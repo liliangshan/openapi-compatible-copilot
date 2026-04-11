@@ -72,6 +72,10 @@
 		}
 	},
 	"main": "./out/extension.js",
+	"activationEvents": [
+		"onCommand:openapicopilot.manageProviders",
+		"onCommand:openapicopilot.openConfig"
+	],
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -p ./",
