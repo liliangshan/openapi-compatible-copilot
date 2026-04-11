@@ -1,0 +1,88 @@
+{
+	"name": "openapi-compatible-copilot",
+	"publisher": "liliangshan",
+	"displayName": "LLS OAI",
+	"description": "Integrates multiple OpenAI-compatible API providers into GitHub Copilot Chat",
+	"version": "0.1.0",
+	"engines": {
+		"vscode": "^1.104.0"
+	},
+	"extensionDependencies": [
+		"github.copilot-chat"
+	],
+	"categories": [
+		"AI",
+		"Chat"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/liliangshan/openapi-compatible-copilot"
+	},
+	"enabledApiProposals": [
+		"chatProvider"
+	],
+	"contributes": {
+		"languageModelChatProviders": [
+			{
+				"vendor": "openapicopilot",
+				"displayName": "LLS OAI",
+				"managementCommand": "openapicopilot.manageProviders"
+			}
+		],
+		"commands": [
+			{
+				"command": "openapicopilot.manageProviders",
+				"category": "LLS OAI",
+				"title": "Manage Providers"
+			},
+			{
+				"command": "openapicopilot.openConfig",
+				"category": "LLS OAI",
+				"title": "Open Configuration UI"
+			}
+		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "openapicopilot.manageProviders"
+				},
+				{
+					"command": "openapicopilot.openConfig"
+				}
+			]
+		},
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "openapi-copilot",
+					"title": "LLS OAI",
+					"icon": "$(plug)"
+				}
+			]
+		},
+		"views": {
+			"openapi-copilot": [
+				{
+					"type": "webview",
+					"id": "openapicopilot.configView",
+					"name": "Provider Management"
+				}
+			]
+		}
+	},
+	"main": "./out/extension.js",
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./",
+		"lint": "eslint src",
+		"package": "vsce package"
+	},
+	"devDependencies": {
+		"@types/vscode": "^1.104.0",
+		"@types/node": "^20.0.0",
+		"typescript": "^5.6.0",
+		"@vscode/vsce": "^3.0.0"
+	}
+}
