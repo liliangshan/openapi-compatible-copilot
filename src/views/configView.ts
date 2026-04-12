@@ -57,6 +57,8 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 							if (apiKey) {
 								try {
 									const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey, provider.models);
+									// Save merged models back to storage so Copilot can see them
+									await this._configManager.updateProvider(provider.id, { models });
 									return { ...provider, models };
 								} catch (err) {
 									// If fetch fails, use existing stored models
