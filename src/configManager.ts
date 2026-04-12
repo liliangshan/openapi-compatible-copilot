@@ -24,7 +24,7 @@ export class ConfigManager {
 	 * Get all provider configurations
 	 */
 	async getProviders(): Promise<ProviderConfigWithoutSecrets[]> {
-		const stored = this.context.workspaceState.get<ProviderConfigWithoutSecrets[]>(ConfigManager.PROVIDERS_KEY, []);
+		const stored = this.context.globalState.get<ProviderConfigWithoutSecrets[]>(ConfigManager.PROVIDERS_KEY, []);
 		return stored;
 	}
 
@@ -65,7 +65,7 @@ export class ConfigManager {
 
 		// Store provider config without the secret
 		providers.push(newProvider);
-		await this.context.workspaceState.update(ConfigManager.PROVIDERS_KEY, providers);
+		await this.context.globalState.update(ConfigManager.PROVIDERS_KEY, providers);
 
 		return newProvider;
 	}
@@ -97,7 +97,7 @@ export class ConfigManager {
 			hasApiKey: updates.apiKey !== undefined ? !!updates.apiKey : providers[index].hasApiKey,
 		};
 
-		await this.context.workspaceState.update(ConfigManager.PROVIDERS_KEY, providers);
+		await this.context.globalState.update(ConfigManager.PROVIDERS_KEY, providers);
 		return providers[index];
 	}
 
@@ -112,7 +112,7 @@ export class ConfigManager {
 		await this.secrets.delete(`${ConfigManager.SECRET_PREFIX}${id}`);
 		
 		// Update storage
-		await this.context.workspaceState.update(ConfigManager.PROVIDERS_KEY, filtered);
+		await this.context.globalState.update(ConfigManager.PROVIDERS_KEY, filtered);
 	}
 
 	/**
@@ -153,6 +153,6 @@ export class ConfigManager {
 	 * Import configurations (for restore)
 	 */
 	async importConfig(data: { providers: ProviderConfigWithoutSecrets[] }): Promise<void> {
-		await this.context.workspaceState.update(ConfigManager.PROVIDERS_KEY, data.providers);
+		await this.context.globalState.update(ConfigManager.PROVIDERS_KEY, data.providers);
 	}
 }

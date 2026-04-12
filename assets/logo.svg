@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="icon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0e7ff;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background rounded square -->
+  <rect x="16" y="16" width="224" height="224" rx="48" fill="url(#bg)"/>
+  
+  <!-- Chat bubble -->
+  <path d="M64 88 h96 a16 16 0 0 1 16 16 v48 a16 16 0 0 1 -16 16 h-40 l-20 20 v-20 h-36 a16 16 0 0 1 -16 -16 v-48 a16 16 0 0 1 16 -16 z" fill="url(#icon)" opacity="0.95"/>
+  
+  <!-- Sparkle dots representing AI -->
+  <circle cx="96" cy="120" r="8" fill="#6366f1"/>
+  <circle cx="128" cy="120" r="8" fill="#6366f1"/>
+  <circle cx="160" cy="120" r="8" fill="#6366f1"/>
+  
+  <!-- Connection lines -->
+  <line x1="104" y1="120" x2="120" y2="120" stroke="#8b5cf6" stroke-width="2"/>
+  <line x1="136" y1="120" x2="152" y2="120" stroke="#8b5cf6" stroke-width="2"/>
+  
+  <!-- Small sparkle -->
+  <path d="M192 72 l4 -12 l4 12 l12 4 l-12 4 l-4 12 l-4 -12 l-12 -4 z" fill="#ffffff" opacity="0.8"/>
+</svg>
