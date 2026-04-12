@@ -114,6 +114,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					version: '1.0.0',
 					maxInputTokens: maxInput,
 					maxOutputTokens: maxOutput,
+					isUserSelectable: model.isUserSelectable,
 					capabilities: {
 						toolCalling: model.toolCalling ?? true,
 						imageInput: model.vision || false,

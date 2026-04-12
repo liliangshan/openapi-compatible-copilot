@@ -42,6 +42,8 @@ export interface ModelConfig {
 	topP: number;
 	/** Sampling mode: 'temperature' (only temperature), 'top_p' (only top_p), 'both' (default) */
 	samplingMode: 'temperature' | 'top_p' | 'both';
+	/** Whether the model shows up in the chat model selector */
+	isUserSelectable?: boolean;
 }
 
 /**

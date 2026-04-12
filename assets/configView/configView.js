@@ -8,6 +8,8 @@
 	let editingModelProviderId = null;
 	let editingModelIndex = -1;
 	let editingModelData = null;
+	let newlyAddedProviderId = null;
+	const expandedProviders = new Set();
 
 	// DOM Elements
 	const providersList = document.getElementById('providersList');
@@ -109,6 +111,34 @@
 		providersList.addEventListener('change', (e) => {
 			const checkbox = e.target.closest('input[type="checkbox"]');
 			if (!checkbox) return;
+			
+			// Check if it's a model selector toggle
+			if (checkbox.classList.contains('model-selector-toggle')) {
+				const modelId = checkbox.dataset.modelId;
+				const providerId = checkbox.dataset.providerId;
+				if (!modelId || !providerId) return;
+				
+				const provider = providers.find(p => p.id === providerId);
+				if (!provider) return;
+				
+				const models = provider.models || provider.apiModels || [];
+				const modelIndex = models.findIndex(m => m.modelId === modelId);
+				if (modelIndex < 0) return;
+				
+				models[modelIndex].isUserSelectable = checkbox.checked;
+				
+				vscode.postMessage({
+					command: 'updateProvider',
+					data: {
+						id: providerId,
+						models: models,
+					},
+				});
+				// Re-render to preserve expand state
+				renderProviders();
+				return;
+			}
+			
 			const card = checkbox.closest('.provider-card');
 			if (!card) return;
 			const id = card.dataset.id;
@@ -127,12 +157,20 @@
 		switch (message.command) {
 			case 'providersLoaded':
 				providers = message.data || [];
+				// Expand newly added provider
+				if (newlyAddedProviderId) {
+					expandedProviders.add(newlyAddedProviderId);
+					newlyAddedProviderId = null;
+				}
 				renderProviders();
 				break;
 
 			case 'providerAdded':
 				if (!message.success) {
 					alert(`Failed to add provider: ${message.error}`);
+				} else if (message.data?.id) {
+					// Store the newly added provider ID to expand after providersLoaded
+					newlyAddedProviderId = message.data.id;
 				}
 				break;
 		}
@@ -179,14 +217,18 @@
 						<h4 class="models-header">
 							<span>Models (${(provider.models || provider.apiModels).length})</span>
 							<button class="models-toggle-btn" data-provider-id="${provider.id}">
-								<span class="toggle-icon">▶</span>
+								<span class="toggle-icon">${expandedProviders.has(provider.id) ? '▼' : '▶'}</span>
 							</button>
 						</h4>
-						<div class="models-list" data-provider-id="${provider.id}" style="display: none;">
+						<div class="models-list" data-provider-id="${provider.id}" style="display: ${expandedProviders.has(provider.id) ? 'flex' : 'none'};">
 							${(provider.models || provider.apiModels).map(m => `
 								<div class="model-item" data-model-id="${escapeHtml(m.modelId)}" data-provider-id="${provider.id}">
 									<span class="model-item-name">${escapeHtml(m.displayName || m.modelId)}</span>
 									<div class="model-item-actions">
+										<label class="toggle model-toggle" title="Show in Chat Selector">
+											<input type="checkbox" class="model-selector-toggle" data-model-id="${escapeHtml(m.modelId)}" data-provider-id="${provider.id}" ${m.isUserSelectable === true ? 'checked' : ''}>
+											<span class="toggle-slider"></span>
+										</label>
 										<button class="model-item-btn edit-model-btn" data-model-id="${escapeHtml(m.modelId)}" data-provider-id="${provider.id}">Edit</button>
 										<button class="model-item-btn delete delete-model-btn" data-model-id="${escapeHtml(m.modelId)}" data-provider-id="${provider.id}">Delete</button>
 									</div>
@@ -226,6 +268,8 @@
 		providerName.value = provider.name;
 		providerBaseUrl.value = provider.baseUrl;
 		providerApiKey.value = ''; // Don't show existing key
+		// Ensure models list remains expanded
+		expandedProviders.add(id);
 		providerModal.classList.add('active');
 	};
 
@@ -268,6 +312,7 @@
 			temperature: 0.7,
 			topP: 1.0,
 			samplingMode: 'both',
+			isUserSelectable: false,
 		};
 		
 		const modelName = document.getElementById('editModelName');
@@ -279,6 +324,7 @@
 		const modelTemperature = document.getElementById('editModelTemperature');
 		const modelTopP = document.getElementById('editModelTopP');
 		const modelSamplingMode = document.getElementById('editModelSamplingMode');
+		const modelUserSelectable = document.getElementById('editModelUserSelectable');
 		
 		if (modelName) modelName.value = '';
 		if (modelDisplayName) modelDisplayName.value = '';
@@ -289,6 +335,10 @@
 		if (modelTemperature) modelTemperature.value = 0.7;
 		if (modelTopP) modelTopP.value = 1.0;
 		if (modelSamplingMode) modelSamplingMode.value = 'both';
+		if (modelUserSelectable) modelUserSelectable.checked = false;
+		
+		// Ensure models list remains expanded
+		expandedProviders.add(providerId);
 		
 		const editModelModal = document.getElementById('editModelModal');
 		if (editModelModal) {
@@ -318,6 +368,7 @@
 		const modelTemperature = document.getElementById('editModelTemperature');
 		const modelTopP = document.getElementById('editModelTopP');
 		const modelSamplingMode = document.getElementById('editModelSamplingMode');
+		const modelUserSelectable = document.getElementById('editModelUserSelectable');
 		
 		if (modelName) modelName.value = editingModelData.modelId || '';
 		if (modelDisplayName) modelDisplayName.value = editingModelData.displayName || '';
@@ -328,6 +379,10 @@
 		if (modelTemperature) modelTemperature.value = editingModelData.temperature ?? 0.7;
 		if (modelTopP) modelTopP.value = editingModelData.topP ?? 1.0;
 		if (modelSamplingMode) modelSamplingMode.value = editingModelData.samplingMode ?? 'both';
+		if (modelUserSelectable) modelUserSelectable.checked = editingModelData.isUserSelectable ?? false;
+		
+		// Ensure provider remains expanded when editing
+		expandedProviders.add(providerId);
 		
 		const editModelModal = document.getElementById('editModelModal');
 		if (editModelModal) {
@@ -346,6 +401,7 @@
 		const modelTemperature = document.getElementById('editModelTemperature');
 		const modelTopP = document.getElementById('editModelTopP');
 		const modelSamplingMode = document.getElementById('editModelSamplingMode');
+		const modelUserSelectable = document.getElementById('editModelUserSelectable');
 		
 		if (!modelName || !modelName.value.trim()) {
 			alert('Model ID is required');
@@ -361,6 +417,7 @@
 		editingModelData.temperature = parseFloat(modelTemperature?.value) ?? 0.7;
 		editingModelData.topP = parseFloat(modelTopP?.value) ?? 1.0;
 		editingModelData.samplingMode = modelSamplingMode?.value || 'both';
+		editingModelData.isUserSelectable = modelUserSelectable?.checked ?? true;
 		
 		// Update the provider
 		const provider = providers.find(p => p.id === editingModelProviderId);
@@ -388,6 +445,9 @@
 		if (editModelModal) {
 			editModelModal.classList.remove('active');
 		}
+		
+		// Re-render to preserve expand state
+		renderProviders();
 	}
 
 	// Toggle models list visibility
@@ -399,6 +459,11 @@
 			const isHidden = modelsList.style.display === 'none';
 			modelsList.style.display = isHidden ? 'flex' : 'none';
 			toggleIcon.textContent = isHidden ? '▼' : '▶';
+			if (isHidden) {
+				expandedProviders.add(providerId);
+			} else {
+				expandedProviders.delete(providerId);
+			}
 		}
 	}
 
@@ -465,14 +530,8 @@
 		}
 
 		closeProviderModal();
-	}
-
-	// Toggle provider enabled/disabled
-	function toggleProvider(id, enabled) {
-		vscode.postMessage({
-			command: 'toggleProvider',
-			data: { id, enabled },
-		});
+		// Re-render to preserve expand state
+		renderProviders();
 	};
 
 	// Escape HTML to prevent XSS

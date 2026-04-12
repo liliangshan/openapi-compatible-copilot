@@ -280,7 +280,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	 * If a model is only in API, it gets added with defaults.
 	 * If a model is only local, it gets preserved (API can add new ones).
 	 */
-	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' }>> {
+	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean }>> {
 		const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
 		const response = await fetch(`${normalizedBaseUrl}/models`, {
 			method: 'GET',
@@ -307,6 +307,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			temperature: 0.7,
 			topP: 1.0,
 			samplingMode: 'both',
+			isUserSelectable: undefined,
 		})).filter((m: any) => m.modelId);
 		
 		// If no existing models, return API models
@@ -315,19 +316,19 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		}
 		
 		// Create a map of existing models by modelId
-		const existingMap = new Map<string, { modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' }>();
+		const existingMap = new Map<string, { modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean }>();
 		for (const existing of existingModels) {
 			existingMap.set(existing.modelId, existing);
 		}
 		
 		// Merge: start with API models, override with local customizations
-		const merged: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' }> = [];
+		const merged: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean }> = [];
 		
 		// Add API models (use API data for all fields that API provides)
 		for (const apiModel of apiModels) {
 			const localModel = existingMap.get(apiModel.modelId);
 			if (localModel) {
-				// Use API data for all fields, keep local temperature/topP/samplingMode
+				// Use API data for all fields, keep local temperature/topP/samplingMode and isUserSelectable
 				merged.push({
 					modelId: apiModel.modelId,
 					displayName: apiModel.displayName,
@@ -338,6 +339,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					temperature: localModel.temperature ?? 0.7,
 					topP: localModel.topP ?? 1.0,
 					samplingMode: localModel.samplingMode ?? 'both',
+					isUserSelectable: localModel.isUserSelectable,
 				});
 			} else {
 				merged.push(apiModel);
@@ -489,6 +491,12 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 								<label class="checkbox-label">
 									<input type="checkbox" id="editModelToolCalling" />
 									Tool Calling
+								</label>
+							</div>
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input type="checkbox" id="editModelUserSelectable" />
+									Show in Chat Selector
 								</label>
 							</div>
 						</div>

@@ -248,6 +248,7 @@ body {
 
 .model-item-actions {
 	display: flex;
+	align-items: center;
 	gap: 4px;
 }
 
@@ -268,6 +269,32 @@ body {
 .model-item-btn.delete {
 	background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
 	color: var(--vscode-errorForeground, #f48771);
+}
+
+/* Model selector toggle in list */
+.model-toggle {
+	width: 32px;
+	height: 16px;
+	margin-right: 4px;
+}
+
+.model-toggle .toggle-slider {
+	background-color: var(--vscode-descriptionForeground);
+}
+
+.model-toggle .toggle-slider:before {
+	height: 12px;
+	width: 12px;
+	left: 2px;
+	bottom: 2px;
+}
+
+.model-toggle input:checked + .toggle-slider {
+	background-color: #2da44e;
+}
+
+.model-toggle input:checked + .toggle-slider:before {
+	transform: translateX(16px);
 }
 
 /* Models Editor in Modal */
