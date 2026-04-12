@@ -2,8 +2,8 @@
 	"name": "openapi-compatible-copilot",
 	"publisher": "liliangshan",
 	"displayName": "LLS OAI",
-	"description": "Integrates multiple OpenAI-compatible API providers into GitHub Copilot Chat",
-	"version": "0.1.0",
+	"description": "OpenAI-compatible for Copilot Chat",
+	"version": "0.2.0",
 	"engines": {
 		"vscode": "^1.104.0"
 	},

@@ -19,7 +19,7 @@ A VS Code extension that integrates multiple OpenAI-compatible API providers int
 ## Getting Started
 
 1. Install the extension
-2. Click on the "OpenAPI Copilot" status bar item or use the command palette: `OpenAPI Copilot: Manage Providers`
+2. Click on the "LLS OAI" status bar item or use the command palette: `LLS OAI: Manage Providers`
 3. Click "Add Provider" to configure your first provider
 4. Fill in:
    - **Vendor Name/Flag**: A unique identifier for this provider (e.g., "MyOpenAI", "LocalLLM")
@@ -45,8 +45,8 @@ Each provider requires:
 
 ## Commands
 
-- `OpenAPI Copilot: Manage Providers` - Open the provider management UI
-- `OpenAPI Copilot: Open Configuration UI` - Open configuration panel
+- `LLS OAI: Manage Providers` - Open the provider management UI
+- `LLS OAI: Open Configuration UI` - Open configuration panel
 
 ## Import/Export
 

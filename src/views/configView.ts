@@ -278,7 +278,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	 * If a model is only in API, it gets added with defaults.
 	 * If a model is only local, it gets preserved (API can add new ones).
 	 */
-	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number }>> {
+	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' }>> {
 		const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
 		const response = await fetch(`${normalizedBaseUrl}/models`, {
 			method: 'GET',
@@ -304,6 +304,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			toolCalling: (m.supported_parameters && m.supported_parameters.includes('tools')) ?? true,
 			temperature: 0.7,
 			topP: 1.0,
+			samplingMode: 'both',
 		})).filter((m: any) => m.modelId);
 		
 		// If no existing models, return API models
@@ -312,19 +313,19 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		}
 		
 		// Create a map of existing models by modelId
-		const existingMap = new Map<string, { modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number }>();
+		const existingMap = new Map<string, { modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' }>();
 		for (const existing of existingModels) {
 			existingMap.set(existing.modelId, existing);
 		}
 		
 		// Merge: start with API models, override with local customizations
-		const merged: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number }> = [];
+		const merged: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' }> = [];
 		
 		// Add API models (use API data for all fields that API provides)
 		for (const apiModel of apiModels) {
 			const localModel = existingMap.get(apiModel.modelId);
 			if (localModel) {
-				// Use API data for all fields, keep local temperature/topP
+				// Use API data for all fields, keep local temperature/topP/samplingMode
 				merged.push({
 					modelId: apiModel.modelId,
 					displayName: apiModel.displayName,
@@ -334,6 +335,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					toolCalling: apiModel.toolCalling,
 					temperature: localModel.temperature ?? 0.7,
 					topP: localModel.topP ?? 1.0,
+					samplingMode: localModel.samplingMode ?? 'both',
 				});
 			} else {
 				merged.push(apiModel);
@@ -441,19 +443,6 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 								<input type="password" id="providerApiKey" placeholder="sk-..." />
 								<div class="help-text">Leave empty to keep existing key (when editing)</div>
 							</div>
-							<div class="form-group">
-								<label>Models</label>
-								<div id="modelsEditor" class="models-editor">
-									<div class="models-editor-header">
-										<button type="button" id="fetchModelsBtn" class="secondary-btn">Fetch from API</button>
-										<button type="button" id="addModelBtn" class="secondary-btn">+ Add Model</button>
-									</div>
-									<div id="modelsListEditor" class="models-list-editor">
-										<!-- Models will be rendered here -->
-									</div>
-								</div>
-								<div class="help-text">Click "Fetch from API" to auto-load models, or manually add/edit models</div>
-							</div>
 							<div class="form-actions">
 								<button type="button" id="cancelBtn" class="secondary-btn">Cancel</button>
 								<button type="submit" class="primary-btn">Save Provider</button>
@@ -510,6 +499,15 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 								<label for="editModelTopP">Top P</label>
 								<input type="number" id="editModelTopP" value="1.0" min="0" max="1" step="0.1" />
 							</div>
+						</div>
+						<div class="form-group">
+							<label for="editModelSamplingMode">Sampling Mode</label>
+							<select id="editModelSamplingMode">
+								<option value="both">Both (temperature + top_p)</option>
+								<option value="temperature">Temperature only</option>
+								<option value="top_p">Top P only</option>
+							</select>
+							<div class="help-text">Some models (e.g. Claude) only accept one sampling parameter at a time</div>
 						</div>
 						<div class="form-actions">
 							<button type="button" id="cancelEditModelBtn" class="secondary-btn">Cancel</button>

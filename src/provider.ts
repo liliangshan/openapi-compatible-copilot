@@ -126,6 +126,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 						modelId: model.modelId,
 						temperature: model.temperature ?? 0.7,
 						topP: model.topP ?? 1.0,
+						samplingMode: model.samplingMode ?? 'both',
 					}
 				} as vscode.LanguageModelChatInformation & { __providerData: any });
 			}
@@ -187,6 +188,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const baseUrl = metadata.providerBaseUrl as string;
 		const temperature = metadata.temperature as number ?? 0.7;
 		const topP = metadata.topP as number ?? 1.0;
+		const samplingMode = (metadata.samplingMode as string) ?? 'both';
 
 		// Get API key from secrets
 		const apiKey = await this._configManager.getApiKey(providerId);
@@ -208,9 +210,18 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			model: modelId,
 			messages: this._convertMessages(messages, model),
 			stream: true,
-			temperature: temperature,
-			top_p: topP,
 		};
+
+		// Only pass temperature/top_p based on samplingMode
+		// Some models (e.g. Claude) don't support both simultaneously
+		if (samplingMode === 'temperature') {
+			requestBody.temperature = temperature;
+		} else if (samplingMode === 'top_p') {
+			requestBody.top_p = topP;
+		} else {
+			requestBody.temperature = temperature;
+			requestBody.top_p = topP;
+		}
 
 		// Handle tool calling if present
 		if (options.tools && options.tools.length > 0) {

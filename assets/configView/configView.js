@@ -5,7 +5,6 @@
 	// State
 	let providers = [];
 	let editingProviderId = null;
-	let editingModels = [];
 	let editingModelProviderId = null;
 	let editingModelIndex = -1;
 	let editingModelData = null;
@@ -24,9 +23,6 @@
 	const cancelBtn = document.getElementById('cancelBtn');
 	const importBtn = document.getElementById('importBtn');
 	const exportBtn = document.getElementById('exportBtn');
-	const fetchModelsBtn = document.getElementById('fetchModelsBtn');
-	const addModelBtn = document.getElementById('addModelBtn');
-	const modelsListEditor = document.getElementById('modelsListEditor');
 	const editModelModal = document.getElementById('editModelModal');
 	const closeEditModelBtn = document.getElementById('closeEditModelBtn');
 	const cancelEditModelBtn = document.getElementById('cancelEditModelBtn');
@@ -51,8 +47,6 @@
 		});
 		importBtn.addEventListener('click', () => vscode.postMessage({ command: 'importConfig' }));
 		exportBtn.addEventListener('click', () => vscode.postMessage({ command: 'exportConfig' }));
-		fetchModelsBtn?.addEventListener('click', () => fetchModelsFromAPI());
-		addModelBtn?.addEventListener('click', () => addModelToEditor());
 		providerForm.addEventListener('submit', (e) => {
 			e.preventDefault();
 			saveProvider();
@@ -88,6 +82,10 @@
 				const modelId = target.dataset.modelId;
 				const providerId = target.dataset.providerId;
 				if (modelId && providerId) editModelInProvider(providerId, modelId);
+			} else if (target.classList.contains('add-model-btn')) {
+				// Add new model to provider
+				const providerId = target.dataset.providerId;
+				if (providerId) addModelToProvider(providerId);
 			} else if (target.classList.contains('delete-model-btn')) {
 				// Delete model from provider list
 				const modelId = target.dataset.modelId;
@@ -120,29 +118,6 @@
 				data: { id, enabled: checkbox.checked },
 			});
 		});
-		
-		// Event delegation for models editor
-		modelsListEditor?.addEventListener('click', (e) => {
-			const target = e.target.closest('button');
-			if (!target) return;
-			
-			if (target.classList.contains('delete-model-btn')) {
-				const index = parseInt(target.dataset.index, 10);
-				editingModels.splice(index, 1);
-				renderModelsEditor();
-			}
-		});
-		
-		modelsListEditor?.addEventListener('input', (e) => {
-			const target = e.target;
-			if (target.classList.contains('model-input')) {
-				const index = parseInt(target.dataset.index, 10);
-				const field = target.dataset.field;
-				if (editingModels[index]) {
-					editingModels[index][field] = target.value;
-				}
-			}
-		});
 	}
 
 	// Handle messages from extension
@@ -160,103 +135,8 @@
 					alert(`Failed to add provider: ${message.error}`);
 				}
 				break;
-				
-			case 'modelsFetched':
-				if (message.success) {
-					editingModels = message.models || [];
-					renderModelsEditor();
-				} else {
-					alert(`Failed to fetch models: ${message.error}`);
-				}
-				break;
 		}
 	});
-	
-	// Fetch models from API
-	function fetchModelsFromAPI() {
-		const baseUrl = providerBaseUrl?.value?.trim();
-		const apiKey = providerApiKey?.value?.trim();
-		
-		if (!baseUrl || !apiKey) {
-			alert('Please enter both Base URL and API Key first');
-			return;
-		}
-		
-		fetchModelsBtn.textContent = 'Fetching...';
-		fetchModelsBtn.disabled = true;
-		
-		// Send existing models to merge with API models
-		vscode.postMessage({
-			command: 'fetchModels',
-			data: { baseUrl, apiKey, existingModels: editingModels }
-		});
-		
-		setTimeout(() => {
-			if (fetchModelsBtn) {
-				fetchModelsBtn.textContent = 'Fetch from API';
-				fetchModelsBtn.disabled = false;
-			}
-		}, 5000);
-	}
-	
-	// Add a new model to editor
-	function addModelToEditor() {
-		editingModels.push({
-			modelId: '',
-			displayName: '',
-			contextLength: 128000,
-			maxTokens: 4096,
-			vision: false,
-			toolCalling: true,
-			temperature: 0.7,
-			topP: 1.0
-		});
-		renderModelsEditor();
-	}
-	
-	// Render models in the editor
-	function renderModelsEditor() {
-		if (!modelsListEditor) return;
-		
-		if (editingModels.length === 0) {
-			modelsListEditor.innerHTML = '<div class="models-empty">No models added</div>';
-			return;
-		}
-		
-		modelsListEditor.innerHTML = editingModels.map((model, index) => `
-			<div class="model-editor-item">
-				<input type="text" class="model-input model-id-input" data-index="${index}" data-field="modelId" value="${escapeHtml(model.modelId)}" placeholder="Model ID" />
-				<input type="text" class="model-input model-name-input" data-index="${index}" data-field="displayName" value="${escapeHtml(model.displayName)}" placeholder="Display Name" />
-				<input type="number" class="model-input model-num-input" data-index="${index}" data-field="contextLength" value="${model.contextLength}" placeholder="Context" title="Context Length" />
-				<input type="number" class="model-input model-num-input" data-index="${index}" data-field="maxTokens" value="${model.maxTokens}" placeholder="Max" title="Max Tokens" />
-				<label class="model-vision-label">
-					<input type="checkbox" class="model-input" data-index="${index}" data-field="vision" ${model.vision ? 'checked' : ''} />
-					Vision
-				</label>
-				<label class="model-vision-label">
-					<input type="checkbox" class="model-input" data-index="${index}" data-field="toolCalling" ${model.toolCalling !== false ? 'checked' : ''} />
-					Tools
-				</label>
-				<button type="button" class="delete-model-btn secondary-btn" data-index="${index}">×</button>
-			</div>
-		`).join('');
-		
-		// Re-attach event listeners for vision checkboxes
-		modelsListEditor.querySelectorAll('input[data-field="vision"]').forEach(cb => {
-			cb.addEventListener('change', (e) => {
-				const index = parseInt(e.target.dataset.index, 10);
-				editingModels[index].vision = e.target.checked;
-			});
-		});
-		
-		// Re-attach event listeners for toolCalling checkboxes
-		modelsListEditor.querySelectorAll('input[data-field="toolCalling"]').forEach(cb => {
-			cb.addEventListener('change', (e) => {
-				const index = parseInt(e.target.dataset.index, 10);
-				editingModels[index].toolCalling = e.target.checked;
-			});
-		});
-	}
 
 	// Render providers list
 	function renderProviders() {
@@ -318,6 +198,7 @@
 				<div class="provider-actions">
 					<button class="secondary-btn edit-btn" data-id="${provider.id}">Edit</button>
 					<button class="secondary-btn delete-btn" data-id="${provider.id}">Delete</button>
+					<button class="primary-btn add-model-btn" data-provider-id="${provider.id}">+ Add Model</button>
 				</div>
 			</div>
 		`).join('');
@@ -331,8 +212,6 @@
 		providerName.value = '';
 		providerBaseUrl.value = '';
 		providerApiKey.value = '';
-		editingModels = [];
-		renderModelsEditor();
 		providerModal.classList.add('active');
 	}
 
@@ -347,8 +226,6 @@
 		providerName.value = provider.name;
 		providerBaseUrl.value = provider.baseUrl;
 		providerApiKey.value = ''; // Don't show existing key
-		editingModels = (provider.models || provider.apiModels) ? [...(provider.models || provider.apiModels)] : [];
-		renderModelsEditor();
 		providerModal.classList.add('active');
 	};
 
@@ -374,6 +251,51 @@
 		});
 	}
 
+	// Add a new model to a provider
+	function addModelToProvider(providerId) {
+		const provider = providers.find(p => p.id === providerId);
+		if (!provider) return;
+		
+		editingModelProviderId = providerId;
+		editingModelIndex = -1; // -1 means new model
+		editingModelData = {
+			modelId: '',
+			displayName: '',
+			contextLength: 128000,
+			maxTokens: 4096,
+			vision: false,
+			toolCalling: true,
+			temperature: 0.7,
+			topP: 1.0,
+			samplingMode: 'both',
+		};
+		
+		const modelName = document.getElementById('editModelName');
+		const modelDisplayName = document.getElementById('editModelDisplayName');
+		const modelContextLength = document.getElementById('editModelContextLength');
+		const modelMaxTokens = document.getElementById('editModelMaxTokens');
+		const modelVision = document.getElementById('editModelVision');
+		const modelToolCalling = document.getElementById('editModelToolCalling');
+		const modelTemperature = document.getElementById('editModelTemperature');
+		const modelTopP = document.getElementById('editModelTopP');
+		const modelSamplingMode = document.getElementById('editModelSamplingMode');
+		
+		if (modelName) modelName.value = '';
+		if (modelDisplayName) modelDisplayName.value = '';
+		if (modelContextLength) modelContextLength.value = 128000;
+		if (modelMaxTokens) modelMaxTokens.value = 4096;
+		if (modelVision) modelVision.checked = false;
+		if (modelToolCalling) modelToolCalling.checked = true;
+		if (modelTemperature) modelTemperature.value = 0.7;
+		if (modelTopP) modelTopP.value = 1.0;
+		if (modelSamplingMode) modelSamplingMode.value = 'both';
+		
+		const editModelModal = document.getElementById('editModelModal');
+		if (editModelModal) {
+			editModelModal.classList.add('active');
+		}
+	}
+
 	// Edit a model directly from the provider list
 	function editModelInProvider(providerId, modelId) {
 		const provider = providers.find(p => p.id === providerId);
@@ -395,6 +317,7 @@
 		const modelToolCalling = document.getElementById('editModelToolCalling');
 		const modelTemperature = document.getElementById('editModelTemperature');
 		const modelTopP = document.getElementById('editModelTopP');
+		const modelSamplingMode = document.getElementById('editModelSamplingMode');
 		
 		if (modelName) modelName.value = editingModelData.modelId || '';
 		if (modelDisplayName) modelDisplayName.value = editingModelData.displayName || '';
@@ -404,6 +327,7 @@
 		if (modelToolCalling) modelToolCalling.checked = editingModelData.toolCalling ?? true;
 		if (modelTemperature) modelTemperature.value = editingModelData.temperature ?? 0.7;
 		if (modelTopP) modelTopP.value = editingModelData.topP ?? 1.0;
+		if (modelSamplingMode) modelSamplingMode.value = editingModelData.samplingMode ?? 'both';
 		
 		const editModelModal = document.getElementById('editModelModal');
 		if (editModelModal) {
@@ -421,6 +345,7 @@
 		const modelToolCalling = document.getElementById('editModelToolCalling');
 		const modelTemperature = document.getElementById('editModelTemperature');
 		const modelTopP = document.getElementById('editModelTopP');
+		const modelSamplingMode = document.getElementById('editModelSamplingMode');
 		
 		if (!modelName || !modelName.value.trim()) {
 			alert('Model ID is required');
@@ -435,12 +360,19 @@
 		editingModelData.toolCalling = modelToolCalling?.checked ?? true;
 		editingModelData.temperature = parseFloat(modelTemperature?.value) ?? 0.7;
 		editingModelData.topP = parseFloat(modelTopP?.value) ?? 1.0;
+		editingModelData.samplingMode = modelSamplingMode?.value || 'both';
 		
 		// Update the provider
 		const provider = providers.find(p => p.id === editingModelProviderId);
 		if (provider) {
 			const models = provider.models || provider.apiModels || [];
-			models[editingModelIndex] = editingModelData;
+			if (editingModelIndex >= 0) {
+				// Edit existing model
+				models[editingModelIndex] = editingModelData;
+			} else {
+				// Add new model
+				models.push(editingModelData);
+			}
 			
 			vscode.postMessage({
 				command: 'updateProvider',
@@ -522,17 +454,13 @@
 					id: editingProviderId,
 					...providerData,
 					hasApiKey: !!apiKey || true,
-					models: editingModels.filter(m => m.modelId.trim()),
 				},
 			});
 		} else {
 			// Add new provider - backend will auto-fetch models
 			vscode.postMessage({
 				command: 'addProvider',
-				data: {
-					...providerData,
-					models: editingModels.filter(m => m.modelId.trim()),
-				},
+				data: providerData,
 			});
 		}
 

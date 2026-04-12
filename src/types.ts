@@ -40,6 +40,8 @@ export interface ModelConfig {
 	temperature: number;
 	/** Top-p sampling value (0-1) */
 	topP: number;
+	/** Sampling mode: 'temperature' (only temperature), 'top_p' (only top_p), 'both' (default) */
+	samplingMode: 'temperature' | 'top_p' | 'both';
 }
 
 /**
