@@ -280,7 +280,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	 * If a model is only in API, it gets added with defaults.
 	 * If a model is only local, it gets preserved (API can add new ones).
 	 */
-	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean }>> {
+	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean; transformThink?: boolean }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean; transformThink?: boolean }>> {
 		const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
 		const response = await fetch(`${normalizedBaseUrl}/models`, {
 			method: 'GET',
@@ -316,19 +316,19 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		}
 		
 		// Create a map of existing models by modelId
-		const existingMap = new Map<string, { modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean }>();
+		const existingMap = new Map<string, { modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean; transformThink?: boolean }>();
 		for (const existing of existingModels) {
 			existingMap.set(existing.modelId, existing);
 		}
 		
 		// Merge: start with API models, override with local customizations
-		const merged: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean }> = [];
+		const merged: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean; transformThink?: boolean }> = [];
 		
 		// Add API models (use API data for all fields that API provides)
 		for (const apiModel of apiModels) {
 			const localModel = existingMap.get(apiModel.modelId);
 			if (localModel) {
-				// Use API data for all fields, keep local temperature/topP/samplingMode and isUserSelectable
+				// Use API data for all fields, keep local temperature/topP/samplingMode/isUserSelectable/transformThink
 				merged.push({
 					modelId: apiModel.modelId,
 					displayName: apiModel.displayName,
@@ -340,6 +340,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					topP: localModel.topP ?? 1.0,
 					samplingMode: localModel.samplingMode ?? 'both',
 					isUserSelectable: localModel.isUserSelectable,
+					transformThink: localModel.transformThink,
 				});
 			} else {
 				merged.push(apiModel);
@@ -497,6 +498,14 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 								<label class="checkbox-label">
 									<input type="checkbox" id="editModelUserSelectable" />
 									Show in Chat Selector
+								</label>
+							</div>
+						</div>
+						<div class="form-row">
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input type="checkbox" id="editModelTransformThink" />
+									Transform Think Tags (<think>/</think>)
 								</label>
 							</div>
 						</div>

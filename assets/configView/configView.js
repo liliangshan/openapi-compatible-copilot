@@ -313,6 +313,7 @@
 			topP: 1.0,
 			samplingMode: 'both',
 			isUserSelectable: false,
+			transformThink: false,
 		};
 		
 		const modelName = document.getElementById('editModelName');
@@ -325,6 +326,7 @@
 		const modelTopP = document.getElementById('editModelTopP');
 		const modelSamplingMode = document.getElementById('editModelSamplingMode');
 		const modelUserSelectable = document.getElementById('editModelUserSelectable');
+		const modelTransformThink = document.getElementById('editModelTransformThink');
 		
 		if (modelName) modelName.value = '';
 		if (modelDisplayName) modelDisplayName.value = '';
@@ -336,6 +338,7 @@
 		if (modelTopP) modelTopP.value = 1.0;
 		if (modelSamplingMode) modelSamplingMode.value = 'both';
 		if (modelUserSelectable) modelUserSelectable.checked = false;
+		if (modelTransformThink) modelTransformThink.checked = false;
 		
 		// Ensure models list remains expanded
 		expandedProviders.add(providerId);
@@ -369,6 +372,7 @@
 		const modelTopP = document.getElementById('editModelTopP');
 		const modelSamplingMode = document.getElementById('editModelSamplingMode');
 		const modelUserSelectable = document.getElementById('editModelUserSelectable');
+		const modelTransformThink = document.getElementById('editModelTransformThink');
 		
 		if (modelName) modelName.value = editingModelData.modelId || '';
 		if (modelDisplayName) modelDisplayName.value = editingModelData.displayName || '';
@@ -380,6 +384,7 @@
 		if (modelTopP) modelTopP.value = editingModelData.topP ?? 1.0;
 		if (modelSamplingMode) modelSamplingMode.value = editingModelData.samplingMode ?? 'both';
 		if (modelUserSelectable) modelUserSelectable.checked = editingModelData.isUserSelectable ?? false;
+		if (modelTransformThink) modelTransformThink.checked = editingModelData.transformThink ?? false;
 		
 		// Ensure provider remains expanded when editing
 		expandedProviders.add(providerId);
@@ -402,6 +407,7 @@
 		const modelTopP = document.getElementById('editModelTopP');
 		const modelSamplingMode = document.getElementById('editModelSamplingMode');
 		const modelUserSelectable = document.getElementById('editModelUserSelectable');
+		const modelTransformThink = document.getElementById('editModelTransformThink');
 		
 		if (!modelName || !modelName.value.trim()) {
 			alert('Model ID is required');
@@ -418,6 +424,7 @@
 		editingModelData.topP = parseFloat(modelTopP?.value) ?? 1.0;
 		editingModelData.samplingMode = modelSamplingMode?.value || 'both';
 		editingModelData.isUserSelectable = modelUserSelectable?.checked ?? true;
+		editingModelData.transformThink = modelTransformThink?.checked ?? false;
 		
 		// Update the provider
 		const provider = providers.find(p => p.id === editingModelProviderId);

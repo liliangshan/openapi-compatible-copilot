@@ -44,6 +44,8 @@ export interface ModelConfig {
 	samplingMode: 'temperature' | 'top_p' | 'both';
 	/** Whether the model shows up in the chat model selector */
 	isUserSelectable?: boolean;
+	/** Whether to transform <think> tags in model responses */
+	transformThink?: boolean;
 }
 
 /**

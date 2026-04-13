@@ -128,6 +128,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 						temperature: model.temperature ?? 0.7,
 						topP: model.topP ?? 1.0,
 						samplingMode: model.samplingMode ?? 'both',
+						transformThink: model.transformThink ?? false,
 					}
 				} as vscode.LanguageModelChatInformation & { __providerData: any });
 			}
@@ -190,6 +191,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const temperature = metadata.temperature as number ?? 0.7;
 		const topP = metadata.topP as number ?? 1.0;
 		const samplingMode = (metadata.samplingMode as string) ?? 'both';
+		const transformThink = (metadata.transformThink as boolean) ?? false;
 
 		// Get API key from secrets
 		const apiKey = await this._configManager.getApiKey(providerId);
@@ -273,10 +275,17 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			let buffer = '';
 			// Track in-progress tool calls across chunks
 			const pendingToolCalls: Map<number, { id?: string; name?: string; arguments: string }> = new Map();
+			// Track think tag state for transformThink
+			const thinkState = { isInThinkTag: false, thinkBuffer: '' };
 
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) {
+				// Flush any remaining think content (without [Thinking] label)
+				if (transformThink && thinkState.thinkBuffer.length > 0) {
+					progress.report(new vscode.LanguageModelTextPart(`${thinkState.thinkBuffer}\n\n`));
+						thinkState.thinkBuffer = '';
+					}
 					// Flush any completed tool calls that didn't get reported
 					for (const [index, tc] of pendingToolCalls) {
 						if (tc.name && tc.arguments) {
@@ -312,7 +321,14 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 							// Handle content
 							const content = parsed.choices?.[0]?.delta?.content;
 							if (content) {
-								progress.report(new vscode.LanguageModelTextPart(content));
+								if (transformThink) {
+									// Process content character by character to detect think tags
+									this._processThinkTags(content, (text) => {
+										progress.report(new vscode.LanguageModelTextPart(text));
+									}, thinkState);
+								} else {
+									progress.report(new vscode.LanguageModelTextPart(content));
+								}
 							}
 
 							// Handle tool calls - accumulate arguments across chunks
@@ -498,6 +514,64 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 
 		return { textParts, toolResults };
+	}
+
+	/**
+	 * Process think tags in streaming content.
+	 * When transformThink is enabled, this extracts content between <think> and </think> tags
+	 * and reports them as separate text parts with a thinking indicator.
+	 */
+	private _processThinkTags(
+		content: string,
+		report: (text: string) => void,
+		thinkState: { isInThinkTag: boolean; thinkBuffer: string }
+	): boolean {
+		let result = '';
+		let i = 0;
+		const len = content.length;
+
+		while (i < len) {
+			// Check for opening think tag
+			if (content.startsWith('<think>', i)) {
+				// Flush any accumulated normal content
+				if (result.length > 0) {
+					report(result);
+					result = '';
+				}
+				thinkState.isInThinkTag = true;
+				thinkState.thinkBuffer = '';
+				i += 7; // length of '<think>'
+				continue;
+			}
+
+			// Check for closing think tag
+			if (content.startsWith('</think>', i)) {
+				thinkState.isInThinkTag = false;
+				// Report the think content as a thinking block
+				if (thinkState.thinkBuffer.length > 0) {
+					report(`${thinkState.thinkBuffer}\n\n`);
+					thinkState.thinkBuffer = '';
+				}
+				i += 8; // length of '</think>'
+				continue;
+			}
+
+			// Accumulate content
+			if (thinkState.isInThinkTag) {
+				thinkState.thinkBuffer += content[i];
+			} else {
+				result += content[i];
+			}
+			i++;
+		}
+
+		// Flush remaining normal content (but not incomplete think content)
+		if (result.length > 0 && !thinkState.isInThinkTag) {
+			report(result);
+			return true;
+		}
+
+		return false;
 	}
 
 	private _extractAssistantContent(message: vscode.LanguageModelChatRequestMessage): { content?: string; tool_calls?: any[] } {
