@@ -10,6 +10,8 @@
 	let editingModelData = null;
 	let newlyAddedProviderId = null;
 	const expandedProviders = new Set();
+	const loadingProviders = new Set(); // Track providers that are fetching models
+	let isInitialLoad = true; // Track whether this is the first providersLoaded
 
 	// DOM Elements
 	const providersList = document.getElementById('providersList');
@@ -20,6 +22,7 @@
 	const providerName = document.getElementById('providerName');
 	const providerBaseUrl = document.getElementById('providerBaseUrl');
 	const providerApiKey = document.getElementById('providerApiKey');
+	const providerAutoFetchModels = document.getElementById('providerAutoFetchModels');
 	const addProviderBtn = document.getElementById('addProviderBtn');
 	const closeModal = document.getElementById('closeModal');
 	const cancelBtn = document.getElementById('cancelBtn');
@@ -84,8 +87,14 @@
 				const modelId = target.dataset.modelId;
 				const providerId = target.dataset.providerId;
 				if (modelId && providerId) editModelInProvider(providerId, modelId);
+			} else if (target.classList.contains('fetch-models-btn')) {
+				// Manually fetch models for this provider
+				if (target.disabled) return; // Ignore clicks while loading
+				const providerId = target.dataset.providerId;
+				if (providerId) vscode.postMessage({ command: 'fetchProviderModels', data: { id: providerId } });
 			} else if (target.classList.contains('add-model-btn')) {
 				// Add new model to provider
+				if (target.disabled) return; // Ignore clicks while loading
 				const providerId = target.dataset.providerId;
 				if (providerId) addModelToProvider(providerId);
 			} else if (target.classList.contains('delete-model-btn')) {
@@ -94,7 +103,12 @@
 				const providerId = target.dataset.providerId;
 				if (modelId && providerId) deleteModelFromProvider(providerId, modelId);
 			} else if (target.closest('.toggle')) {
-				const checkbox = target.closest('.toggle').querySelector('input[type="checkbox"]');
+				// Exclude auto-fetch toggle (handled by change event) and model selector toggle
+				const toggle = target.closest('.toggle');
+				if (toggle.classList.contains('auto-fetch-toggle') || toggle.classList.contains('model-toggle')) {
+					return;
+				}
+				const checkbox = toggle.querySelector('input[type="checkbox"]');
 				if (checkbox) {
 					const id = checkbox.closest('.provider-card')?.dataset.id;
 					if (id) {
@@ -139,6 +153,26 @@
 				return;
 			}
 			
+			// Check if it's an auto-fetch toggle
+			if (checkbox.classList.contains('auto-fetch-checkbox')) {
+				const id = checkbox.dataset.id;
+				if (!id) return;
+				
+				// Update local state first to prevent visual revert on re-render
+				const provider = providers.find(p => p.id === id);
+				if (provider) {
+					provider.autoFetchModels = checkbox.checked;
+				}
+				
+				vscode.postMessage({
+					command: 'toggleAutoFetchModels',
+					data: { id, autoFetchModels: checkbox.checked },
+				});
+				// Re-render to preserve expand state
+				renderProviders();
+				return;
+			}
+			
 			const card = checkbox.closest('.provider-card');
 			if (!card) return;
 			const id = card.dataset.id;
@@ -157,11 +191,42 @@
 		switch (message.command) {
 			case 'providersLoaded':
 				providers = message.data || [];
+				// Only mark providers as loading on initial load (triggered by getProviders)
+				// Subsequent providersLoaded messages (from updateProvider, toggleProvider, etc.)
+				// should not reset loading state for all providers
+				if (isInitialLoad) {
+					isInitialLoad = false;
+					providers.forEach(p => {
+						if (p.enabled && p.hasApiKey && p.autoFetchModels !== false) {
+							loadingProviders.add(p.id);
+						}
+					});
+				}
 				// Expand newly added provider
 				if (newlyAddedProviderId) {
 					expandedProviders.add(newlyAddedProviderId);
 					newlyAddedProviderId = null;
 				}
+				renderProviders();
+				break;
+
+			case 'providerModelsLoading':
+				// Set loading state for manual fetch
+				if (message.data.loading) {
+					loadingProviders.add(message.data.providerId);
+					renderProviders();
+				}
+				break;
+
+			case 'providerModelsUpdated':
+				// Async model fetch completed, update the provider's models
+				const { providerId, models } = message.data;
+				const provider = providers.find(p => p.id === providerId);
+				if (provider) {
+					provider.models = models;
+				}
+				// Remove from loading set
+				loadingProviders.delete(providerId);
 				renderProviders();
 				break;
 
@@ -211,6 +276,13 @@
 						<span class="provider-detail-label">API Key</span>
 						<span>${provider.hasApiKey ? '**** Configured' : '⚠️ Not Set'}</span>
 					</div>
+					<div class="provider-detail-item">
+						<span class="provider-detail-label">Auto Fetch Models</span>
+						<label class="toggle auto-fetch-toggle" title="Automatically fetch models from API when settings open">
+							<input type="checkbox" class="auto-fetch-checkbox" ${provider.autoFetchModels !== false ? 'checked' : ''} data-id="${provider.id}">
+							<span class="toggle-slider"></span>
+						</label>
+					</div>
 				</div>
 				${(provider.models || provider.apiModels) && (provider.models || provider.apiModels).length > 0 ? `
 					<div class="provider-models">
@@ -236,11 +308,21 @@
 							`).join('')}
 						</div>
 					</div>
-				` : '<div class="provider-detail-item"><span class="provider-detail-label">Models</span><span>⚠️ No models (check API Key)</span></div>'}
+				` : (provider.enabled && provider.hasApiKey && provider.autoFetchModels !== false && loadingProviders.has(provider.id))
+					? '<div class="provider-detail-item"><span class="provider-detail-label">Models</span><span class="loading-text"><span class="loading-spinner"></span> Fetching models...</span></div>'
+					: '<div class="provider-detail-item"><span class="provider-detail-label">Models</span><span>⚠️ No models (check API Key)</span></div>'}
 				<div class="provider-actions">
 					<button class="secondary-btn edit-btn" data-id="${provider.id}">Edit</button>
 					<button class="secondary-btn delete-btn" data-id="${provider.id}">Delete</button>
-					<button class="primary-btn add-model-btn" data-provider-id="${provider.id}">+ Add Model</button>
+					${provider.autoFetchModels !== false ? `
+						<button class="primary-btn fetch-models-btn" data-provider-id="${provider.id}" ${loadingProviders.has(provider.id) ? 'disabled' : ''}>
+							${loadingProviders.has(provider.id) ? '<span class="btn-loading"><span class="btn-spinner"></span> Loading...</span>' : 'Fetch Models'}
+						</button>
+					` : `
+						<button class="primary-btn add-model-btn" data-provider-id="${provider.id}" ${loadingProviders.has(provider.id) ? 'disabled' : ''}>
+							${loadingProviders.has(provider.id) ? '<span class="btn-loading"><span class="btn-spinner"></span> Loading...</span>' : '+ Add Model'}
+						</button>
+					`}
 				</div>
 			</div>
 		`).join('');
@@ -254,6 +336,7 @@
 		providerName.value = '';
 		providerBaseUrl.value = '';
 		providerApiKey.value = '';
+		providerAutoFetchModels.checked = true;
 		providerModal.classList.add('active');
 	}
 
@@ -268,6 +351,7 @@
 		providerName.value = provider.name;
 		providerBaseUrl.value = provider.baseUrl;
 		providerApiKey.value = ''; // Don't show existing key
+		providerAutoFetchModels.checked = provider.autoFetchModels !== false;
 		// Ensure models list remains expanded
 		expandedProviders.add(id);
 		providerModal.classList.add('active');
@@ -500,6 +584,7 @@
 		const name = providerName.value.trim();
 		const baseUrl = providerBaseUrl.value.trim();
 		const apiKey = providerApiKey.value.trim();
+		const autoFetchModels = providerAutoFetchModels.checked;
 
 		if (!name) {
 			alert('Please enter a provider name');
@@ -516,7 +601,7 @@
 			return;
 		}
 
-		const providerData = { name, baseUrl, apiKey, enabled: true };
+		const providerData = { name, baseUrl, apiKey, enabled: true, autoFetchModels };
 
 		if (editingProviderId) {
 			// Update existing provider

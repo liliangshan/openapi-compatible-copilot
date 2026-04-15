@@ -49,40 +49,24 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			case 'getProviders':
 				const providers = await this._configManager.getProviders();
 				
-				// Auto-fetch models for each provider from API, merging with local models
-				const providersWithModels = await Promise.all(
-					providers.map(async (provider) => {
-						if (provider.hasApiKey) {
-							const apiKey = await this._configManager.getApiKey(provider.id);
-							if (apiKey) {
-								try {
-									const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey, provider.models);
-									// Save merged models back to storage so Copilot can see them
-									await this._configManager.updateProvider(provider.id, { models });
-									return { ...provider, models };
-								} catch (err) {
-									// If fetch fails, use existing stored models
-									return provider;
-								}
-							}
-						}
-						return provider;
-					})
-				);
-				
+				// Immediately send providers to UI (without waiting for API fetch)
 				this._getWebview()?.postMessage({
 					command: 'providersLoaded',
-					data: providersWithModels
+					data: providers
 				});
+				
+				// Async fetch models for each provider in background
+				this._fetchModelsAsync(providers);
 				break;
 
 			case 'addProvider':
 				try {
-					const provider = message.data as { name: string; baseUrl: string; apiKey: string; models?: any[] };
+					const provider = message.data as { name: string; baseUrl: string; apiKey: string; models?: any[]; autoFetchModels?: boolean };
 					
 					// Use models from request if provided, otherwise fetch from API
 					let models: any[] = provider.models || [];
-					if (models.length === 0 && provider.apiKey) {
+					const shouldFetch = provider.autoFetchModels !== false && models.length === 0 && provider.apiKey;
+					if (shouldFetch) {
 						try {
 							models = await this._fetchModelsFromAPI(provider.baseUrl, provider.apiKey);
 						} catch (err) {
@@ -95,7 +79,8 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						baseUrl: provider.baseUrl,
 						apiKey: provider.apiKey,
 						models: models,
-						enabled: true
+						enabled: true,
+						autoFetchModels: provider.autoFetchModels !== false,
 					});
 					
 					this._getWebview()?.postMessage({
@@ -134,7 +119,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					// Use models from request if provided, otherwise fetch from API and merge
 					if (updates.models && updates.models.length > 0) {
 						// User provided models, use them
-					} else if (apiKey) {
+					} else if (apiKey && updates.enabled !== false) {
 						const baseUrl = updates.baseUrl || currentProvider?.baseUrl || '';
 						if (baseUrl) {
 							try {
@@ -147,7 +132,13 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						}
 					}
 					
-					await this._configManager.updateProvider(id, updates);
+					// Only pass apiKey if it's provided (non-empty), otherwise keep existing key
+					const updateData: any = { ...updates };
+					if (apiKey) {
+						updateData.apiKey = apiKey;
+					}
+					
+					await this._configManager.updateProvider(id, updateData);
 					const updatedProviders = await this._configManager.getProviders();
 					this._getWebview()?.postMessage({
 						command: 'providersLoaded',
@@ -235,6 +226,76 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				}
 				break;
 
+			case 'toggleAutoFetchModels':
+				try {
+					const { id, autoFetchModels } = message.data as { id: string; autoFetchModels: boolean };
+					await this._configManager.updateProvider(id, { autoFetchModels });
+					
+					// If enabling auto-fetch, fetch models immediately
+					if (autoFetchModels) {
+						const providers = await this._configManager.getProviders();
+						const provider = providers.find(p => p.id === id);
+						if (provider && provider.enabled && provider.hasApiKey) {
+							const apiKey = await this._configManager.getApiKey(id);
+							if (apiKey) {
+								try {
+									const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey, provider.models);
+									await this._configManager.updateProvider(id, { models });
+									this._getWebview()?.postMessage({
+										command: 'providerModelsUpdated',
+										data: { providerId: id, models }
+									});
+								} catch (err) {
+									// Fetch failed, still clear loading state
+									this._getWebview()?.postMessage({
+										command: 'providerModelsUpdated',
+										data: { providerId: id, models: provider.models || [] }
+									});
+								}
+							}
+						}
+					}
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to toggle auto-fetch: ${errorMessage}`);
+				}
+				break;
+
+			case 'fetchProviderModels':
+				try {
+					const { id } = message.data as { id: string };
+					const providers = await this._configManager.getProviders();
+					const provider = providers.find(p => p.id === id);
+					if (provider && provider.enabled && provider.hasApiKey) {
+						const apiKey = await this._configManager.getApiKey(id);
+						if (apiKey) {
+							// Set loading state
+							this._getWebview()?.postMessage({
+								command: 'providerModelsLoading',
+								data: { providerId: id, loading: true }
+							});
+							
+							try {
+								const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey, provider.models);
+								await this._configManager.updateProvider(id, { models });
+								this._getWebview()?.postMessage({
+									command: 'providerModelsUpdated',
+									data: { providerId: id, models }
+								});
+							} catch (err) {
+								this._getWebview()?.postMessage({
+									command: 'providerModelsUpdated',
+									data: { providerId: id, models: provider.models || [] }
+								});
+							}
+						}
+					}
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to fetch models: ${errorMessage}`);
+				}
+				break;
+
 			case 'exportConfig':
 				const config = await this._configManager.exportConfig();
 				const content = JSON.stringify(config, null, 2);
@@ -282,19 +343,24 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	 */
 	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean; transformThink?: boolean }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean; transformThink?: boolean }>> {
 		const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
-		const response = await fetch(`${normalizedBaseUrl}/models`, {
-			method: 'GET',
-			headers: {
-				'Authorization': `Bearer ${apiKey}`,
-				'Content-Type': 'application/json',
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+		try {
+			const response = await fetch(`${normalizedBaseUrl}/models`, {
+				method: 'GET',
+				headers: {
+					'Authorization': `Bearer ${apiKey}`,
+					'Content-Type': 'application/json',
+				},
+				signal: controller.signal,
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
 			}
-		});
 
-		if (!response.ok) {
-			throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
-		}
-
-		const data: any = await response.json();
+			const data: any = await response.json();
 		const modelsList = data.data || data.models || [];
 		
 		const apiModels = modelsList.map((m: any) => ({
@@ -356,6 +422,48 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		}
 		
 		return merged;
+		} finally {
+			clearTimeout(timeoutId);
+		}
+	}
+
+	/**
+	 * Asynchronously fetch models for each provider and send updates to the UI.
+	 * Runs in background without blocking the initial provider list display.
+	 */
+	private async _fetchModelsAsync(providers: any[]): Promise<void> {
+		for (const provider of providers) {
+			// Skip disabled providers or providers with autoFetchModels disabled
+			if (!provider.enabled || provider.autoFetchModels === false) {
+				continue;
+			}
+			if (!provider.hasApiKey) {
+				continue;
+			}
+			
+			const apiKey = await this._configManager.getApiKey(provider.id);
+			if (!apiKey) {
+				continue;
+			}
+			
+			try {
+				const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey, provider.models);
+				// Save merged models back to storage so Copilot can see them
+				await this._configManager.updateProvider(provider.id, { models });
+				
+				// Send updated models to UI
+				this._getWebview()?.postMessage({
+					command: 'providerModelsUpdated',
+					data: { providerId: provider.id, models }
+				});
+			} catch (err) {
+				// If fetch fails, still clear loading state and keep existing models
+				this._getWebview()?.postMessage({
+					command: 'providerModelsUpdated',
+					data: { providerId: provider.id, models: provider.models || [] }
+				});
+			}
+		}
 	}
 
 	/**
@@ -447,6 +555,13 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 								<label for="providerApiKey">API Key</label>
 								<input type="password" id="providerApiKey" placeholder="sk-..." />
 								<div class="help-text">Leave empty to keep existing key (when editing)</div>
+							</div>
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input type="checkbox" id="providerAutoFetchModels" checked />
+									Auto Fetch Models
+								</label>
+								<div class="help-text">Automatically fetch models from API when settings open</div>
 							</div>
 							<div class="form-actions">
 								<button type="button" id="cancelBtn" class="secondary-btn">Cancel</button>

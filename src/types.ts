@@ -16,6 +16,8 @@ export interface ProviderConfig {
 	models: ModelConfig[];
 	/** Whether this provider is enabled */
 	enabled: boolean;
+	/** Whether to automatically fetch models from API on settings open */
+	autoFetchModels: boolean;
 	/** Creation timestamp */
 	createdAt: number;
 }
