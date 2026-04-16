@@ -29,6 +29,9 @@
 	const importBtn = document.getElementById('importBtn');
 	const exportBtn = document.getElementById('exportBtn');
 	const settingsBtn = document.getElementById('settingsBtn');
+	const testChatBtn = document.getElementById('testChatBtn');
+	const exportRecordsBtn = document.getElementById('exportRecordsBtn');
+	const importRecordsBtn = document.getElementById('importRecordsBtn');
 	const settingsModal = document.getElementById('settingsModal');
 	const closeSettingsModal = document.getElementById('closeSettingsModal');
 	const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
@@ -66,6 +69,19 @@
 		closeSettingsModal?.addEventListener('click', () => closeSettingsModalFn());
 		cancelSettingsBtn?.addEventListener('click', () => closeSettingsModalFn());
 		saveSettingsBtn?.addEventListener('click', () => saveSettings());
+		
+		// Test chat button
+		testChatBtn?.addEventListener('click', () => {
+			vscode.postMessage({ command: 'testNewChat' });
+		});
+		
+		// Chat records buttons
+		exportRecordsBtn?.addEventListener('click', () => {
+			vscode.postMessage({ command: 'exportRecords' });
+		});
+		importRecordsBtn?.addEventListener('click', () => {
+			vscode.postMessage({ command: 'importRecords' });
+		});
 		
 		providerForm.addEventListener('submit', (e) => {
 			e.preventDefault();

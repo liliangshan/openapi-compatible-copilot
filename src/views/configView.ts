@@ -360,6 +360,89 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					});
 				}
 				break;
+
+			case 'exportRecords':
+				try {
+					// Get VS Code workspace storage path based on platform
+					const home = process.env.HOME || process.env.USERPROFILE || '';
+					let workspaceStoragePath = '';
+					if (process.platform === 'darwin') {
+						workspaceStoragePath = `${home}/Library/Application Support/Code/User/workspaceStorage`;
+					} else if (process.platform === 'win32') {
+						const appData = process.env.APPDATA || `${home}/AppData/Roaming`;
+						workspaceStoragePath = `${appData}/Code/User/workspaceStorage`;
+					} else {
+						workspaceStoragePath = `${home}/.config/Code/User/workspaceStorage`;
+					}
+
+					// Get current workspace folder
+					const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+					const workspacePath = workspaceFolder?.uri.fsPath || 'unknown';
+
+					const prompt = `Please help me export chat records:
+
+1. VS Code chat records directory: ${workspaceStoragePath}
+2. Current project path: ${workspacePath}
+
+Please perform the following operations:
+- Traverse all subdirectories under ${workspaceStoragePath}
+- Read the workspace.json file in each subdirectory
+- Find the subdirectory whose folder field equals the current project path (${workspacePath})
+- Create a .LLSOAI/current-timestamp folder under the current project
+- Copy all contents from the matched subdirectory (including workspace.json and chatSessions folder) to the .LLSOAI/current-timestamp folder`;
+
+					// Open new chat and send message
+					await vscode.commands.executeCommand('workbench.action.chat.newChat');
+					await vscode.commands.executeCommand('workbench.action.chat.open', {
+						query: prompt,
+					});
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to export records: ${errorMessage}`);
+				}
+				break;
+
+			case 'importRecords':
+				try {
+					// Get VS Code workspace storage path based on platform
+					const home = process.env.HOME || process.env.USERPROFILE || '';
+					let workspaceStoragePath = '';
+					if (process.platform === 'darwin') {
+						workspaceStoragePath = `${home}/Library/Application Support/Code/User/workspaceStorage`;
+					} else if (process.platform === 'win32') {
+						const appData = process.env.APPDATA || `${home}/AppData/Roaming`;
+						workspaceStoragePath = `${appData}/Code/User/workspaceStorage`;
+					} else {
+						workspaceStoragePath = `${home}/.config/Code/User/workspaceStorage`;
+					}
+
+					// Get current workspace folder
+					const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+					const workspacePath = workspaceFolder?.uri.fsPath || 'unknown';
+
+					const prompt = `Please help me import chat records:
+
+1. Current project path: ${workspacePath}
+2. VS Code chat records directory: ${workspaceStoragePath}
+
+Please perform the following operations:
+- Check if the .LLSOAI directory exists in the current project
+- If it does not exist, prompt the user to place the exported records folder into the .LLSOAI directory
+- If it exists, list all subdirectories under .LLSOAI and find the one with the most recent modification time
+- Enter the latest directory and check if there is a workspace.json file
+- If it exists, modify its folder field to the current project path (${workspacePath})
+- Then copy all contents from this latest directory (including the modified workspace.json) to ${workspaceStoragePath} (create a new subdirectory)`;
+
+					// Open new chat and send message
+					await vscode.commands.executeCommand('workbench.action.chat.newChat');
+					await vscode.commands.executeCommand('workbench.action.chat.open', {
+						query: prompt,
+					});
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to import records: ${errorMessage}`);
+				}
+				break;
 		}
 	}
 
@@ -563,13 +646,27 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						<div class="section-header">
 							<div class="section-title-group">
 								<svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2L1 2v9l1 1h3v2.5l.854.354L8.707 12H14l1-1V2l-1-1zm0 10H8.293L5.146 14.146 6 13.293V11H2V2h12v9z"/><path d="M3 4h10v1H3V4zm0 2h8v1H3V6zm0 2h6v1H3V8z"/></svg>
-								<h2>Chat History</h2>
+								<h2>Save Chat History</h2>
 							</div>
 							<button id="settingsBtn" class="icon-btn compact" title="Chat History Settings">
 								<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M3.5 2h-1v5h1V2zm6.1 5H6.4L6 6.45v-1L6.4 5h3.2l.4.5v1l-.4.5zm-5 3H1.4L1 9.5v-1l.4-.5h3.2l.4.5v1l-.4.5zm3.9-8h-1v2h1V2zm-1 6h1v6h-1V8zm-4 3h-1v3h1v-3zm7.9 0h3.19l.4-.5v-1l-.4-.5H11.4l-.4.5v1l.4.5zm2.1-9h-1v6h1V2zm-1 10h1v2h-1v-2z"/></svg>
 								<span>Settings</span>
 							</button>
 						</div>
+					</section>
+
+					<section class="config-section chat-records-section">
+						<div class="section-header">
+							<div class="section-title-group">
+								<svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2L1 2v9l1 1h3v2.5l.854.354L8.707 12H14l1-1V2l-1-1zm0 10H8.293L5.146 14.146 6 13.293V11H2V2h12v9z"/><path d="M3 4h10v1H3V4zm0 2h8v1H3V6zm0 2h6v1H3V8z"/></svg>
+								<h2>Copilot Records</h2>
+							</div>
+							<div class="section-actions">
+								<button id="importRecordsBtn" class="secondary-btn">Import</button>
+								<button id="exportRecordsBtn" class="secondary-btn">Export</button>
+							</div>
+						</div>
+						<p class="section-description">Import and export Copilot chat records for migration between different machines.</p>
 					</section>
 
 					<section class="config-section providers-section">
@@ -738,6 +835,18 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				<script nonce="${nonce}" src="${scriptUri}?v=${version}"></script>
 			</body>
 			</html>`;
+	}
+
+	/**
+	 * Get default chat records save path based on platform
+	 */
+	private _getDefaultSavePath(): string {
+		const home = process.env.HOME || process.env.USERPROFILE || '';
+		if (process.platform === 'win32') {
+			const appData = process.env.APPDATA || '';
+			return appData ? `${appData}/LLSOAI` : `${home}/AppData/Roaming/LLSOAI`;
+		}
+		return `${home}/.LLSOAI`;
 	}
 
 	private _getNonce(): string {

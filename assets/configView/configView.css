@@ -136,6 +136,13 @@ body {
 	margin: 0;
 }
 
+.section-description {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	margin: 0 0 12px 12px;
+	line-height: 1.4;
+}
+
 .provider-count {
 	display: inline-flex;
 	align-items: center;

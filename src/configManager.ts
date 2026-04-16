@@ -246,8 +246,8 @@ export class ConfigManager {
 			const firstMessageContent = firstUserMsg?.content || 'unknown';
 			const sessionId = this._generateSessionId(firstMessageContent);
 
-			// Check if this is a compression event (contains <conversation-summary>)
-			const isCompression = messages.some(m => m.content.includes('<conversation-summary>'));
+			// Check if this is a compression event (system prompt contains "create a comprehensive")
+			const isCompression = messages.some(m => m.role === 'system' && m.content.includes('create a comprehensive'));
 			const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 			const startTime = new Date().toISOString();
 
