@@ -38,42 +38,135 @@ body {
 .container {
 	max-width: 800px;
 	margin: 0 auto;
-	padding: 20px;
+	padding: 16px 20px;
 }
 
 .header {
 	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 24px;
-	padding-bottom: 16px;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 20px;
+	padding-bottom: 14px;
 	border-bottom: 1px solid var(--vscode-input-border);
 }
 
+.header-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
 .header h1 {
-	font-size: 20px;
+	font-size: 18px;
 	font-weight: 600;
+}
+
+.header-subtitle {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	font-weight: 400;
+	margin: 0;
 }
 
 .header-actions {
 	display: flex;
-	gap: 8px;
+	gap: 6px;
 }
 
-.section-header {
+/* Icon Button */
+.icon-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	background: transparent;
+	color: var(--vscode-foreground);
+	border: 1px solid var(--vscode-input-border);
+	padding: 5px 10px;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 12px;
+	transition: background-color 0.15s, border-color 0.15s;
+}
+
+.icon-btn:hover {
+	background-color: var(--vscode-list-hoverBackground);
+	border-color: var(--vscode-focusBorder);
+}
+
+.icon-btn svg {
+	flex-shrink: 0;
+	opacity: 0.8;
+}
+
+.icon-btn.compact {
+	padding: 4px 8px;
+	font-size: 11px;
+}
+
+/* Config Sections */
+.config-section {
+	margin-bottom: 20px;
+}
+
+.config-section .section-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	margin-bottom: 16px;
+	margin-bottom: 12px;
+	padding: 8px 12px;
+	background-color: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 6px;
 }
 
-.section-header h2 {
-	font-size: 16px;
+.section-title-group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.section-icon {
+	opacity: 0.7;
+	flex-shrink: 0;
+}
+
+.config-section .section-header h2 {
+	font-size: 13px;
+	font-weight: 600;
+	margin: 0;
+}
+
+.provider-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 20px;
+	height: 18px;
+	padding: 0 6px;
+	border-radius: 9px;
+	background-color: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.provider-count:empty {
+	display: none;
+}
+
+/* Add Provider Button */
+.add-provider-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 12px;
+	border-radius: 4px;
+	font-size: 12px;
 	font-weight: 500;
 }
 
-.providers-section {
-	margin-bottom: 24px;
+.add-provider-btn svg {
+	flex-shrink: 0;
 }
 
 /* Buttons */

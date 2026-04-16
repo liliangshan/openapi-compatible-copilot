@@ -265,6 +265,12 @@
 
 	// Render providers list
 	function renderProviders() {
+		// Update provider count badge
+		const countEl = document.getElementById('providerCount');
+		if (countEl) {
+			countEl.textContent = providers.length > 0 ? providers.length : '';
+		}
+
 		if (providers.length === 0) {
 			providersList.innerHTML = `
 				<div class="empty-state">

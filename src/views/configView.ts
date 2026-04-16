@@ -543,24 +543,46 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			<body>
 				<div class="container">
 					<header class="header">
-						<h1>LLS OAI</h1>
+						<div class="header-top">
+							<h1>LLS OAI</h1>
+							<div class="header-actions">
+								<button id="importBtn" class="icon-btn" title="Import Configuration">
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M11.5 1h-7l-.5.5v4H1.5l-.5.5v8l.5.5h13l.5-.5v-8l-.5-.5H12V1.5l-.5-.5zM5 5V2h6v3H5zm9 9H2V6h3v1.5l.5.5h5l.5-.5V6h3v8z"/><path d="M6 10h4v1H6v-1z"/></svg>
+									<span>Import</span>
+								</button>
+								<button id="exportBtn" class="icon-btn" title="Export Configuration">
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M11.5 1h-7l-.5.5v4H1.5l-.5.5v8l.5.5h13l.5-.5v-8l-.5-.5H12V1.5l-.5-.5zM5 5V2h6v3H5zm9 9H2V6h3v1.5l.5.5h5l.5-.5V6h3v8z"/><path d="M6 8h1v3h2V8h1L8 5.5 6 8z"/></svg>
+									<span>Export</span>
+								</button>
+							</div>
+						</div>
+						<p class="header-subtitle">OpenAPI Compatible Copilot</p>
 					</header>
-					<div class="header-actions">
-						<button id="importBtn" class="secondary-btn">Import</button>
-						<button id="exportBtn" class="secondary-btn">Export</button>
-					</div>
 
-					<section class="providers-section">
+					<section class="config-section chat-history-section">
 						<div class="section-header">
-							<h2>Auto Save Chat History</h2>
-							<button id="settingsBtn" class="secondary-btn" title="Settings">⚙ Settings</button>
+							<div class="section-title-group">
+								<svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2L1 2v9l1 1h3v2.5l.854.354L8.707 12H14l1-1V2l-1-1zm0 10H8.293L5.146 14.146 6 13.293V11H2V2h12v9z"/><path d="M3 4h10v1H3V4zm0 2h8v1H3V6zm0 2h6v1H3V8z"/></svg>
+								<h2>Chat History</h2>
+							</div>
+							<button id="settingsBtn" class="icon-btn compact" title="Chat History Settings">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M3.5 2h-1v5h1V2zm6.1 5H6.4L6 6.45v-1L6.4 5h3.2l.4.5v1l-.4.5zm-5 3H1.4L1 9.5v-1l.4-.5h3.2l.4.5v1l-.4.5zm3.9-8h-1v2h1V2zm-1 6h1v6h-1V8zm-4 3h-1v3h1v-3zm7.9 0h3.19l.4-.5v-1l-.4-.5H11.4l-.4.5v1l.4.5zm2.1-9h-1v6h1V2zm-1 10h1v2h-1v-2z"/></svg>
+								<span>Settings</span>
+							</button>
 						</div>
 					</section>
 
-					<section class="providers-section">
+					<section class="config-section providers-section">
 						<div class="section-header">
-							<h2>Providers</h2>
-							<button id="addProviderBtn" class="primary-btn">+ Add Provider</button>
+							<div class="section-title-group">
+								<svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.5 1H2.5L2 1.5V5l.5.5h1.639l.138.248 1.14 2.06-.638 2.148L4.5 10.5H3v3l.5.5h9l.5-.5v-3h-1.5l-.279-.544-.638-2.148 1.14-2.06.138-.248H13.5l.5-.5V1.5l-.5-.5zM13 5H3V2h10v3zm-2.621 5H5.621l.579-1.948-.758-1.37L4.5 5h7l-.942 1.682-.758 1.37L10.379 10zM12 13H4v-2h8v2z"/></svg>
+								<h2>Providers</h2>
+								<span class="provider-count" id="providerCount"></span>
+							</div>
+							<button id="addProviderBtn" class="primary-btn add-provider-btn">
+								<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 7v1H8v6H7V8H1V7h6V1h1v6h6z"/></svg>
+								<span>Add Provider</span>
+							</button>
 						</div>
 						<div id="providersList" class="providers-list">
 							<!-- Providers will be rendered here -->
