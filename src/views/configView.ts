@@ -429,12 +429,16 @@ Please perform the following operations:
 - Check if the .LLSOAI directory exists in the current project
 - If it does not exist, prompt the user to place the exported records folder into the .LLSOAI directory
 - If it exists, list all subdirectories under .LLSOAI and find the one with the most recent modification time
-- Enter the latest directory and check if there is a workspace.json file
-- If it exists, modify its folder field to the current project path (${workspacePath})
-- Then copy all contents from this latest directory (including the modified workspace.json) to ${workspaceStoragePath} (create a new subdirectory)`;
+- Traverse ALL subdirectories under ${workspaceStoragePath} and read each workspace.json file
+- Find the subdirectory whose workspace.json "folder" field matches the current project path (${workspacePath})
+- Once found, force copy ALL contents from the latest .LLSOAI directory into that matched subdirectory (overwrite any existing files)
+
+After completing the operations, please reply with the following message in both English and Chinese:
+"Import completed successfully. Please close the current editor and reopen it to load the migrated data. If the chat records do not appear after reopening, please try importing again and then close and reopen the editor once more.
+导入完成。请关闭当前编辑器并重新打开以载入迁移的数据。如果重新打开后没有看到聊天记录，请再次尝试导入，完成后再次关闭并重新打开编辑器。"`;
 
 					// Open new chat and send message
-					await vscode.commands.executeCommand('workbench.action.chat.newChat');
+					//await vscode.commands.executeCommand('workbench.action.chat.newChat');
 					await vscode.commands.executeCommand('workbench.action.chat.open', {
 						query: prompt,
 					});

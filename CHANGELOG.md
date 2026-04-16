@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.0
+
+### Added
+- **Auto Save Chat History**: Automatically save chat conversations to local files with configurable save path
+- **Chat History Settings**: Settings modal with toggle switch and custom save path configuration
+- **Session Archiving**: When conversation compression is detected (system prompt contains "create a comprehensive"), automatically archives the full conversation with timestamp
+- **Cross-Platform Support**: Default save paths for Windows (`%APPDATA%/LLSOAI`) and macOS/Linux (`~/.LLSOAI`)
+- **Copilot Records Import/Export**: Import and export Copilot chat records for migration between different machines
+- **Export Records**: Finds the current project's workspace in VS Code storage and copies to `.LLSOAI/timestamp` folder in the project
+- **Import Records**: Detects the latest exported records from `.LLSOAI`, finds the matched workspaceStorage directory by reading workspace.json, and copies all contents
+- **Chat Records Section**: New UI section with Import/Export buttons and description
+
+### File Format
+- **Normal save**: `chat_<sessionId>.json` - overwrites on each update, always keeps latest session state
+- **Archive save**: `chat-session-<timestamp>.json` - created when conversation is compressed, preserves the full history at that point
+
+## 0.9.0
+
+### Added
+- **Copilot Records**: Import and export Copilot chat records for migration between different machines
+- **Export Records**: Finds the current project's workspace in VS Code storage and copies to `.LLSOAI/timestamp` folder in the project
+- **Import Records**: Detects the latest exported records from `.LLSOAI`, updates `workspace.json` folder path to current project, and copies to VS Code workspace storage
+- **Chat Records Section**: New UI section with Import/Export buttons and description
+
 ## 0.8.0
 
 ### Added
