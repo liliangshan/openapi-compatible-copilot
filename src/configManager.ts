@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import * as os from 'os';
+import * as path from 'path';
+import * as crypto from 'crypto';
 import { ProviderConfig, ProviderConfigWithoutSecrets } from './types';
 
 /**
@@ -9,11 +12,37 @@ function generateId(): string {
 }
 
 /**
+ * Chat history auto-save settings
+ */
+export interface ChatHistorySettings {
+	/** Whether to automatically save chat history */
+	enabled: boolean;
+	/** Directory to save chat history files */
+	savePath: string;
+}
+
+/**
+ * Get default chat history save path based on platform
+ */
+export function getDefaultChatHistorySavePath(): string {
+	const platform = os.platform();
+	if (platform === 'win32') {
+		// Windows: %APPDATA%/LLSOAI
+		const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+		return path.join(appData, 'LLSOAI');
+	} else {
+		// macOS/Linux: ~/.LLSOAI
+		return path.join(os.homedir(), '.LLSOAI');
+	}
+}
+
+/**
  * Manages provider configurations including persistence and secrets
  */
 export class ConfigManager {
 	private static readonly PROVIDERS_KEY = 'openapicopilot.providers';
 	private static readonly SECRET_PREFIX = 'openapicopilot.apiKey.';
+	private static readonly CHAT_HISTORY_KEY = 'openapicopilot.chatHistorySettings';
 
 	constructor(
 		private readonly context: vscode.ExtensionContext,
@@ -154,5 +183,102 @@ export class ConfigManager {
 	 */
 	async importConfig(data: { providers: ProviderConfigWithoutSecrets[] }): Promise<void> {
 		await this.context.globalState.update(ConfigManager.PROVIDERS_KEY, data.providers);
+	}
+
+	/**
+	 * Get chat history auto-save settings
+	 */
+	async getChatHistorySettings(): Promise<ChatHistorySettings> {
+		const stored = this.context.globalState.get<ChatHistorySettings>(ConfigManager.CHAT_HISTORY_KEY);
+		if (stored) {
+			return stored;
+		}
+		// Return default settings
+		return {
+			enabled: false,
+			savePath: getDefaultChatHistorySavePath(),
+		};
+	}
+
+	/**
+	 * Update chat history auto-save settings
+	 */
+	async updateChatHistorySettings(settings: Partial<ChatHistorySettings>): Promise<ChatHistorySettings> {
+		const current = await this.getChatHistorySettings();
+		const updated = { ...current, ...settings };
+		await this.context.globalState.update(ConfigManager.CHAT_HISTORY_KEY, updated);
+		return updated;
+	}
+
+	/**
+	 * Generate a session ID from the first message content
+	 * Uses hash to create a short, consistent identifier
+	 */
+	private _generateSessionId(firstMessage: string): string {
+		return crypto.createHash('md5').update(firstMessage).digest('hex').substring(0, 8);
+	}
+
+	/**
+	 * Save chat history to file
+	 * Normal save: overwrites the file for the same session (chat_<sessionId>.json)
+	 * When conversation-summary is detected (compression): also saves an archive file (chat-session-<timestamp>.json)
+	 * @param messages The complete conversation history
+	 * @param modelId The model used for this conversation
+	 */
+	async saveChatHistory(messages: Array<{ role: string; content: string; name?: string }>, modelId?: string): Promise<void> {
+		const settings = await this.getChatHistorySettings();
+		if (!settings.enabled || messages.length === 0) {
+			return;
+		}
+
+		try {
+			const saveUri = vscode.Uri.file(settings.savePath);
+			
+			// Ensure directory exists
+			try {
+				await vscode.workspace.fs.stat(saveUri);
+			} catch {
+				await vscode.workspace.fs.createDirectory(saveUri);
+			}
+
+			// Generate session ID from first user message
+			const firstUserMsg = messages.find(m => m.role === 'user');
+			const firstMessageContent = firstUserMsg?.content || 'unknown';
+			const sessionId = this._generateSessionId(firstMessageContent);
+
+			// Check if this is a compression event (contains <conversation-summary>)
+			const isCompression = messages.some(m => m.content.includes('<conversation-summary>'));
+			const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+			const startTime = new Date().toISOString();
+
+			// Build the chat history object
+			const chatData = {
+				sessionId,
+				modelId,
+				startTime,
+				messageCount: messages.length,
+				messages: messages.map(m => ({
+					role: m.role,
+					name: m.name || undefined,
+					content: m.content,
+				})),
+			};
+
+			const content = JSON.stringify(chatData, null, 2);
+
+			// Normal save: overwrite session file
+			const sessionFilename = `chat_${sessionId}.json`;
+			const sessionFileUri = vscode.Uri.joinPath(saveUri, sessionFilename);
+			await vscode.workspace.fs.writeFile(sessionFileUri, Buffer.from(content, 'utf8'));
+
+			// If compression event, also save an archive file with timestamp
+			if (isCompression) {
+				const archiveFilename = `chat-session-${timestamp}.json`;
+				const archiveFileUri = vscode.Uri.joinPath(saveUri, archiveFilename);
+				await vscode.workspace.fs.writeFile(archiveFileUri, Buffer.from(content, 'utf8'));
+			}
+		} catch (error) {
+			console.error('Failed to save chat history:', error);
+		}
 	}
 }

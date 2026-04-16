@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0
+
+### Added
+- **Auto Save Chat History**: New feature to automatically save chat conversations to local files
+- **Chat History Settings**: Settings modal with toggle switch and custom save path configuration
+- **Session Archiving**: When conversation compression is detected (`<conversation-summary>`), automatically archives the full conversation with timestamp
+- **Cross-Platform Support**: Default save paths for Windows (`%APPDATA%/LLSOAI`) and macOS/Linux (`~/.LLSOAI`)
+- **Chat History Section**: New "Auto Save Chat History" section in the provider management UI with settings button
+
+### File Format
+- **Normal save**: `chat_<sessionId>.json` - overwrites on each update, always keeps latest session state
+- **Archive save**: `chat-session-<timestamp>.json` - created when conversation is compressed, preserves the full history at that point
+
 ## 0.7.0
 
 ### Added

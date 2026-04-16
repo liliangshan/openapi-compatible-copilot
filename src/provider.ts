@@ -244,6 +244,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		// Make API request
 		const abortController = new AbortController();
 		this._abortControllers.set(providerId, abortController);
+		let assistantResponse = ''; // Collect full response for chat history
 
 		token.onCancellationRequested(() => {
 			abortController.abort();
@@ -326,8 +327,10 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 									this._processThinkTags(content, (text) => {
 										progress.report(new vscode.LanguageModelTextPart(text));
 									}, thinkState);
+									assistantResponse += content; // Collect for chat history (with think tags)
 								} else {
 									progress.report(new vscode.LanguageModelTextPart(content));
+									assistantResponse += content;
 								}
 							}
 
@@ -374,7 +377,49 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			throw error;
 		} finally {
 			this._abortControllers.delete(providerId);
+			
+			// Save chat history after response completes
+			if (assistantResponse) {
+				const chatMessages = this._buildChatMessages(messages, assistantResponse);
+				await this._configManager.saveChatHistory(chatMessages, modelId);
+			}
 		}
+	}
+
+	/**
+	 * Build chat messages array for saving to history file
+	 */
+	private _buildChatMessages(
+		messages: readonly vscode.LanguageModelChatRequestMessage[],
+		assistantResponse: string
+	): Array<{ role: string; content: string; name?: string }> {
+		const result: Array<{ role: string; content: string; name?: string }> = [];
+		
+		for (const msg of messages) {
+			const role = this._mapRole(msg);
+			const content = msg.content
+				.filter((p): p is vscode.LanguageModelTextPart => p instanceof vscode.LanguageModelTextPart)
+				.map(p => p.value)
+				.join('');
+			
+			if (content) {
+				result.push({
+					role,
+					content,
+					name: msg.name || undefined,
+				});
+			}
+		}
+		
+		// Add assistant response
+		if (assistantResponse) {
+			result.push({
+				role: 'assistant',
+				content: assistantResponse,
+			});
+		}
+		
+		return result;
 	}
 
 	/**

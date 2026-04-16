@@ -331,6 +331,35 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					vscode.window.showInformationMessage('Configuration imported successfully.');
 				}
 				break;
+
+			case 'getChatHistorySettings':
+				const settings = await this._configManager.getChatHistorySettings();
+				this._getWebview()?.postMessage({
+					command: 'chatHistorySettingsLoaded',
+					data: settings
+				});
+				break;
+
+			case 'updateChatHistorySettings':
+				try {
+					const { enabled, savePath } = message.data as { enabled: boolean; savePath: string };
+					const updatedSettings = await this._configManager.updateChatHistorySettings({ enabled, savePath });
+					this._getWebview()?.postMessage({
+						command: 'chatHistorySettingsLoaded',
+						data: updatedSettings,
+						success: true
+					});
+					vscode.window.showInformationMessage('Chat history settings updated.');
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to update chat history settings: ${errorMessage}`);
+					this._getWebview()?.postMessage({
+						command: 'chatHistorySettingsLoaded',
+						success: false,
+						error: errorMessage
+					});
+				}
+				break;
 		}
 	}
 
@@ -523,6 +552,13 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 					<section class="providers-section">
 						<div class="section-header">
+							<h2>Auto Save Chat History</h2>
+							<button id="settingsBtn" class="secondary-btn" title="Settings">⚙ Settings</button>
+						</div>
+					</section>
+
+					<section class="providers-section">
+						<div class="section-header">
 							<h2>Providers</h2>
 							<button id="addProviderBtn" class="primary-btn">+ Add Provider</button>
 						</div>
@@ -646,6 +682,32 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						<div class="form-actions">
 							<button type="button" id="cancelEditModelBtn" class="secondary-btn">Cancel</button>
 							<button type="button" id="saveEditModelBtn" class="primary-btn">Save Model</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- Settings Modal -->
+				<div id="settingsModal" class="modal">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h2>Chat History Settings</h2>
+							<button id="closeSettingsModal" class="close-btn">&times;</button>
+						</div>
+						<div class="form-group">
+							<label class="checkbox-label">
+								<input type="checkbox" id="chatHistoryEnabled" />
+								Auto Save Chat History
+							</label>
+							<div class="help-text">Automatically save chat conversations to local files</div>
+						</div>
+						<div class="form-group">
+							<label for="chatHistorySavePath">Save Path</label>
+							<input type="text" id="chatHistorySavePath" placeholder="Path to save chat history" />
+							<div class="help-text">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
+						</div>
+						<div class="form-actions">
+							<button type="button" id="cancelSettingsBtn" class="secondary-btn">Cancel</button>
+							<button type="button" id="saveSettingsBtn" class="primary-btn">Save</button>
 						</div>
 					</div>
 				</div>

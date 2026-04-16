@@ -28,6 +28,13 @@
 	const cancelBtn = document.getElementById('cancelBtn');
 	const importBtn = document.getElementById('importBtn');
 	const exportBtn = document.getElementById('exportBtn');
+	const settingsBtn = document.getElementById('settingsBtn');
+	const settingsModal = document.getElementById('settingsModal');
+	const closeSettingsModal = document.getElementById('closeSettingsModal');
+	const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
+	const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+	const chatHistoryEnabled = document.getElementById('chatHistoryEnabled');
+	const chatHistorySavePath = document.getElementById('chatHistorySavePath');
 	const editModelModal = document.getElementById('editModelModal');
 	const closeEditModelBtn = document.getElementById('closeEditModelBtn');
 	const cancelEditModelBtn = document.getElementById('cancelEditModelBtn');
@@ -35,6 +42,7 @@
 
 	// Initialize
 	vscode.postMessage({ command: 'getProviders' });
+	vscode.postMessage({ command: 'getChatHistorySettings' });
 	setupEventListeners();
 
 	function setupEventListeners() {
@@ -52,6 +60,13 @@
 		});
 		importBtn.addEventListener('click', () => vscode.postMessage({ command: 'importConfig' }));
 		exportBtn.addEventListener('click', () => vscode.postMessage({ command: 'exportConfig' }));
+		
+		// Settings modal
+		settingsBtn?.addEventListener('click', () => openSettingsModal());
+		closeSettingsModal?.addEventListener('click', () => closeSettingsModalFn());
+		cancelSettingsBtn?.addEventListener('click', () => closeSettingsModalFn());
+		saveSettingsBtn?.addEventListener('click', () => saveSettings());
+		
 		providerForm.addEventListener('submit', (e) => {
 			e.preventDefault();
 			saveProvider();
@@ -236,6 +251,13 @@
 				} else if (message.data?.id) {
 					// Store the newly added provider ID to expand after providersLoaded
 					newlyAddedProviderId = message.data.id;
+				}
+				break;
+
+			case 'chatHistorySettingsLoaded':
+				if (message.data) {
+					chatHistoryEnabled.checked = message.data.enabled;
+					chatHistorySavePath.value = message.data.savePath || '';
 				}
 				break;
 		}
@@ -632,4 +654,26 @@
 		div.textContent = text;
 		return div.innerHTML;
 	}
+
+        // Settings Modal
+        function openSettingsModal() {
+                // Request latest settings before opening
+                vscode.postMessage({ command: 'getChatHistorySettings' });
+                settingsModal?.classList.add('active');
+        }
+
+        function closeSettingsModalFn() {
+                settingsModal?.classList.remove('active');
+        }
+
+        function saveSettings() {
+                vscode.postMessage({
+                        command: 'updateChatHistorySettings',
+                        data: {
+                                enabled: chatHistoryEnabled.checked,
+                                savePath: chatHistorySavePath.value.trim()
+                        }
+                });
+                closeSettingsModalFn();
+        }
 })();
