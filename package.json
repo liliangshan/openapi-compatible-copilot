@@ -4,12 +4,12 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
 	"extensionDependencies": [
-		"github.copilot-chat"
+		
 	],
 	"categories": [
 		"AI",
@@ -27,8 +27,7 @@
 		"languageModelChatProviders": [
 			{
 				"vendor": "openapicopilot",
-				"displayName": "LLS OAI",
-				"managementCommand": "openapicopilot.manageProviders"
+				"displayName": "LLS OAI"
 			}
 		],
 		"commands": [
@@ -74,8 +73,7 @@
 	},
 	"main": "./out/extension.js",
 	"activationEvents": [
-		"onCommand:openapicopilot.manageProviders",
-		"onCommand:openapicopilot.openConfig"
+	
 	],
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
