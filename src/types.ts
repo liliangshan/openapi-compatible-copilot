@@ -12,6 +12,8 @@ export interface ProviderConfig {
 	baseUrl: string;
 	/** API key for authentication */
 	apiKey: string;
+	/** API type: 'openai-compatible' | 'anthropic' */
+	apiType: 'openai-compatible' | 'anthropic';
 	/** List of models configured for this provider */
 	models: ModelConfig[];
 	/** Whether this provider is enabled */
@@ -43,7 +45,7 @@ export interface ModelConfig {
 	/** Top-p sampling value (0-1) */
 	topP: number;
 	/** Sampling mode: 'temperature' (only temperature), 'top_p' (only top_p), 'both' (default) */
-	samplingMode: 'temperature' | 'top_p' | 'both';
+	samplingMode: 'temperature' | 'top_p' | 'both' | 'none';
 	/** Whether the model shows up in the chat model selector */
 	isUserSelectable?: boolean;
 	/** Whether to transform <think> tags in model responses */

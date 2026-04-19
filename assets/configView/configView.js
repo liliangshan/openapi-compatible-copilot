@@ -20,6 +20,7 @@
 	const providerForm = document.getElementById('providerForm');
 	const providerId = document.getElementById('providerId');
 	const providerName = document.getElementById('providerName');
+	const providerApiType = document.getElementById('providerApiType');
 	const providerBaseUrl = document.getElementById('providerBaseUrl');
 	const providerApiKey = document.getElementById('providerApiKey');
 	const providerAutoFetchModels = document.getElementById('providerAutoFetchModels');
@@ -313,6 +314,10 @@
 				</div>
 				<div class="provider-details">
 					<div class="provider-detail-item">
+						<span class="provider-detail-label">API Type</span>
+						<span>${provider.apiType === 'anthropic' ? 'Anthropic' : 'OpenAI-Compatible'}</span>
+					</div>
+					<div class="provider-detail-item">
 						<span class="provider-detail-label">Base URL</span>
 						<span>${escapeHtml(provider.baseUrl)}</span>
 					</div>
@@ -378,6 +383,7 @@
 		modalTitle.textContent = 'Add Provider';
 		providerId.value = '';
 		providerName.value = '';
+		providerApiType.value = 'openai-compatible';
 		providerBaseUrl.value = '';
 		providerApiKey.value = '';
 		providerAutoFetchModels.checked = true;
@@ -393,6 +399,7 @@
 		modalTitle.textContent = 'Edit Provider';
 		providerId.value = provider.id;
 		providerName.value = provider.name;
+		providerApiType.value = provider.apiType || 'openai-compatible';
 		providerBaseUrl.value = provider.baseUrl;
 		providerApiKey.value = ''; // Don't show existing key
 		providerAutoFetchModels.checked = provider.autoFetchModels !== false;
@@ -626,6 +633,7 @@
 	// Save provider - models will be auto-fetched by the backend
 	function saveProvider() {
 		const name = providerName.value.trim();
+		const apiType = providerApiType.value;
 		const baseUrl = providerBaseUrl.value.trim();
 		const apiKey = providerApiKey.value.trim();
 		const autoFetchModels = providerAutoFetchModels.checked;
@@ -645,7 +653,7 @@
 			return;
 		}
 
-		const providerData = { name, baseUrl, apiKey, enabled: true, autoFetchModels };
+		const providerData = { name, apiType, baseUrl, apiKey, enabled: true, autoFetchModels };
 
 		if (editingProviderId) {
 			// Update existing provider
@@ -698,4 +706,29 @@
                 });
                 closeSettingsModalFn();
         }
+
+        // Ad Banner
+        const adBanner = document.getElementById('adBanner');
+        let adUrl = '';
+
+        // Handle ad click
+        adBanner?.addEventListener('click', () => {
+                if (adUrl) {
+                        vscode.postMessage({ command: 'openUrl', data: adUrl });
+                }
+        });
+
+        // Handle ad data loaded from extension
+        window.addEventListener('message', (event) => {
+                const message = event.data;
+                if (message.command === 'loadAd' && message.data) {
+                        const { image, url } = message.data;
+                        if (image && url) {
+                                adUrl = url;
+                                const adLabel = (window.VSCODE_LOCALE || '').startsWith('zh') ? '广告' : 'AD';
+                                adBanner.innerHTML = `<span class="ad-label">${adLabel}</span><img src="${image}" alt="Ad" />`;
+                                adBanner.style.display = 'block';
+                        }
+                }
+        });
 })();

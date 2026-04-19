@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.0
+
+### Added
+- **Anthropic API Support**: Full support for Anthropic Messages API (`/v1/messages`) alongside OpenAI-compatible endpoints
+- **Automatic Format Conversion**: Bidirectional conversion between OpenAI chat format and Anthropic Messages format, including:
+  - Messages conversion (system/user/assistant/tool roles)
+  - Tool definitions (`type: 'function'` → `input_schema`)
+  - Tool choice mapping (`auto/none/required` → `auto/none/any`)
+  - Streaming SSE event translation (Anthropic → OpenAI-style chunks)
+- **Tool Calling for Anthropic**: Complete tool calling support with proper handling of:
+  - `content_block_start` / `content_block_delta` / `content_block_stop` events
+  - Empty parameter tools (no-argument tool calls)
+  - Multi-tool calls in a single response
+- **Consecutive User Message Merging**: Automatically merges consecutive user messages from VS Code Copilot context to comply with API requirements
+- **Cross-Platform Debug Logging**: Error and debug file saving with automatic directory creation, works on macOS, Linux, and Windows
+
 ## 1.0.0
 
 ### Added

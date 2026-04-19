@@ -10,6 +10,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 	private _view?: vscode.WebviewView;
 	private _panelWebview?: vscode.Webview;
+	private _adCache: any[] | null = null;
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -42,6 +43,42 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		webviewView.webview.onDidReceiveMessage(async (message: WebviewMessage) => {
 			await this._handleMessage(message);
 		});
+
+		// Load Ad when webview becomes visible
+		this._loadAd();
+
+		// Reload Ad each time webview visibility changes
+		webviewView.onDidChangeVisibility(() => {
+			if (webviewView.visible) {
+				this._loadAd();
+			}
+		});
+	}
+
+	/**
+	 * Fetch ad data and send a random ad to webview
+	 * Uses cached data if available to avoid repeated network requests
+	 */
+	private async _loadAd(): Promise<void> {
+		try {
+			// Use cache if available, otherwise fetch from server
+			let data: any[];
+			if (this._adCache) {
+				data = this._adCache;
+			} else {
+				const response = await fetch('https://ads-starmodel.oss-cn-shenzhen.aliyuncs.com/data2.json');
+				if (!response.ok) return;
+				const fetched = await response.json();
+				if (!Array.isArray(fetched) || fetched.length === 0) return;
+				this._adCache = fetched;
+				data = fetched;
+			}
+
+			const randomAd = data[Math.floor(Math.random() * data.length)];
+			this._getWebview()?.postMessage({ command: 'loadAd', data: randomAd });
+		} catch (error) {
+			// Ignore ad fetch errors
+		}
 	}
 
 	private async _handleMessage(message: WebviewMessage): Promise<void> {
@@ -61,7 +98,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 			case 'addProvider':
 				try {
-					const provider = message.data as { name: string; baseUrl: string; apiKey: string; models?: any[]; autoFetchModels?: boolean };
+					const provider = message.data as { name: string; baseUrl: string; apiKey: string; apiType?: 'openai-compatible' | 'anthropic'; models?: any[]; autoFetchModels?: boolean };
 					
 					// Use models from request if provided, otherwise fetch from API
 					let models: any[] = provider.models || [];
@@ -78,6 +115,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						name: provider.name,
 						baseUrl: provider.baseUrl,
 						apiKey: provider.apiKey,
+						apiType: provider.apiType || 'openai-compatible',
 						models: models,
 						enabled: true,
 						autoFetchModels: provider.autoFetchModels !== false,
@@ -447,6 +485,13 @@ After completing the operations, please reply with the following message in both
 					vscode.window.showErrorMessage(`Failed to import records: ${errorMessage}`);
 				}
 				break;
+
+			case 'openUrl':
+				const url = message.data as string;
+				if (url) {
+					vscode.env.openExternal(vscode.Uri.parse(url));
+				}
+				break;
 		}
 	}
 
@@ -457,7 +502,7 @@ After completing the operations, please reply with the following message in both
 	 * If a model is only in API, it gets added with defaults.
 	 * If a model is only local, it gets preserved (API can add new ones).
 	 */
-	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean; transformThink?: boolean }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean; transformThink?: boolean }>> {
+	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }>> {
 		const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
@@ -498,13 +543,13 @@ After completing the operations, please reply with the following message in both
 		}
 		
 		// Create a map of existing models by modelId
-		const existingMap = new Map<string, { modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean; transformThink?: boolean }>();
+		const existingMap = new Map<string, { modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }>();
 		for (const existing of existingModels) {
 			existingMap.set(existing.modelId, existing);
 		}
 		
 		// Merge: start with API models, override with local customizations
-		const merged: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both'; isUserSelectable?: boolean; transformThink?: boolean }> = [];
+		const merged: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }> = [];
 		
 		// Add API models (use API data for all fields that API provides)
 		for (const apiModel of apiModels) {
@@ -617,18 +662,22 @@ After completing the operations, please reply with the following message in both
 		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'assets', 'configView', 'configView.css'));
 		const nonce = this._getNonce();
 		const version = Date.now(); // Force reload
+		const vscodeLocale = vscode.env.language; // e.g. 'zh-cn', 'en'
 
 		return `<!DOCTYPE html>
 			<html lang="en">
 			<head>
 				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src https:;">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<link href="${styleUri}?v=${version}" rel="stylesheet">
 				<title>LLS OAI</title>
 			</head>
 			<body>
 				<div class="container">
+					<!-- Ad Banner -->
+					<div id="adBanner" class="ad-banner" style="display:none;"></div>
+
 					<header class="header">
 						<div class="header-top">
 							<h1>LLS OAI</h1>
@@ -706,9 +755,17 @@ After completing the operations, please reply with the following message in both
 								<div class="help-text">A unique name to identify this provider in Copilot</div>
 							</div>
 							<div class="form-group">
+								<label for="providerApiType">API Type</label>
+								<select id="providerApiType">
+									<option value="openai-compatible">OpenAI-Compatible</option>
+									<option value="anthropic">Anthropic</option>
+								</select>
+								<div class="help-text">The API protocol used by this provider</div>
+							</div>
+							<div class="form-group">
 								<label for="providerBaseUrl">Base URL</label>
 								<input type="url" id="providerBaseUrl" placeholder="https://api.openai.com/v1" required />
-								<div class="help-text">The OpenAI-compatible API endpoint</div>
+								<div class="help-text">The API endpoint</div>
 							</div>
 							<div class="form-group">
 								<label for="providerApiKey">API Key</label>
@@ -799,6 +856,7 @@ After completing the operations, please reply with the following message in both
 								<option value="both">Both (temperature + top_p)</option>
 								<option value="temperature">Temperature only</option>
 								<option value="top_p">Top P only</option>
+								<option value="none">None (do not pass)</option>
 							</select>
 							<div class="help-text">Some models (e.g. Claude) only accept one sampling parameter at a time</div>
 						</div>
@@ -835,7 +893,8 @@ After completing the operations, please reply with the following message in both
 					</div>
 				</div>
 
-				<script nonce="${nonce}">alert('INLINE_SCRIPT_LOADED');</script>
+				<script nonce="${nonce}">window.VSCODE_LOCALE = '${vscodeLocale}';</script>
+			<script nonce="${nonce}">alert('INLINE_SCRIPT_LOADED');</script>
 				<script nonce="${nonce}" src="${scriptUri}?v=${version}"></script>
 			</body>
 			</html>`;

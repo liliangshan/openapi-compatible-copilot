@@ -1,10 +1,48 @@
 import * as vscode from 'vscode';
 import { ConfigManager } from './configManager';
 import { updateContextStatusBar, resetStatusBar } from './statusBar';
+import {
+	convertOpenAIRequestToAnthropic,
+	convertAnthropicEventToOpenAIChunks,
+	convertAnthropicResponseToOpenAI,
+	createAnthropicStreamState,
+	type AnthropicStreamState,
+	type OpenAIChunk,
+} from './anthropicConverter';
 
 const EXTENSION_LABEL = 'LLS OAI';
 const DEFAULT_CONTEXT_LENGTH = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
+
+/**
+ * Get the debug directory path (cross-platform compatible).
+ */
+function getDebugDir(): string {
+	return require('path').join(require('os').homedir(), '.LLSOAI');
+}
+
+/**
+ * Ensure the debug directory exists (cross-platform compatible).
+ */
+function ensureDebugDir(): void {
+	const dir = getDebugDir();
+	if (!require('fs').existsSync(dir)) {
+		require('fs').mkdirSync(dir, { recursive: true });
+	}
+}
+
+/**
+ * Write JSON data to a debug file in the .LLSOAI directory.
+ */
+function writeDebugFile(filename: string, data: any): void {
+	try {
+		ensureDebugDir();
+		const filePath = require('path').join(getDebugDir(), filename);
+		require('fs').writeFileSync(filePath, JSON.stringify(data, null, 2));
+	} catch {
+		// Ignore errors when saving debug files
+	}
+}
 
 /**
  * Type guard for LanguageModelToolResultPart-like values.
@@ -124,6 +162,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 						providerId: provider.id,
 						providerName: provider.name,
 						providerBaseUrl: provider.baseUrl,
+						apiType: (provider as any).apiType ?? 'openai-compatible',
 						modelId: model.modelId,
 						temperature: model.temperature ?? 0.7,
 						topP: model.topP ?? 1.0,
@@ -188,6 +227,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const providerId = metadata.providerId as string;
 		const modelId = metadata.modelId as string;
 		const baseUrl = metadata.providerBaseUrl as string;
+		const apiType = (metadata.apiType as string) ?? 'openai-compatible';
 		const temperature = metadata.temperature as number ?? 0.7;
 		const topP = metadata.topP as number ?? 1.0;
 		const samplingMode = (metadata.samplingMode as string) ?? 'both';
@@ -221,6 +261,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			requestBody.temperature = temperature;
 		} else if (samplingMode === 'top_p') {
 			requestBody.top_p = topP;
+		} else if (samplingMode === 'none') {
+			// Do not pass temperature or top_p
 		} else {
 			requestBody.temperature = temperature;
 			requestBody.top_p = topP;
@@ -245,19 +287,53 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const abortController = new AbortController();
 		this._abortControllers.set(providerId, abortController);
 		let assistantResponse = ''; // Collect full response for chat history
+		
+		// Debug variables (declared outside try for finally access)
+		let debugSseEvents: any[] = [];
+		let debugConvertedChunks: any[] = [];
+		let debugDeltaHandling: any[] = [];
+		let debugPendingToolCalls: Array<[number, { id?: string; name?: string; arguments: string }]> = [];
 
 		token.onCancellationRequested(() => {
 			abortController.abort();
 		});
 
 		try {
-			const response = await fetch(`${baseUrl}/chat/completions`, {
+			const isAnthropic = apiType === 'anthropic';
+			const normalizedBase = baseUrl.replace(/\/+$/, '');
+			const url = isAnthropic ? `${normalizedBase}/messages` : `${normalizedBase}/chat/completions`;
+			const headers: Record<string, string> = {
+				'Content-Type': 'application/json',
+			};
+			if (isAnthropic) {
+				headers['x-api-key'] = apiKey;
+				headers['anthropic-version'] = '2023-06-01';
+			} else {
+				headers['Authorization'] = `Bearer ${apiKey}`;
+			}
+			const finalBody = isAnthropic
+				? convertOpenAIRequestToAnthropic(requestBody)
+				: requestBody;
+
+			// Debug: Write the actual request body to a file for inspection
+			try {
+				writeDebugFile('debug_request.json', {
+					url,
+					isAnthropic,
+					requestBody,
+					finalBody,
+					toolsCount: requestBody.tools?.length || 0,
+					toolsInFinalBody: finalBody.tools?.length || 0,
+					timestamp: new Date().toISOString()
+				});
+			} catch (e) {
+				console.error('[DEBUG] Failed to write debug file:', e);
+			}
+
+			const response = await fetch(url, {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${apiKey}`,
-				},
-				body: JSON.stringify(requestBody),
+				headers,
+				body: JSON.stringify(finalBody),
 				signal: abortController.signal,
 			});
 
@@ -278,10 +354,58 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const pendingToolCalls: Map<number, { id?: string; name?: string; arguments: string }> = new Map();
 			// Track think tag state for transformThink
 			const thinkState = { isInThinkTag: false, thinkBuffer: '' };
+			// Anthropic streaming state (only used when isAnthropic)
+			const anthState: AnthropicStreamState | null = isAnthropic
+				? createAnthropicStreamState(modelId, true)
+				: null;
+			// Track the current SSE event name for Anthropic streams
+			let currentEventName = '';
+			let streamDone = false;
+
+			// Debug: Collect raw SSE events for inspection (Anthropic only)
+			debugSseEvents = [];
+			debugConvertedChunks = [];
+			debugDeltaHandling = [];
+
+			// Process a single OpenAI-style delta (used for both OpenAI and converted Anthropic chunks)
+			const handleOpenAIDelta = (delta: any) => {
+				if (!delta) return;
+				// Debug: Log delta handling
+				debugDeltaHandling.push({ delta, pendingBefore: Array.from(pendingToolCalls.entries()) });
+				const content: string | undefined = delta.content ?? undefined;
+				if (typeof content === 'string' && content.length > 0) {
+					if (transformThink) {
+						this._processThinkTags(content, (text) => {
+							progress.report(new vscode.LanguageModelTextPart(text));
+						}, thinkState);
+						assistantResponse += content;
+					} else {
+						progress.report(new vscode.LanguageModelTextPart(content));
+						assistantResponse += content;
+					}
+				}
+
+				const toolCalls = delta.tool_calls;
+				if (toolCalls && Array.isArray(toolCalls)) {
+					for (const tc of toolCalls) {
+						const index = tc.index;
+						const existing = pendingToolCalls.get(index) || { arguments: '' };
+						if (tc.id) existing.id = tc.id;
+						if (tc.function?.name) existing.name = tc.function.name;
+						if (tc.function?.arguments !== undefined) existing.arguments += tc.function.arguments;
+						pendingToolCalls.set(index, existing);
+						// Don't try to parse/report here - wait for content_block_stop
+						// when all arguments have been received
+					}
+				}
+				if (debugDeltaHandling.length > 0) {
+					debugDeltaHandling[debugDeltaHandling.length - 1].pendingAfter = Array.from(pendingToolCalls.entries());
+				}
+			};
 
 			while (true) {
 				const { done, value } = await reader.read();
-				if (done) {
+				if (done || streamDone) {
 				// Flush any remaining think content (without [Thinking] label)
 				if (transformThink && thinkState.thinkBuffer.length > 0) {
 					progress.report(new vscode.LanguageModelTextPart(`${thinkState.thinkBuffer}\n\n`));
@@ -289,12 +413,15 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					}
 					// Flush any completed tool calls that didn't get reported
 					for (const [index, tc] of pendingToolCalls) {
-						if (tc.name && tc.arguments) {
+						if (tc.name) {
 							try {
+								// Empty arguments string means no parameters - treat as empty object
+								const argsStr = tc.arguments.trim();
+								const parsedArgs = argsStr === '' ? {} : JSON.parse(argsStr);
 								progress.report(new vscode.LanguageModelToolCallPart(
 									tc.id || `call_${index}`,
 									tc.name,
-									JSON.parse(tc.arguments)
+									parsedArgs
 								));
 							} catch {
 								// Invalid JSON, skip
@@ -310,7 +437,18 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 
 				for (const line of lines) {
 					const trimmedLine = line.trim();
-					if (!trimmedLine || trimmedLine === 'data: [DONE]') {
+					if (!trimmedLine) {
+						// Blank line indicates end of one SSE event; reset event name
+						currentEventName = '';
+						continue;
+					}
+
+					if (isAnthropic && trimmedLine.startsWith('event:')) {
+						currentEventName = trimmedLine.slice(6).trim();
+						continue;
+					}
+
+					if (trimmedLine === 'data: [DONE]') {
 						continue;
 					}
 
@@ -318,62 +456,67 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 						try {
 							const json = trimmedLine.slice(6);
 							const parsed = JSON.parse(json);
-							
-							// Handle content
-							const content = parsed.choices?.[0]?.delta?.content;
-							if (content) {
-								if (transformThink) {
-									// Process content character by character to detect think tags
-									this._processThinkTags(content, (text) => {
-										progress.report(new vscode.LanguageModelTextPart(text));
-									}, thinkState);
-									assistantResponse += content; // Collect for chat history (with think tags)
-								} else {
-									progress.report(new vscode.LanguageModelTextPart(content));
-									assistantResponse += content;
-								}
-							}
 
-							// Handle tool calls - accumulate arguments across chunks
-							const toolCalls = parsed.choices?.[0]?.delta?.tool_calls;
-							if (toolCalls && Array.isArray(toolCalls)) {
-								for (const tc of toolCalls) {
-									const index = tc.index;
-									const existing = pendingToolCalls.get(index) || { arguments: '' };
-									
-									if (tc.id) existing.id = tc.id;
-									if (tc.function?.name) existing.name = tc.function.name;
-									if (tc.function?.arguments) existing.arguments += tc.function.arguments;
-									
-									pendingToolCalls.set(index, existing);
-									
-									// If we have both name and complete-looking arguments, report it
-									if (existing.name && existing.arguments) {
-										try {
-											const parsedArgs = JSON.parse(existing.arguments);
-											progress.report(new vscode.LanguageModelToolCallPart(
-												existing.id || `call_${index}`,
-												existing.name,
-												parsedArgs
-											));
-											// Clear after reporting to avoid duplicates
-											pendingToolCalls.delete(index);
-										} catch {
-											// Arguments not yet complete, keep accumulating
-										}
+							if (isAnthropic && anthState) {
+								const eventType = currentEventName || (typeof parsed.type === 'string' ? parsed.type : '');
+								// Debug: Collect important SSE events (non-text_delta)
+								if (eventType && eventType !== 'message_delta' && !parsed.delta?.text) {
+									debugSseEvents.push({ event: eventType, data: parsed });
+								}
+								const chunks: OpenAIChunk[] = convertAnthropicEventToOpenAIChunks(eventType, parsed, anthState);
+								// Debug: Record converted chunks
+								debugConvertedChunks.push({
+									event: eventType,
+									rawEvent: parsed,
+									convertedChunks: chunks
+								});
+								for (const chunk of chunks) {
+									if (chunk.done) {
+										streamDone = true;
+										break;
+									}
+									if (chunk.delta) {
+										handleOpenAIDelta(chunk.delta);
 									}
 								}
+								if (streamDone) break;
+							} else {
+								const delta = parsed.choices?.[0]?.delta;
+								handleOpenAIDelta(delta);
 							}
 						} catch (e) {
-							// Ignore parse errors for incomplete chunks
+							// Save SSE parse errors to file for debugging
+								writeDebugFile(`sse_error_${Date.now()}.json`, {
+									error: e instanceof Error ? { message: e.message, stack: e.stack } : String(e),
+									line: trimmedLine,
+									eventName: currentEventName,
+									modelId,
+									timestamp: new Date().toISOString()
+								});
 						}
 					}
 				}
+				if (streamDone) {
+					// Loop will exit on next iteration via top-of-loop check
+				}
 			}
+			
+			// Debug: Capture pending tool calls before exiting
+			debugPendingToolCalls = Array.from(pendingToolCalls.entries());
 		} catch (error) {
 			if (error instanceof Error && error.name === 'AbortError') {
 				return; // Request was cancelled
 			}
+			// Save error details to file for debugging
+			writeDebugFile(`error_${Date.now()}.json`, {
+				error: error instanceof Error ? { message: error.message, stack: error.stack, name: error.name } : String(error),
+				modelId,
+				providerId,
+				apiType,
+				baseUrl,
+				requestBody,
+				timestamp: new Date().toISOString()
+			});
 			throw error;
 		} finally {
 			this._abortControllers.delete(providerId);
@@ -381,8 +524,23 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			// Save chat history after response completes
 			if (assistantResponse) {
 				const chatMessages = this._buildChatMessages(messages, assistantResponse);
-				await this._configManager.saveChatHistory(chatMessages, modelId);
+				await this._configManager.saveChatHistory(chatMessages, modelId, options.tools ? [...options.tools] : undefined);
 			}
+
+			// Debug: Write response data to file
+			writeDebugFile('debug_response.json', {
+				assistantResponse,
+				sseEvents: debugSseEvents,
+				pendingToolCalls: debugPendingToolCalls,
+				timestamp: new Date().toISOString()
+			});
+			// Also write detailed conversion debug
+			writeDebugFile('debug_conversion.json', {
+				convertedChunks: debugConvertedChunks,
+				deltaHandling: debugDeltaHandling,
+				finalPendingToolCalls: debugPendingToolCalls,
+				timestamp: new Date().toISOString()
+			});
 		}
 	}
 
@@ -403,20 +561,31 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				.join('');
 			
 			if (content) {
-				result.push({
-					role,
-					content,
-					name: msg.name || undefined,
-				});
+				// 合并连续的用户消息
+				const lastMsg = result.length > 0 ? result[result.length - 1] : null;
+				if (lastMsg && lastMsg.role === role && (role === 'user' || role === 'assistant')) {
+					lastMsg.content += '\n' + content;
+				} else {
+					result.push({
+						role,
+						content,
+						name: msg.name || undefined,
+					});
+				}
 			}
 		}
 		
 		// Add assistant response
 		if (assistantResponse) {
-			result.push({
-				role: 'assistant',
-				content: assistantResponse,
-			});
+			const lastMsg = result.length > 0 ? result[result.length - 1] : null;
+			if (lastMsg && lastMsg.role === 'assistant') {
+				lastMsg.content += '\n' + assistantResponse;
+			} else {
+				result.push({
+					role: 'assistant',
+					content: assistantResponse,
+				});
+			}
 		}
 		
 		return result;
@@ -461,18 +630,33 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					});
 				}
 				
-				// Then emit the user message with text content (if any)
+				// Check if we should merge with the previous user message
+				const lastMsg = result.length > 0 ? result[result.length - 1] : null;
+				const canMerge = lastMsg && lastMsg.role === 'user' && toolResults.length === 0;
+				
 				if (textParts.length > 0) {
 					// Check if it's a simple string or needs array format (for images)
 					const hasNonText = textParts.some(p => p.type !== 'text');
+					let content;
 					if (hasNonText) {
-						result.push({ role: 'user', content: textParts });
+						content = textParts;
 					} else if (textParts.length === 1) {
-						result.push({ role: 'user', content: textParts[0].text });
+						content = textParts[0].text;
 					} else {
-						result.push({ role: 'user', content: textParts.map(p => p.text).join('\n') });
+						content = textParts.map(p => p.text).join('\n');
 					}
-				} else if (toolResults.length === 0) {
+					
+					if (canMerge) {
+						// Merge with previous user message
+						if (typeof lastMsg.content === 'string' && typeof content === 'string') {
+							lastMsg.content += '\n' + content;
+						} else if (Array.isArray(lastMsg.content) && Array.isArray(content)) {
+							lastMsg.content = [...lastMsg.content, ...content];
+						}
+					} else {
+						result.push({ role: 'user', content });
+					}
+				} else if (toolResults.length === 0 && !canMerge) {
 					// Empty user message - send empty string
 					result.push({ role: 'user', content: '' });
 				}

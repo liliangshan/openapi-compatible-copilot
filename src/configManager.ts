@@ -224,8 +224,13 @@ export class ConfigManager {
 	 * When conversation-summary is detected (compression): also saves an archive file (chat-session-<timestamp>.json)
 	 * @param messages The complete conversation history
 	 * @param modelId The model used for this conversation
+	 * @param tools The tools available for this conversation
 	 */
-	async saveChatHistory(messages: Array<{ role: string; content: string; name?: string }>, modelId?: string): Promise<void> {
+	async saveChatHistory(
+		messages: Array<{ role: string; content: string; name?: string }>,
+		modelId?: string,
+		tools?: any[]
+	): Promise<void> {
 		const settings = await this.getChatHistorySettings();
 		if (!settings.enabled || messages.length === 0) {
 			return;
@@ -252,7 +257,7 @@ export class ConfigManager {
 			const startTime = new Date().toISOString();
 
 			// Build the chat history object
-			const chatData = {
+			const chatData: any = {
 				sessionId,
 				modelId,
 				startTime,
@@ -263,6 +268,11 @@ export class ConfigManager {
 					content: m.content,
 				})),
 			};
+
+			// Add tools if available
+			if (tools && tools.length > 0) {
+				chatData.tools = tools;
+			}
 
 			const content = JSON.stringify(chatData, null, 2);
 

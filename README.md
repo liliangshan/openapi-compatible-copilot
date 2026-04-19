@@ -1,17 +1,32 @@
-# OpenAPI Compatible Provider for Copilot
+# LLS OAI - OpenAI-compatible & Anthropic for Copilot Chat
 
-A VS Code extension that integrates multiple OpenAI-compatible API providers into GitHub Copilot Chat.
+A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API providers into GitHub Copilot Chat.
 
 ## Features
 
-- 🚀 **Multiple Provider Support** - Add and manage multiple OpenAI-compatible API providers
+- 🚀 **Multiple Provider Support** - Add and manage multiple OpenAI-compatible and Anthropic API providers
 - 🔐 **Secure Key Storage** - API keys are stored securely using VS Code's secret storage
 - 🎨 **Beautiful Configuration UI** - Easy-to-use webview interface for managing providers
-- 📦 **No Extension Settings** - All configuration through the intuitive UI, no settings.json clutter
 - 🔌 **Copilot Integration** - Seamlessly integrates with GitHub Copilot Chat
 - 📤 **Import/Export Config** - Backup and restore your provider configurations
-- 💾 **Auto Save Chat History** - Automatically save chat conversations to local files with configurable save path
-- 🔄 **Copilot Records Migration** - Import and export Copilot chat records for migration between different machines
+- 💾 **Auto Save Chat History** - Automatically save chat conversations to local files
+- 🔄 **Copilot Records Migration** - Import and export Copilot chat records between machines
+
+## Supported APIs
+
+| API Type | Endpoint | Notes |
+|----------|----------|-------|
+| **OpenAI-compatible** | `/v1/chat/completions` | Any OpenAI-compatible API |
+| **Anthropic** | `/v1/messages` | Claude models with automatic format conversion |
+
+### Anthropic API Features
+
+When using Anthropic API type, the extension automatically handles:
+- ✅ Message format conversion (system/user/assistant/tool roles)
+- ✅ Tool definitions conversion (`input_schema` ↔ `parameters`)
+- ✅ Tool choice mapping (`auto/none/required` ↔ `auto/none/any`)
+- ✅ Streaming response translation
+- ✅ Full tool calling support (including no-argument tools)
 
 ## Requirements
 
@@ -24,17 +39,33 @@ A VS Code extension that integrates multiple OpenAI-compatible API providers int
 2. Click on the "LLS OAI" status bar item or use the command palette: `LLS OAI: Manage Providers`
 3. Click "Add Provider" to configure your first provider
 4. Fill in:
-   - **Vendor Name/Flag**: A unique identifier for this provider (e.g., "MyOpenAI", "LocalLLM")
-   - **Base URL**: The OpenAI-compatible API endpoint (e.g., `https://api.openai.com/v1`)
+   - **Name**: A unique identifier for this provider (e.g., "MyOpenAI", "Claude")
+   - **API Type**: Select "OpenAI-compatible" or "Anthropic"
+   - **Base URL**: The API endpoint (e.g., `https://api.openai.com/v1` or `https://api.anthropic.com`)
    - **API Key**: Your API key for authentication
    - **Models**: Add one or more models with their configurations
 5. Save and start using your provider in Copilot Chat!
+
+## ⚠️ Important: Base URL Format
+
+When configuring the Base URL, **do NOT include the API endpoint path suffix**:
+
+| ✅ Correct | ❌ Incorrect |
+|------------|-------------|
+| `https://api.openai.com/v1` | `https://api.openai.com/v1/chat/completions` |
+| `https://api.anthropic.com/v1` | `https://api.anthropic.com/v1/messages` |
+| `https://your-proxy.com/v1` | `https://your-proxy.com/v1/chat/completions` |
+
+The extension automatically appends the correct endpoint based on the API type:
+- **OpenAI-compatible** → appends `/chat/completions`
+- **Anthropic** → appends `/messages`
 
 ## Provider Configuration
 
 Each provider requires:
 
 - **Name**: Unique identifier shown in Copilot
+- **API Type**: `OpenAI-compatible` or `Anthropic`
 - **Base URL**: API endpoint URL
 - **API Key**: Authentication key (stored securely)
 - **Models**: List of models with:
@@ -85,27 +116,6 @@ Migrate your Copilot chat records between different machines:
 2. Click "Import" in the Copilot Records section
 3. The extension will find the latest exported records and copy them to VS Code storage
 4. Close and reopen VS Code to load the migrated chat records
-
-## Development
-
-### Setup
-
-```bash
-npm install
-npm run compile
-```
-
-### Watch Mode
-
-```bash
-npm run watch
-```
-
-### Package Extension
-
-```bash
-npm run package
-```
 
 ## License
 
