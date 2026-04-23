@@ -102,6 +102,31 @@ You can configure automatic chat history saving:
 
 Chat sessions are automatically saved as JSON files. When a conversation is compressed, an archive file is created with a timestamp.
 
+## Custom System Prompt
+
+Customize the system prompt that is sent with every chat request. This is useful for adding persistent instructions, coding style preferences, or project-specific context.
+
+### Features
+
+- **Global System Prompt**: Applies to all VS Code projects (user settings)
+- **Workspace System Prompt**: Applies only to the current project (workspace settings)
+- **Dual Input**: Both prompts can be used simultaneously — they are merged into a single system message
+- **User Message Appendix**: Custom prompts are also appended to the last user message for better model adherence
+
+### How to Configure
+
+1. Open the LLS OAI configuration panel
+2. Scroll to **System Prompt** section
+3. Click **Edit** to open the modal
+4. Fill in:
+   - **Global System Prompt**: Your personal default instructions (applies everywhere)
+   - **Workspace System Prompt**: Project-specific instructions (applies only to this workspace)
+5. Click **Save**
+
+### Debug
+
+The merged system message content is written to `~/.LLSOAI/system.txt` for verification.
+
 ## Copilot Records Migration
 
 Migrate your Copilot chat records between different machines:

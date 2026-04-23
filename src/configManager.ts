@@ -211,6 +211,38 @@ export class ConfigManager {
 	}
 
 	/**
+	 * Get custom system prompt from workspace configuration (project-scoped)
+	 */
+	getWorkspaceSystemPrompt(): string {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		return config.inspect<string>('systemPrompt')?.workspaceValue || '';
+	}
+
+	/**
+	 * Update custom system prompt in workspace configuration (project-scoped)
+	 */
+	async updateWorkspaceSystemPrompt(prompt: string): Promise<void> {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update('systemPrompt', prompt, false); // false = workspace-scoped
+	}
+
+	/**
+	 * Get global system prompt from global configuration
+	 */
+	getGlobalSystemPrompt(): string {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		return config.inspect<string>('systemPrompt')?.globalValue || '';
+	}
+
+	/**
+	 * Update global system prompt in global configuration
+	 */
+	async updateGlobalSystemPrompt(prompt: string): Promise<void> {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update('systemPrompt', prompt, true); // true = global-scoped
+	}
+
+	/**
 	 * Generate a session ID from the first message content
 	 * Uses hash to create a short, consistent identifier
 	 */

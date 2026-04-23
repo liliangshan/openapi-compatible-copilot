@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.3
+
+### Added
+- **Custom System Prompt**: Global and workspace-scoped custom system prompts with dual input fields in configuration UI
+- **System Prompt Merging**: Multiple system prompt sources (global, workspace, VS Code Copilot) are merged into a single system message
+- **User Message Prompt Appendix**: Custom prompts are also appended to the last user message for better model adherence
+- **Debug System Output**: Writes merged system message content to `~/.LLSOAI/system.txt` for verification
+
 ## 1.3.0
 
 ### Added

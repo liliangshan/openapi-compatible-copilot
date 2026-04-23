@@ -12,7 +12,7 @@ import {
 
 const EXTENSION_LABEL = 'LLS OAI';
 const DEFAULT_CONTEXT_LENGTH = 128000;
-const DEFAULT_MAX_TOKENS = 4096;
+const DEFAULT_MAX_TOKENS = 16000;
 
 /**
  * Get the debug directory path (cross-platform compatible).
@@ -219,6 +219,21 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
 		token: vscode.CancellationToken
 	): Promise<void> {
+		// Debug: Log the raw incoming request at the very beginning
+		try {
+			const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+			writeDebugFile(`raw_request_${timestamp}.json`, {
+				model: JSON.parse(JSON.stringify(model)),
+				messagesCount: messages.length,
+				messages: JSON.parse(JSON.stringify(messages)),
+				toolsCount: options.tools?.length || 0,
+				tools: JSON.parse(JSON.stringify(options.tools)),
+				timestamp: new Date().toISOString()
+			});
+		} catch (e) {
+			console.error('[DEBUG] Failed to write raw request debug file:', e);
+		}
+
 		const metadata = model.__providerData;
 		if (!metadata) {
 			throw new Error('Model metadata not found');
@@ -254,6 +269,18 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			messages: this._convertMessages(messages, model),
 			stream: true,
 		};
+
+		// Debug: Write system message content to system.txt for verification
+		try {
+			const systemMessages = requestBody.messages.filter((m: any) => m.role === 'system');
+			writeDebugFile('system.txt', {
+				count: systemMessages.length,
+				messages: systemMessages,
+				timestamp: new Date().toISOString()
+			});
+		} catch (e) {
+			console.error('[DEBUG] Failed to write system debug file:', e);
+		}
 
 		// Only pass temperature/top_p based on samplingMode
 		// Some models (e.g. Claude) don't support both simultaneously
@@ -317,13 +344,15 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 
 			// Debug: Write the actual request body to a file for inspection
 			try {
-				writeDebugFile('debug_request.json', {
+				const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+				writeDebugFile(`request_${timestamp}.json`, {
 					url,
 					isAnthropic,
+					providerId,
+					modelId,
+					apiType,
 					requestBody,
 					finalBody,
-					toolsCount: requestBody.tools?.length || 0,
-					toolsInFinalBody: finalBody.tools?.length || 0,
 					timestamp: new Date().toISOString()
 				});
 			} catch (e) {
@@ -615,6 +644,36 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	private _convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], model: vscode.LanguageModelChatInformation): Array<any> {
 		const result: Array<any> = [];
 
+		// Collect all system prompt parts and merge into a single system message
+		const systemParts: string[] = [];
+
+		// 1. Custom global system prompt
+		const globalPrompt = this._configManager.getGlobalSystemPrompt();
+		if (globalPrompt) {
+			systemParts.push(globalPrompt);
+		}
+
+		// 2. Custom workspace (project) system prompt
+		const workspacePrompt = this._configManager.getWorkspaceSystemPrompt();
+		if (workspacePrompt) {
+			systemParts.push(workspacePrompt);
+		}
+
+		// 3. VS Code system messages (filtered)
+		for (const message of messages) {
+			if (this._mapRole(message) === 'system') {
+				const filteredContent = this._filterSystemMessage(message, model);
+				if (filteredContent) {
+					systemParts.push(filteredContent);
+				}
+			}
+		}
+
+		// Push merged single system message
+		if (systemParts.length > 0) {
+			result.push({ role: 'system', content: systemParts.join('\n\n') });
+		}
+
 		for (const message of messages) {
 			const role = this._mapRole(message);
 			
@@ -674,11 +733,25 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					msg.content = ''; // OpenAI requires at least one field
 				}
 				result.push(msg);
-			} else if (role === 'system') {
-				// Intercept system messages: filter out VS Code Copilot identity injection
-				const filteredContent = this._filterSystemMessage(message, model);
-				if (filteredContent) {
-					result.push({ role: 'system', content: filteredContent });
+			}
+			// system messages are already merged above; skip here
+		}
+
+		// If the last message is user, append custom prompts to it for better model adherence
+		if (result.length > 0) {
+			const lastMsg = result[result.length - 1];
+			if (lastMsg.role === 'user') {
+				const promptAppendix: string[] = [];
+				if (globalPrompt) { promptAppendix.push(globalPrompt); }
+				if (workspacePrompt) { promptAppendix.push(workspacePrompt); }
+				if (promptAppendix.length > 0) {
+					const appendixText = '\n\n' + promptAppendix.join('\n\n');
+					if (typeof lastMsg.content === 'string') {
+						lastMsg.content += appendixText;
+					} else if (Array.isArray(lastMsg.content)) {
+						// If content is an array (multimodal), append as a new text part
+						lastMsg.content.push({ type: 'text', text: appendixText });
+					}
 				}
 			}
 		}
@@ -717,7 +790,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 
 		if (hasCopilotIdentity) {
 			// Replace the system message with our actual model info
-			const modelName = model.name || model.id;
+			const modelName = model.id || model.name;
 			return `You are ${modelName}, a helpful AI assistant.`;
 		}
 

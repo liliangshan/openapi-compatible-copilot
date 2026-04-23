@@ -579,7 +579,8 @@ body {
 .form-group input[type="text"],
 .form-group input[type="url"],
 .form-group input[type="password"],
-.form-group input[type="number"] {
+.form-group input[type="number"],
+.form-group textarea {
 	width: 100%;
 	padding: 6px 8px;
 	background-color: var(--vscode-input-background);
@@ -588,6 +589,7 @@ body {
 	border-radius: 2px;
 	font-size: 13px;
 	font-family: var(--vscode-font-family);
+	box-sizing: border-box;
 }
 
 .form-group input:focus {
@@ -800,4 +802,99 @@ body {
 	border-radius: 2px;
 	line-height: 1;
 	z-index: 1;
+}
+
+/* System Prompt Section */
+.system-prompt-section {
+	margin-top: 16px;
+	padding: 12px;
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 6px;
+	background-color: var(--vscode-editor-background);
+}
+
+.system-prompt-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.system-prompt-header h3 {
+	margin: 0;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.system-prompt-preview {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	min-height: 24px;
+}
+
+.system-prompt-preview .empty-text {
+	font-style: italic;
+	opacity: 0.7;
+}
+
+.prompt-tag {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 4px;
+	font-size: 11px;
+	margin-right: 6px;
+	margin-bottom: 4px;
+}
+
+.prompt-tag.global {
+	background-color: rgba(0, 122, 204, 0.15);
+	color: var(--vscode-foreground);
+}
+
+.prompt-tag.workspace {
+	background-color: rgba(16, 185, 129, 0.15);
+	color: var(--vscode-foreground);
+}
+
+.tag-label {
+	font-weight: 600;
+	opacity: 0.8;
+}
+
+/* System Prompt Modal */
+.system-prompt-form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.prompt-field label {
+	display: block;
+	font-size: 12px;
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.prompt-field .hint {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	margin-bottom: 4px;
+}
+
+.prompt-field textarea {
+	width: 100%;
+	min-height: 80px;
+	resize: vertical;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 12px;
+	padding: 8px;
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 4px;
+	background-color: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+}
+
+.prompt-field textarea:focus {
+	outline: none;
+	border-color: var(--vscode-focusBorder);
 }

@@ -4,7 +4,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "1.3.0",
+	"version": "1.3.3",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -69,6 +69,17 @@
 					"name": "Provider Management"
 				}
 			]
+		},
+		"configuration": {
+			"title": "LLS OAI",
+			"properties": {
+				"openapicopilot.systemPrompt": {
+					"type": "string",
+					"default": "",
+					"description": "Custom system prompt to prepend to system messages",
+					"scope": "resource"
+				}
+			}
 		}
 	},
 	"main": "./out/extension.js",

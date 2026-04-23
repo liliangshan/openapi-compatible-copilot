@@ -40,6 +40,13 @@
 	const chatHistoryEnabled = document.getElementById('chatHistoryEnabled');
 	const chatHistorySavePath = document.getElementById('chatHistorySavePath');
 	const editModelModal = document.getElementById('editModelModal');
+	const systemPromptModal = document.getElementById('systemPromptModal');
+	const closeSystemPromptModal = document.getElementById('closeSystemPromptModal');
+	const cancelSystemPromptBtn = document.getElementById('cancelSystemPromptBtn');
+	const saveSystemPromptBtn = document.getElementById('saveSystemPromptBtn');
+	const globalSystemPromptTextarea = document.getElementById('globalSystemPromptTextarea');
+	const workspaceSystemPromptTextarea = document.getElementById('workspaceSystemPromptTextarea');
+	const editSystemPromptBtn = document.getElementById('editSystemPromptBtn');
 	const closeEditModelBtn = document.getElementById('closeEditModelBtn');
 	const cancelEditModelBtn = document.getElementById('cancelEditModelBtn');
 	const saveEditModelBtn = document.getElementById('saveEditModelBtn');
@@ -47,6 +54,7 @@
 	// Initialize
 	vscode.postMessage({ command: 'getProviders' });
 	vscode.postMessage({ command: 'getChatHistorySettings' });
+	vscode.postMessage({ command: 'getSystemPrompt' });
 	setupEventListeners();
 
 	function setupEventListeners() {
@@ -83,6 +91,12 @@
 		importRecordsBtn?.addEventListener('click', () => {
 			vscode.postMessage({ command: 'importRecords' });
 		});
+		
+		// System Prompt modal
+		editSystemPromptBtn?.addEventListener('click', () => openSystemPromptModal());
+		closeSystemPromptModal?.addEventListener('click', () => closeSystemPromptModalFn());
+		cancelSystemPromptBtn?.addEventListener('click', () => closeSystemPromptModalFn());
+		saveSystemPromptBtn?.addEventListener('click', () => saveSystemPrompt());
 		
 		providerForm.addEventListener('submit', (e) => {
 			e.preventDefault();
@@ -277,6 +291,16 @@
 					chatHistorySavePath.value = message.data.savePath || '';
 				}
 				break;
+		case 'systemPromptLoaded':
+			if (message.data) {
+				globalSystemPromptTextarea.value = message.data.globalPrompt || '';
+				workspaceSystemPromptTextarea.value = message.data.workspacePrompt || '';
+			}
+			break;
+
+		case 'systemPromptSaved':
+			// Saved successfully, nothing to update in UI
+			break;
 		}
 	});
 
@@ -441,7 +465,7 @@
 			modelId: '',
 			displayName: '',
 			contextLength: 128000,
-			maxTokens: 4096,
+			maxTokens: 16000,
 			vision: false,
 			toolCalling: true,
 			temperature: 0.7,
@@ -466,7 +490,7 @@
 		if (modelName) modelName.value = '';
 		if (modelDisplayName) modelDisplayName.value = '';
 		if (modelContextLength) modelContextLength.value = 128000;
-		if (modelMaxTokens) modelMaxTokens.value = 4096;
+		if (modelMaxTokens) modelMaxTokens.value = 16000;
 		if (modelVision) modelVision.checked = false;
 		if (modelToolCalling) modelToolCalling.checked = true;
 		if (modelTemperature) modelTemperature.value = 0.7;
@@ -512,7 +536,7 @@
 		if (modelName) modelName.value = editingModelData.modelId || '';
 		if (modelDisplayName) modelDisplayName.value = editingModelData.displayName || '';
 		if (modelContextLength) modelContextLength.value = editingModelData.contextLength || 128000;
-		if (modelMaxTokens) modelMaxTokens.value = editingModelData.maxTokens || 4096;
+		if (modelMaxTokens) modelMaxTokens.value = editingModelData.maxTokens || 16000;
 		if (modelVision) modelVision.checked = editingModelData.vision || false;
 		if (modelToolCalling) modelToolCalling.checked = editingModelData.toolCalling ?? true;
 		if (modelTemperature) modelTemperature.value = editingModelData.temperature ?? 0.7;
@@ -552,7 +576,7 @@
 		editingModelData.modelId = modelName.value.trim();
 		editingModelData.displayName = modelDisplayName?.value.trim() || '';
 		editingModelData.contextLength = parseInt(modelContextLength?.value, 10) || 128000;
-		editingModelData.maxTokens = parseInt(modelMaxTokens?.value, 10) || 4096;
+		editingModelData.maxTokens = parseInt(modelMaxTokens?.value, 10) || 16000;
 		editingModelData.vision = modelVision?.checked || false;
 		editingModelData.toolCalling = modelToolCalling?.checked ?? true;
 		editingModelData.temperature = parseFloat(modelTemperature?.value) ?? 0.7;
@@ -694,6 +718,31 @@
 
         function closeSettingsModalFn() {
                 settingsModal?.classList.remove('active');
+        }
+
+        // System Prompt Modal
+        function openSystemPromptModal() {
+                vscode.postMessage({ command: 'getSystemPrompt' });
+                systemPromptModal?.classList.add('active');
+        }
+
+        function closeSystemPromptModalFn() {
+                systemPromptModal?.classList.remove('active');
+        }
+
+        function saveSystemPrompt() {
+                vscode.postMessage({
+                        command: 'updateSystemPrompt',
+                        data: {
+                                globalPrompt: globalSystemPromptTextarea.value.trim(),
+                                workspacePrompt: workspaceSystemPromptTextarea.value.trim()
+                        }
+                });
+                closeSystemPromptModalFn();
+        }
+
+        function updateSystemPromptPreview(globalPrompt, workspacePrompt) {
+                // Preview removed from card; kept for potential future use
         }
 
         function saveSettings() {

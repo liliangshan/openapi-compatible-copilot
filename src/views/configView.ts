@@ -157,7 +157,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					// Use models from request if provided, otherwise fetch from API and merge
 					if (updates.models && updates.models.length > 0) {
 						// User provided models, use them
-					} else if (apiKey && updates.enabled !== false) {
+					} else if (apiKey && updates.enabled !== false && updates.autoFetchModels !== false) {
 						const baseUrl = updates.baseUrl || currentProvider?.baseUrl || '';
 						if (baseUrl) {
 							try {
@@ -399,6 +399,43 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				}
 				break;
 
+			case 'getSystemPrompt':
+				try {
+					const globalPrompt = this._configManager.getGlobalSystemPrompt();
+					const workspacePrompt = this._configManager.getWorkspaceSystemPrompt();
+					this._getWebview()?.postMessage({
+						command: 'systemPromptLoaded',
+						data: { globalPrompt, workspacePrompt }
+					});
+				} catch (error: unknown) {
+					this._getWebview()?.postMessage({
+						command: 'systemPromptLoaded',
+						data: { globalPrompt: '', workspacePrompt: '' }
+					});
+				}
+				break;
+
+			case 'updateSystemPrompt':
+				try {
+					const { globalPrompt, workspacePrompt } = message.data as { globalPrompt: string; workspacePrompt: string };
+					await this._configManager.updateGlobalSystemPrompt(globalPrompt);
+					await this._configManager.updateWorkspaceSystemPrompt(workspacePrompt);
+					this._getWebview()?.postMessage({
+						command: 'systemPromptSaved',
+						success: true
+					});
+					vscode.window.showInformationMessage('System prompt updated.');
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to update system prompt: ${errorMessage}`);
+					this._getWebview()?.postMessage({
+						command: 'systemPromptSaved',
+						success: false,
+						error: errorMessage
+					});
+				}
+				break;
+
 			case 'exportRecords':
 				try {
 					// Get VS Code workspace storage path based on platform
@@ -498,9 +535,9 @@ After completing the operations, please reply with the following message in both
 	/**
 	 * Fetch models from OpenAI-compatible API
 	 * Merges API models with existing local models, preserving local customizations.
-	 * If a model exists in both, local settings take precedence.
+	 * If a model exists in both, local settings (temperature/topP etc.) take precedence.
 	 * If a model is only in API, it gets added with defaults.
-	 * If a model is only local, it gets preserved (API can add new ones).
+	 * If a model is only local (not in API list), it gets removed to stay in sync with API.
 	 */
 	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }>> {
 		const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
@@ -527,8 +564,8 @@ After completing the operations, please reply with the following message in both
 		const apiModels = modelsList.map((m: any) => ({
 			modelId: m.id || '',
 			displayName: m.name || m.id || '',
-			contextLength: m.max_input_tokens || 128000,
-			maxTokens: m.max_output_tokens || 4096,
+			contextLength: m.max_input_tokens !== undefined && m.max_input_tokens !== null ? m.max_input_tokens : null,
+			maxTokens: m.max_output_tokens !== undefined && m.max_output_tokens !== null ? m.max_output_tokens : null,
 			vision: (m.input_modalities && m.input_modalities.includes('image')) || false,
 			toolCalling: (m.supported_parameters && m.supported_parameters.includes('tools')) ?? true,
 			temperature: 0.7,
@@ -555,12 +592,13 @@ After completing the operations, please reply with the following message in both
 		for (const apiModel of apiModels) {
 			const localModel = existingMap.get(apiModel.modelId);
 			if (localModel) {
-				// Use API data for all fields, keep local temperature/topP/samplingMode/isUserSelectable/transformThink
+				// Use API data for fields that API provides, keep local values for missing fields
+				// Preserve local temperature/topP/samplingMode/isUserSelectable/transformThink
 				merged.push({
 					modelId: apiModel.modelId,
 					displayName: apiModel.displayName,
-					contextLength: apiModel.contextLength,
-					maxTokens: apiModel.maxTokens,
+					contextLength: apiModel.contextLength !== null ? apiModel.contextLength : localModel.contextLength,
+					maxTokens: apiModel.maxTokens !== null ? apiModel.maxTokens : localModel.maxTokens,
 					vision: apiModel.vision,
 					toolCalling: apiModel.toolCalling,
 					temperature: localModel.temperature ?? 0.7,
@@ -570,17 +608,17 @@ After completing the operations, please reply with the following message in both
 					transformThink: localModel.transformThink,
 				});
 			} else {
-				merged.push(apiModel);
+				merged.push({
+					...apiModel,
+					contextLength: apiModel.contextLength ?? 128000,
+					maxTokens: apiModel.maxTokens ?? 16000,
+				});
 			}
 		}
 		
-		// Add local-only models that are not in API
-		for (const localModel of existingModels) {
-			const apiMatch = apiModels.find((m: any) => m.modelId === localModel.modelId);
-			if (!apiMatch) {
-				merged.push(localModel);
-			}
-		}
+		// Remove local-only models that are not in API
+		// When API returns a model list, only keep models that exist in the API list
+		// (local models not in API are discarded)
 		
 		return merged;
 		} finally {
@@ -722,6 +760,19 @@ After completing the operations, please reply with the following message in both
 						<p class="section-description">Import and export Copilot chat records for migration between different machines.</p>
 					</section>
 
+					<section class="config-section system-prompt-section">
+						<div class="section-header">
+							<div class="section-title-group">
+								<svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M15 1H1c-.55 0-1 .45-1 1v2c0 .55.45 1 1 1h14c.55 0 1-.45 1-1V2c0-.55-.45-1-1-1zm0 5H1c-.55 0-1 .45-1 1v2c0 .55.45 1 1 1h14c.55 0 1-.45 1-1V7c0-.55-.45-1-1-1zm0 5H1c-.55 0-1 .45-1 1v2c0 .55.45 1 1 1h14c.55 0 1-.45 1-1v-2c0-.55-.45-1-1-1z"/></svg>
+								<h2>System Prompt</h2>
+							</div>
+							<div class="section-actions">
+								<button id="editSystemPromptBtn" class="secondary-btn">Edit</button>
+							</div>
+						</div>
+						<p class="section-description">Customize the system prompt that will be prepended to all chat messages.</p>
+					</section>
+
 					<section class="config-section providers-section">
 						<div class="section-header">
 							<div class="section-title-group">
@@ -809,7 +860,7 @@ After completing the operations, please reply with the following message in both
 							</div>
 							<div class="form-group">
 								<label for="editModelMaxTokens">Max Tokens</label>
-								<input type="number" id="editModelMaxTokens" value="4096" min="1" />
+								<input type="number" id="editModelMaxTokens" value="16000" min="1" />
 							</div>
 						</div>
 						<div class="form-row">
@@ -836,7 +887,7 @@ After completing the operations, please reply with the following message in both
 							<div class="form-group">
 								<label class="checkbox-label">
 									<input type="checkbox" id="editModelTransformThink" />
-									Transform Think Tags (<think>/</think>)
+									Transform Think Tags (<|im_start|>/♩)
 								</label>
 							</div>
 						</div>
@@ -889,6 +940,30 @@ After completing the operations, please reply with the following message in both
 						<div class="form-actions">
 							<button type="button" id="cancelSettingsBtn" class="secondary-btn">Cancel</button>
 							<button type="button" id="saveSettingsBtn" class="primary-btn">Save</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- System Prompt Modal -->
+				<div id="systemPromptModal" class="modal">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h2>Edit System Prompt</h2>
+							<button id="closeSystemPromptModal" class="close-btn">&times;</button>
+						</div>
+						<div class="form-group">
+						<label for="globalSystemPromptTextarea">Global System Prompt</label>
+						<textarea id="globalSystemPromptTextarea" rows="6" placeholder="Enter global system prompt here..."></textarea>
+						<div class="help-text">Applied to all workspaces. Stored in global settings.</div>
+					</div>
+					<div class="form-group">
+						<label for="workspaceSystemPromptTextarea">Project (Workspace) System Prompt</label>
+						<textarea id="workspaceSystemPromptTextarea" rows="6" placeholder="Enter project-specific system prompt here..."></textarea>
+						<div class="help-text">Applied only to current workspace. Stored in workspace settings.</div>
+						</div>
+						<div class="form-actions">
+							<button type="button" id="cancelSystemPromptBtn" class="secondary-btn">Cancel</button>
+							<button type="button" id="saveSystemPromptBtn" class="primary-btn">Save</button>
 						</div>
 					</div>
 				</div>
