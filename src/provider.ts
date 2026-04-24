@@ -96,11 +96,30 @@ function saveTodoToolState(todoData: any, forceTodoEnabled: boolean): void {
 		const currentTaskPath = path.join(todoDir, 'task.json');
 
 		if (allCompleted) {
-			// Move existing task.json to task_时间缀.json
-			const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-			const archivedPath = path.join(todoDir, `task_${timestamp}.json`);
+			// Append completed tasks to a daily archive file: task_YYYY-MM-DD.json
+			const now = new Date();
+			const timestamp = now.toISOString();
+			const day = timestamp.slice(0, 10);
+			const archivedPath = path.join(todoDir, `task_${day}.json`);
+			const completedTask = {
+				timestamp,
+				todoList,
+			};
+
+			let archivedTasks: any[] = [];
+			if (fs.existsSync(archivedPath)) {
+				try {
+					const existingArchive = JSON.parse(fs.readFileSync(archivedPath, 'utf8'));
+					archivedTasks = Array.isArray(existingArchive) ? existingArchive : [existingArchive];
+				} catch {
+					archivedTasks = [];
+				}
+			}
+			archivedTasks.push(completedTask);
+			fs.writeFileSync(archivedPath, JSON.stringify(archivedTasks, null, 2));
+
 			if (fs.existsSync(currentTaskPath)) {
-				fs.renameSync(currentTaskPath, archivedPath);
+				fs.unlinkSync(currentTaskPath);
 			}
 		} else {
 			// Save current todo state to task.json
@@ -128,7 +147,7 @@ function getExistingTodoTaskPrompt(): string | null {
 		if (!existingTaskContent) {
 			return null;
 		}
-		return `An unfinished todo task already exists. Do not create a different new todo list yet. Continue with the following existing todo task by calling the todo tool with this todo list and updating item statuses in order. Only create a different new todo list after all existing items are completed.\n\n${existingTaskContent}`;
+		return 'TODO-LOCK: Active TODOs must finish first. Only after ALL active TODOs are completed may you process the user message below. Treat it as a queued next request, not as part of the active TODO. Do not create/merge/rename/reorder/replace TODOs until all active items are completed.';
 	} catch (error) {
 		writeDebugFile(`todo_existing_task_read_error_${Date.now()}.json`, {
 			error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
@@ -782,6 +801,15 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	 */
 	private _convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], model: vscode.LanguageModelChatInformation): Array<any> {
 		const result: Array<any> = [];
+		const lastSourceMessage = messages[messages.length - 1];
+		const isLastSourceMessageUser = lastSourceMessage?.role === vscode.LanguageModelChatMessageRole.User;
+		const lastSourceUserText = isLastSourceMessageUser
+			? lastSourceMessage.content
+				.filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+				.map(part => part.value)
+				.join('\n')
+			: '';
+		const lastUserContainsTodoListTag = lastSourceUserText.includes('<todoList>');
 
 		// Collect all system prompt parts and merge into a single system message
 		const systemParts: string[] = [];
@@ -886,6 +914,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			if (lastMsg.role === 'user') {
 				const promptAppendix: string[] = [];
 				if (hasCurrentTodoTask) {
+					if (isLastSourceMessageUser && !lastUserContainsTodoListTag) {
+						promptAppendix.push(`TODO-LOCK: The user message below lacks <todoList>. It is a queued NEXT request, not a TODO item. Before any other action, call manage_todo_list with the exact active todoList below, finish ALL active unfinished TODOs in order, and update status after each item. Only after ALL active TODOs are completed may you process the user message below. Do not create/merge/rename/reorder/replace TODOs.\n\n${getCurrentTodoTaskContent() || ''}`);
+					} else {
+						promptAppendix.push('TODO-LOCK: <todoList> is present. Do NOT recreate or modify TODO structure. Finish ALL active unfinished TODOs strictly in order and call manage_todo_list after each item. Only after ALL active TODOs are completed may you process the user message below.');
+					}
 					promptAppendix.push(TODO_STATUS_UPDATE_PROMPT);
 				}
 				if (forceTodoEnabled) {
@@ -901,12 +934,21 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				if (globalPrompt) { promptAppendix.push(globalPrompt); }
 				if (workspacePrompt) { promptAppendix.push(workspacePrompt); }
 				if (promptAppendix.length > 0) {
-					const appendixText = '\n\n' + promptAppendix.join('\n\n');
+					const promptText = promptAppendix.join('\n\n');
+					const appendixText = hasCurrentTodoTask
+						? `${promptText}\n\nUSER MESSAGE BELOW (process only after all active TODOs are completed):\n\n`
+						: `\n\n${promptText}`;
 					if (typeof lastMsg.content === 'string') {
-						lastMsg.content += appendixText;
+						lastMsg.content = hasCurrentTodoTask
+							? appendixText + lastMsg.content
+							: lastMsg.content + appendixText;
 					} else if (Array.isArray(lastMsg.content)) {
-						// If content is an array (multimodal), append as a new text part
-						lastMsg.content.push({ type: 'text', text: appendixText });
+						// If content is an array (multimodal), prepend TODO-LOCK or append normal prompts as a text part
+						if (hasCurrentTodoTask) {
+							lastMsg.content.unshift({ type: 'text', text: appendixText });
+						} else {
+							lastMsg.content.push({ type: 'text', text: appendixText });
+						}
 					}
 				}
 			}
