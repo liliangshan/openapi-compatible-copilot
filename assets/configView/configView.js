@@ -51,13 +51,55 @@
 	const cancelEditModelBtn = document.getElementById('cancelEditModelBtn');
 	const saveEditModelBtn = document.getElementById('saveEditModelBtn');
 
+	// Global Settings Modal
+	const globalSettingsModal = document.getElementById('globalSettingsModal');
+	const closeGlobalSettingsModal = document.getElementById('closeGlobalSettingsModal');
+	const cancelGlobalSettingsBtn = document.getElementById('cancelGlobalSettingsBtn');
+	const saveGlobalSettingsBtn = document.getElementById('saveGlobalSettingsBtn');
+	const modalGlobalSystemPrompt = document.getElementById('modalGlobalSystemPrompt');
+	const modalChatHistoryEnabled = document.getElementById('modalChatHistoryEnabled');
+	const modalChatHistorySavePath = document.getElementById('modalChatHistorySavePath');
+	const modalImportRecordsBtn = document.getElementById('modalImportRecordsBtn');
+	const modalExportRecordsBtn = document.getElementById('modalExportRecordsBtn');
+	
+	// Project Settings Modal
+	const projectSettingsModal = document.getElementById('projectSettingsModal');
+	const closeProjectSettingsModal = document.getElementById('closeProjectSettingsModal');
+	const cancelProjectSettingsBtn = document.getElementById('cancelProjectSettingsBtn');
+	const saveProjectSettingsBtn = document.getElementById('saveProjectSettingsBtn');
+	const modalProjectSystemPrompt = document.getElementById('modalProjectSystemPrompt');
+
+	// Collapsible sections
+	const globalSettingsHeader = document.getElementById('globalSettingsHeader');
+	const globalSettingsContent = document.getElementById('globalSettingsContent');
+	const projectSettingsHeader = document.getElementById('projectSettingsHeader');
+	// Settings buttons
+	const openGlobalSettingsBtn = document.getElementById('openGlobalSettingsBtn');
+	const openProjectSettingsBtn = document.getElementById('openProjectSettingsBtn');
+	const chatHistoryStatus = document.getElementById('chatHistoryStatus');
+	const isPanelMode = !!document.getElementById('panelSaveBtn');
+
 	// Initialize
-	vscode.postMessage({ command: 'getProviders' });
-	vscode.postMessage({ command: 'getChatHistorySettings' });
-	vscode.postMessage({ command: 'getSystemPrompt' });
+	if (isPanelMode) {
+		if (window.settingsMode === 'global') {
+			vscode.postMessage({ command: 'getChatHistorySettings' });
+			vscode.postMessage({ command: 'getSystemPrompt' });
+		} else if (window.settingsMode === 'project') {
+			vscode.postMessage({ command: 'getSystemPrompt' });
+		}
+	} else {
+		vscode.postMessage({ command: 'getProviders' });
+		vscode.postMessage({ command: 'getChatHistorySettings' });
+		vscode.postMessage({ command: 'getSystemPrompt' });
+	}
 	setupEventListeners();
 
 	function setupEventListeners() {
+		if (isPanelMode) {
+			setupPanelEventListeners();
+			return;
+		}
+
 		addProviderBtn.addEventListener('click', () => openAddProviderModal());
 		closeModal.addEventListener('click', () => closeProviderModal());
 		cancelBtn.addEventListener('click', () => closeProviderModal());
@@ -97,6 +139,20 @@
 		closeSystemPromptModal?.addEventListener('click', () => closeSystemPromptModalFn());
 		cancelSystemPromptBtn?.addEventListener('click', () => closeSystemPromptModalFn());
 		saveSystemPromptBtn?.addEventListener('click', () => saveSystemPrompt());
+		
+		// Settings buttons - Global Settings (open in editor tab)
+		openGlobalSettingsBtn?.addEventListener('click', () => vscode.postMessage({ command: 'openGlobalSettingsTab' }));
+		closeGlobalSettingsModal?.addEventListener('click', () => closeGlobalSettingsModalFn());
+		cancelGlobalSettingsBtn?.addEventListener('click', () => closeGlobalSettingsModalFn());
+		saveGlobalSettingsBtn?.addEventListener('click', () => saveGlobalSettings());
+		modalImportRecordsBtn?.addEventListener('click', () => vscode.postMessage({ command: 'importRecords' }));
+		modalExportRecordsBtn?.addEventListener('click', () => vscode.postMessage({ command: 'exportRecords' }));
+		
+		// Settings buttons - Project Settings (open in editor tab)
+		openProjectSettingsBtn?.addEventListener('click', () => vscode.postMessage({ command: 'openProjectSettingsTab' }));
+		closeProjectSettingsModal?.addEventListener('click', () => closeProjectSettingsModalFn());
+		cancelProjectSettingsBtn?.addEventListener('click', () => closeProjectSettingsModalFn());
+		saveProjectSettingsBtn?.addEventListener('click', () => saveProjectSettings());
 		
 		providerForm.addEventListener('submit', (e) => {
 			e.preventDefault();
@@ -228,6 +284,102 @@
 				data: { id, enabled: checkbox.checked },
 			});
 		});
+		
+		// Panel mode button handlers (Editor Tab)
+		const panelCancelBtn = document.getElementById('panelCancelBtn');
+		const panelSaveBtn = document.getElementById('panelSaveBtn');
+		const panelImportRecordsBtn = document.getElementById('panelImportRecordsBtn');
+		const panelExportRecordsBtn = document.getElementById('panelExportRecordsBtn');
+		
+		if (panelCancelBtn) {
+			panelCancelBtn.addEventListener('click', () => {
+				vscode.postMessage({ command: 'cancelPanel' });
+			});
+		}
+		
+		if (panelSaveBtn) {
+			panelSaveBtn.addEventListener('click', () => {
+				const mode = window.settingsMode;
+				if (mode === 'global') {
+					const globalSystemPrompt = document.getElementById('panelGlobalSystemPrompt')?.value || '';
+					const chatHistoryEnabled = document.getElementById('panelChatHistoryEnabled')?.checked || false;
+					const chatHistorySavePath = document.getElementById('panelChatHistorySavePath')?.value || '';
+					vscode.postMessage({
+						command: 'saveGlobalSettings',
+						data: {
+							globalSystemPrompt,
+							chatHistoryEnabled,
+							chatHistorySavePath
+						}
+					});
+				} else if (mode === 'project') {
+					const projectSystemPrompt = document.getElementById('panelProjectSystemPrompt')?.value || '';
+					vscode.postMessage({
+						command: 'saveProjectSettings',
+						data: {
+							projectSystemPrompt
+						}
+					});
+				}
+			});
+		}
+		
+		if (panelImportRecordsBtn) {
+			panelImportRecordsBtn.addEventListener('click', () => {
+				vscode.postMessage({ command: 'importRecords' });
+			});
+		}
+		
+		if (panelExportRecordsBtn) {
+			panelExportRecordsBtn.addEventListener('click', () => {
+				vscode.postMessage({ command: 'exportRecords' });
+			});
+		}
+	}
+
+	function setupPanelEventListeners() {
+		const panelCancelBtn = document.getElementById('panelCancelBtn');
+		const panelSaveBtn = document.getElementById('panelSaveBtn');
+		const panelImportRecordsBtn = document.getElementById('panelImportRecordsBtn');
+		const panelExportRecordsBtn = document.getElementById('panelExportRecordsBtn');
+
+		panelCancelBtn?.addEventListener('click', () => {
+			vscode.postMessage({ command: 'cancelPanel' });
+		});
+
+		panelSaveBtn?.addEventListener('click', () => {
+			const mode = window.settingsMode;
+			if (mode === 'global') {
+				const globalSystemPrompt = document.getElementById('panelGlobalSystemPrompt')?.value || '';
+				const chatHistoryEnabled = document.getElementById('panelChatHistoryEnabled')?.checked || false;
+				const chatHistorySavePath = document.getElementById('panelChatHistorySavePath')?.value || '';
+				const forceTodoEnabled = document.getElementById('panelForceTodoEnabled')?.checked || false;
+				vscode.postMessage({
+					command: 'saveGlobalSettings',
+					data: {
+						globalSystemPrompt,
+						chatHistoryEnabled,
+						chatHistorySavePath,
+						forceTodoEnabled
+					}
+				});
+			} else if (mode === 'project') {
+				const projectSystemPrompt = document.getElementById('panelProjectSystemPrompt')?.value || '';
+				const forceTodoEnabled = document.getElementById('panelProjectForceTodoEnabled')?.checked || false;
+				vscode.postMessage({
+					command: 'saveProjectSettings',
+					data: { projectSystemPrompt, forceTodoEnabled }
+				});
+			}
+		});
+
+		panelImportRecordsBtn?.addEventListener('click', () => {
+			vscode.postMessage({ command: 'importRecords' });
+		});
+
+		panelExportRecordsBtn?.addEventListener('click', () => {
+			vscode.postMessage({ command: 'exportRecords' });
+		});
 	}
 
 	// Handle messages from extension
@@ -287,14 +439,59 @@
 
 			case 'chatHistorySettingsLoaded':
 				if (message.data) {
-					chatHistoryEnabled.checked = message.data.enabled;
-					chatHistorySavePath.value = message.data.savePath || '';
+					if (chatHistoryEnabled) {
+						chatHistoryEnabled.checked = message.data.enabled;
+					}
+					if (chatHistorySavePath) {
+						chatHistorySavePath.value = message.data.savePath || '';
+					}
+					const panelChatHistoryEnabled = document.getElementById('panelChatHistoryEnabled');
+					const panelChatHistorySavePath = document.getElementById('panelChatHistorySavePath');
+					if (panelChatHistoryEnabled) {
+						panelChatHistoryEnabled.checked = message.data.enabled;
+					}
+					if (panelChatHistorySavePath) {
+						panelChatHistorySavePath.value = message.data.savePath || '';
+					}
+					
+					// Update the chat history status display
+					if (chatHistoryStatus) {
+						chatHistoryStatus.textContent = message.data.enabled ? 'Enabled' : 'Disabled';
+					}
+					
+					// Also update the modal fields for unified global settings modal
+					if (modalChatHistoryEnabled) {
+						modalChatHistoryEnabled.checked = message.data.enabled;
+					}
+					if (modalChatHistorySavePath) {
+						modalChatHistorySavePath.value = message.data.savePath || '';
+					}
 				}
 				break;
 		case 'systemPromptLoaded':
 			if (message.data) {
-				globalSystemPromptTextarea.value = message.data.globalPrompt || '';
-				workspaceSystemPromptTextarea.value = message.data.workspacePrompt || '';
+				if (globalSystemPromptTextarea) {
+					globalSystemPromptTextarea.value = message.data.globalPrompt || '';
+				}
+				if (workspaceSystemPromptTextarea) {
+					workspaceSystemPromptTextarea.value = message.data.workspacePrompt || '';
+				}
+				const panelGlobalSystemPrompt = document.getElementById('panelGlobalSystemPrompt');
+				const panelProjectSystemPrompt = document.getElementById('panelProjectSystemPrompt');
+				if (panelGlobalSystemPrompt) {
+					panelGlobalSystemPrompt.value = message.data.globalPrompt || '';
+				}
+				if (panelProjectSystemPrompt) {
+					panelProjectSystemPrompt.value = message.data.workspacePrompt || '';
+				}
+				
+				// Also update the modal fields for unified modals
+				if (modalGlobalSystemPrompt) {
+					modalGlobalSystemPrompt.value = message.data.globalPrompt || '';
+				}
+				if (modalProjectSystemPrompt) {
+					modalProjectSystemPrompt.value = message.data.workspacePrompt || '';
+				}
 			}
 			break;
 
@@ -720,9 +917,21 @@
                 settingsModal?.classList.remove('active');
         }
 
+        // Collapsible sections
+        function toggleCollapsible(header, content) {
+                const isCollapsed = header.classList.contains('collapsed');
+                if (isCollapsed) {
+                        header.classList.remove('collapsed');
+                        content.classList.remove('collapsed');
+                } else {
+                        header.classList.add('collapsed');
+                        content.classList.add('collapsed');
+                }
+        }
+
         // System Prompt Modal
-        function openSystemPromptModal() {
-                vscode.postMessage({ command: 'getSystemPrompt' });
+        function openSystemPromptModal(tab = 'global') {
+                vscode.postMessage({ command: 'getSystemPrompt', data: { tab } });
                 systemPromptModal?.classList.add('active');
         }
 
@@ -754,13 +963,62 @@
                         }
                 });
                 closeSettingsModalFn();
-        }
+	}
 
-        // Ad Banner
-        const adBanner = document.getElementById('adBanner');
-        let adUrl = '';
+	// Global Settings Modal (Unified)
+	function openGlobalSettingsModal() {
+		// Load current settings
+		vscode.postMessage({ command: 'getSystemPrompt' });
+		vscode.postMessage({ command: 'getChatHistorySettings' });
+		
+		// Populate the modal with current values
+		// The message handlers below will update the modal fields
+		globalSettingsModal?.classList.add('active');
+	}
 
-        // Handle ad click
+	function closeGlobalSettingsModalFn() {
+		globalSettingsModal?.classList.remove('active');
+	}
+
+	function saveGlobalSettings() {
+		// Save both global system prompt and chat history settings
+		vscode.postMessage({
+			command: 'updateSystemPrompt',
+			data: {
+				globalPrompt: modalGlobalSystemPrompt?.value.trim() || '',
+				workspacePrompt: workspaceSystemPromptTextarea?.value.trim() || ''
+			}
+		});
+		vscode.postMessage({
+			command: 'updateChatHistorySettings',
+			data: {
+				enabled: modalChatHistoryEnabled?.checked || false,
+				savePath: modalChatHistorySavePath?.value.trim() || ''
+			}
+		});
+		closeGlobalSettingsModalFn();
+	}
+
+	// Project Settings Modal
+	function openProjectSettingsModal() {
+		vscode.postMessage({ command: 'getSystemPrompt' });
+		projectSettingsModal?.classList.add('active');
+	}
+
+	function closeProjectSettingsModalFn() {
+		projectSettingsModal?.classList.remove('active');
+	}
+
+	function saveProjectSettings() {
+		vscode.postMessage({
+			command: 'updateSystemPrompt',
+			data: {
+				globalPrompt: globalSystemPromptTextarea?.value.trim() || '',
+				workspacePrompt: modalProjectSystemPrompt?.value.trim() || ''
+			}
+		});
+		closeProjectSettingsModalFn();
+	}
         adBanner?.addEventListener('click', () => {
                 if (adUrl) {
                         vscode.postMessage({ command: 'openUrl', data: adUrl });

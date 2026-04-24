@@ -43,6 +43,8 @@ export class ConfigManager {
 	private static readonly PROVIDERS_KEY = 'openapicopilot.providers';
 	private static readonly SECRET_PREFIX = 'openapicopilot.apiKey.';
 	private static readonly CHAT_HISTORY_KEY = 'openapicopilot.chatHistorySettings';
+	private static readonly GLOBAL_FORCE_TODO_KEY = 'openapicopilot.globalForceTodoEnabled';
+	private static readonly WORKSPACE_FORCE_TODO_KEY = 'openapicopilot.workspaceForceTodoEnabled';
 
 	constructor(
 		private readonly context: vscode.ExtensionContext,
@@ -208,6 +210,34 @@ export class ConfigManager {
 		const updated = { ...current, ...settings };
 		await this.context.globalState.update(ConfigManager.CHAT_HISTORY_KEY, updated);
 		return updated;
+	}
+
+	/**
+	 * Get global Force TODO setting
+	 */
+	getGlobalForceTodoEnabled(): boolean {
+		return this.context.globalState.get<boolean>(ConfigManager.GLOBAL_FORCE_TODO_KEY, false);
+	}
+
+	/**
+	 * Update global Force TODO setting
+	 */
+	async updateGlobalForceTodoEnabled(enabled: boolean): Promise<void> {
+		await this.context.globalState.update(ConfigManager.GLOBAL_FORCE_TODO_KEY, enabled);
+	}
+
+	/**
+	 * Get workspace Force TODO setting
+	 */
+	getWorkspaceForceTodoEnabled(): boolean {
+		return this.context.workspaceState.get<boolean>(ConfigManager.WORKSPACE_FORCE_TODO_KEY, false);
+	}
+
+	/**
+	 * Update workspace Force TODO setting
+	 */
+	async updateWorkspaceForceTodoEnabled(enabled: boolean): Promise<void> {
+		await this.context.workspaceState.update(ConfigManager.WORKSPACE_FORCE_TODO_KEY, enabled);
 	}
 
 	/**

@@ -44,6 +44,165 @@ function writeDebugFile(filename: string, data: any): void {
 	}
 }
 
+const FORCE_TODO_PROMPT = 'If there is no todo list, create one before making changes. If a todo list already exists, continue using the existing todo list, execute todo items in order, and update the todo status after completing each item.';
+const TODO_STATUS_UPDATE_PROMPT = 'If an existing todo item is solved during this conversation, update the todo status when it is completed.';
+const MANDATORY_TODO_PROMPT = 'You MUST use the TODO tool before taking any action. All TODO items must be clear, specific, and detailed with actionable steps. Do not execute any task without first creating or updating a TODO item. All work must be tracked through the TODO tool.';
+
+function getCurrentTodoTaskContent(): string | null {
+	try {
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+		if (!workspaceFolder) {
+			return null;
+		}
+
+		const fs = require('fs');
+		const path = require('path');
+		const currentTaskPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO', 'task.json');
+		if (!fs.existsSync(currentTaskPath)) {
+			return null;
+		}
+
+		return fs.readFileSync(currentTaskPath, 'utf8');
+	} catch (error) {
+		writeDebugFile(`todo_current_task_read_error_${Date.now()}.json`, {
+			error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
+			timestamp: new Date().toISOString(),
+		});
+		return null;
+	}
+}
+
+/**
+ * Save manage_todo_list tool arguments into the active workspace .vscode/TODO folder.
+ * Only saves when forceTodoEnabled is true.
+ */
+function saveTodoToolState(todoData: any, forceTodoEnabled: boolean): void {
+	if (!forceTodoEnabled) {
+		return;
+	}
+	try {
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+		if (!workspaceFolder) {
+			return;
+		}
+
+		const fs = require('fs');
+		const path = require('path');
+		const todoDir = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO');
+		fs.mkdirSync(todoDir, { recursive: true });
+
+		const todoList = Array.isArray(todoData?.todoList) ? todoData.todoList : [];
+		const allCompleted = todoList.length > 0 && todoList.every((item: any) => item?.status === 'completed');
+		const currentTaskPath = path.join(todoDir, 'task.json');
+
+		if (allCompleted) {
+			// Move existing task.json to task_时间缀.json
+			const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+			const archivedPath = path.join(todoDir, `task_${timestamp}.json`);
+			if (fs.existsSync(currentTaskPath)) {
+				fs.renameSync(currentTaskPath, archivedPath);
+			}
+		} else {
+			// Save current todo state to task.json
+			fs.writeFileSync(currentTaskPath, JSON.stringify({
+				timestamp: new Date().toISOString(),
+				todoList,
+			}, null, 2));
+		}
+	} catch (error) {
+		writeDebugFile(`todo_save_error_${Date.now()}.json`, {
+			error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
+			todoData,
+			timestamp: new Date().toISOString(),
+		});
+	}
+}
+
+/**
+ * Read the existing unfinished task.json content so it can be sent to the model
+ * before tool calling starts. This keeps VS Code tool-call animations working.
+ */
+function getExistingTodoTaskPrompt(): string | null {
+	try {
+		const existingTaskContent = getCurrentTodoTaskContent();
+		if (!existingTaskContent) {
+			return null;
+		}
+		return `An unfinished todo task already exists. Do not create a different new todo list yet. Continue with the following existing todo task by calling the todo tool with this todo list and updating item statuses in order. Only create a different new todo list after all existing items are completed.\n\n${existingTaskContent}`;
+	} catch (error) {
+		writeDebugFile(`todo_existing_task_read_error_${Date.now()}.json`, {
+			error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
+			timestamp: new Date().toISOString(),
+		});
+		return null;
+	}
+}
+
+/**
+ * Return merged manage_todo_list input when the model tries to create a different
+ * todo task while an unfinished task.json already exists.
+ */
+function getMergedTodoInputForConflict(todoData: any): any | null {
+	try {
+		const todoList = Array.isArray(todoData?.todoList) ? todoData.todoList : [];
+		const incomingFirstItem = todoList[0];
+		const incomingFirstStatus = incomingFirstItem?.status;
+		if (incomingFirstStatus !== 'in-progress' && incomingFirstStatus !== 'not-started') {
+			return null;
+		}
+
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+		if (!workspaceFolder) {
+			return null;
+		}
+
+		const fs = require('fs');
+		const path = require('path');
+		const currentTaskPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO', 'task.json');
+		if (!fs.existsSync(currentTaskPath)) {
+			return null;
+		}
+
+		const existingTaskContent = fs.readFileSync(currentTaskPath, 'utf8');
+		const existingTask = JSON.parse(existingTaskContent);
+		const existingTodoList = Array.isArray(existingTask?.todoList) ? existingTask.todoList : [];
+		const existingFirstItem = existingTodoList[0];
+		const incomingFirstContent = JSON.stringify(incomingFirstItem ?? {});
+		const existingFirstContent = JSON.stringify(existingFirstItem ?? {});
+
+		if (incomingFirstContent === existingFirstContent) {
+			return null;
+		}
+
+		const firstUnfinishedIndex = existingTodoList.findIndex((item: any) => item?.status !== 'completed');
+		const insertIndex = firstUnfinishedIndex === -1
+			? existingTodoList.length
+			: firstUnfinishedIndex === 0
+				? 1
+				: firstUnfinishedIndex;
+		const existingCompletedItems = existingTodoList.slice(0, insertIndex);
+		const existingRemainingItems = existingTodoList.slice(insertIndex);
+		const mergedTodoList = [...existingCompletedItems, ...todoList, ...existingRemainingItems].map((item: any, index: number) => ({
+			...item,
+			id: index + 1,
+		}));
+		const mergedTodoInput = {
+			timestamp: new Date().toISOString(),
+			todoList: mergedTodoList,
+		};
+		writeDebugFile('mergedTodoList.test.json', mergedTodoInput);
+
+		return mergedTodoInput;
+	} catch (error) {
+		writeDebugFile(`todo_conflict_tool_result_error_${Date.now()}.json`, {
+			error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
+			todoData,
+			timestamp: new Date().toISOString(),
+		});
+		return null;
+	}
+}
+
 /**
  * Type guard for LanguageModelToolResultPart-like values.
  */
@@ -219,21 +378,6 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
 		token: vscode.CancellationToken
 	): Promise<void> {
-		// Debug: Log the raw incoming request at the very beginning
-		try {
-			const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-			writeDebugFile(`raw_request_${timestamp}.json`, {
-				model: JSON.parse(JSON.stringify(model)),
-				messagesCount: messages.length,
-				messages: JSON.parse(JSON.stringify(messages)),
-				toolsCount: options.tools?.length || 0,
-				tools: JSON.parse(JSON.stringify(options.tools)),
-				timestamp: new Date().toISOString()
-			});
-		} catch (e) {
-			console.error('[DEBUG] Failed to write raw request debug file:', e);
-		}
-
 		const metadata = model.__providerData;
 		if (!metadata) {
 			throw new Error('Model metadata not found');
@@ -247,6 +391,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const topP = metadata.topP as number ?? 1.0;
 		const samplingMode = (metadata.samplingMode as string) ?? 'both';
 		const transformThink = (metadata.transformThink as boolean) ?? false;
+		const forceTodoEnabled = this._configManager.getGlobalForceTodoEnabled() || this._configManager.getWorkspaceForceTodoEnabled();
 
 		// Get API key from secrets
 		const apiKey = await this._configManager.getApiKey(providerId);
@@ -342,23 +487,6 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				? convertOpenAIRequestToAnthropic(requestBody)
 				: requestBody;
 
-			// Debug: Write the actual request body to a file for inspection
-			try {
-				const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-				writeDebugFile(`request_${timestamp}.json`, {
-					url,
-					isAnthropic,
-					providerId,
-					modelId,
-					apiType,
-					requestBody,
-					finalBody,
-					timestamp: new Date().toISOString()
-				});
-			} catch (e) {
-				console.error('[DEBUG] Failed to write debug file:', e);
-			}
-
 			const response = await fetch(url, {
 				method: 'POST',
 				headers,
@@ -447,6 +575,17 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 								// Empty arguments string means no parameters - treat as empty object
 								const argsStr = tc.arguments.trim();
 								const parsedArgs = argsStr === '' ? {} : JSON.parse(argsStr);
+								if (tc.name === 'manage_todo_list') {
+									const mergedTodoInput = getMergedTodoInputForConflict(parsedArgs);
+									const finalArgs = mergedTodoInput ?? parsedArgs;
+									saveTodoToolState(finalArgs, forceTodoEnabled);
+									progress.report(new vscode.LanguageModelToolCallPart(
+										tc.id || `call_${index}`,
+										tc.name,
+										finalArgs
+									));
+									continue;
+								}
 								progress.report(new vscode.LanguageModelToolCallPart(
 									tc.id || `call_${index}`,
 									tc.name,
@@ -659,6 +798,10 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			systemParts.push(workspacePrompt);
 		}
 
+		// 2.1 Force TODO prompt switch: check global first, then workspace/project
+		const forceTodoEnabled = this._configManager.getGlobalForceTodoEnabled() || this._configManager.getWorkspaceForceTodoEnabled();
+		const hasCurrentTodoTask = getCurrentTodoTaskContent() !== null;
+
 		// 3. VS Code system messages (filtered)
 		for (const message of messages) {
 			if (this._mapRole(message) === 'system') {
@@ -685,7 +828,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					result.push({
 						role: 'tool',
 						tool_call_id: tr.tool_call_id,
-						content: tr.text,
+						content: hasCurrentTodoTask ? `${tr.text}\n\n${TODO_STATUS_UPDATE_PROMPT}` : tr.text,
 					});
 				}
 				
@@ -742,6 +885,19 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const lastMsg = result[result.length - 1];
 			if (lastMsg.role === 'user') {
 				const promptAppendix: string[] = [];
+				if (hasCurrentTodoTask) {
+					promptAppendix.push(TODO_STATUS_UPDATE_PROMPT);
+				}
+				if (forceTodoEnabled) {
+					const existingTodoTaskPrompt = getExistingTodoTaskPrompt();
+					if (existingTodoTaskPrompt) {
+						promptAppendix.push(existingTodoTaskPrompt);
+					} else {
+						promptAppendix.push('If there is no todo, please create one after analysis and execute in order. If a todo list already exists, continue using it and update item statuses after completing each one.');
+					}
+					promptAppendix.push(FORCE_TODO_PROMPT);
+					promptAppendix.push(MANDATORY_TODO_PROMPT);
+				}
 				if (globalPrompt) { promptAppendix.push(globalPrompt); }
 				if (workspacePrompt) { promptAppendix.push(workspacePrompt); }
 				if (promptAppendix.length > 0) {

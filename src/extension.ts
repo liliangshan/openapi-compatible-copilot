@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ConfigManager } from './configManager';
 import { OpenAPIChatModelProvider } from './provider';
-import { ConfigViewProvider } from './views/configView';
+import { ConfigViewProvider, ConfigViewPanel } from './views/configView';
 import { initStatusBar } from './statusBar';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -39,6 +39,20 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('openapicopilot.openConfig', async () => {
 			// Focus the config view (same as manageProviders)
 			await vscode.commands.executeCommand(`${ConfigViewProvider.viewType}.focus`);
+		})
+	);
+
+	// Register command: Open Global Settings in editor tab
+	context.subscriptions.push(
+		vscode.commands.registerCommand('openapicopilot.openGlobalSettingsTab', async () => {
+			await ConfigViewPanel.openPanel(context.extensionUri, configManager, chatProvider, 'global');
+		})
+	);
+
+	// Register command: Open Project Settings in editor tab
+	context.subscriptions.push(
+		vscode.commands.registerCommand('openapicopilot.openProjectSettingsTab', async () => {
+			await ConfigViewPanel.openPanel(context.extensionUri, configManager, chatProvider, 'project');
 		})
 	);
 }

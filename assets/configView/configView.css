@@ -161,6 +161,75 @@ body {
 	display: none;
 }
 
+/* Settings Row Sections */
+.settings-section {
+	margin-bottom: 12px;
+}
+
+.settings-row-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 10px 12px;
+	background-color: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 6px;
+	transition: background-color 0.15s, border-color 0.15s;
+}
+
+.settings-row-header:hover {
+	background-color: var(--vscode-list-hoverBackground);
+	border-color: var(--vscode-focusBorder);
+}
+
+.settings-row-header .section-title-group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.settings-row-header h2 {
+	font-size: 13px;
+	font-weight: 600;
+	margin: 0;
+}
+
+.settings-row {
+	padding: 8px 12px;
+	background-color: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-input-border);
+	border-top: none;
+	border-radius: 0 0 6px 6px;
+}
+
+.settings-label {
+	font-size: 12px;
+	color: var(--vscode-foreground);
+}
+
+.settings-desc {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.settings-buttons-row {
+	display: flex;
+	gap: 8px;
+	padding: 10px 12px;
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 6px;
+}
+
+.settings-buttons-row .primary-btn {
+	flex: 1;
+}
+
+.settings-hint {
+	padding: 6px 12px 0;
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
 /* Add Provider Button */
 .add-provider-btn {
 	display: inline-flex;
@@ -565,6 +634,28 @@ body {
 	font-weight: 500;
 }
 
+.modal-content.modal-large {
+	max-width: 800px;
+}
+
+.modal-section {
+	margin-bottom: 24px;
+	padding-bottom: 20px;
+	border-bottom: 1px solid var(--vscode-input-border);
+}
+
+.modal-section:last-of-type {
+	border-bottom: none;
+	margin-bottom: 16px;
+}
+
+.modal-section h3 {
+	font-size: 14px;
+	font-weight: 600;
+	margin-bottom: 12px;
+	color: var(--vscode-foreground);
+}
+
 /* Form */
 .form-group {
 	margin-bottom: 16px;
@@ -896,5 +987,150 @@ body {
 
 .prompt-field textarea:focus {
 	outline: none;
+	border-color: var(--vscode-focusBorder);
+}
+
+/* Settings Panel Styles (Editor Tab) */
+.config-view-container {
+	padding: 20px;
+	max-width: 900px;
+	margin: 0 auto;
+}
+
+.settings-panel-header {
+	margin-bottom: 24px;
+	padding-bottom: 16px;
+	border-bottom: 1px solid var(--vscode-input-border);
+}
+
+.settings-panel-header h1 {
+	font-size: 20px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.config-section {
+	margin-bottom: 24px;
+	padding: 16px;
+	background-color: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 6px;
+}
+
+.config-section h2 {
+	font-size: 14px;
+	font-weight: 600;
+	margin-bottom: 12px;
+	color: var(--vscode-foreground);
+}
+
+.form-group {
+	margin-bottom: 12px;
+}
+
+.form-group label {
+	display: block;
+	font-size: 13px;
+	font-weight: 500;
+	margin-bottom: 4px;
+	color: var(--vscode-foreground);
+}
+
+.checkbox-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+	width: 16px;
+	height: 16px;
+	cursor: pointer;
+}
+
+.help-text {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	margin-top: 4px;
+}
+
+.form-group textarea {
+	width: 100%;
+	min-height: 100px;
+	resize: vertical;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 12px;
+	padding: 8px;
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 4px;
+	background-color: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+}
+
+.form-group textarea:focus {
+	outline: none;
+	border-color: var(--vscode-focusBorder);
+}
+
+.form-group input[type="text"] {
+	width: 100%;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 12px;
+	padding: 8px;
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 4px;
+	background-color: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+}
+
+.form-group input[type="text"]:focus {
+	outline: none;
+	border-color: var(--vscode-focusBorder);
+}
+
+.form-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	margin-top: 16px;
+}
+
+.form-actions.sticky-footer {
+	position: sticky;
+	bottom: 0;
+	background-color: var(--vscode-editor-background);
+	padding: 12px 0;
+	border-top: 1px solid var(--vscode-input-border);
+}
+
+.primary-btn {
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border: none;
+	padding: 8px 16px;
+	border-radius: 4px;
+	font-size: 13px;
+	cursor: pointer;
+	transition: background-color 0.15s;
+}
+
+.primary-btn:hover {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+.secondary-btn {
+	background-color: transparent;
+	color: var(--vscode-foreground);
+	border: 1px solid var(--vscode-input-border);
+	padding: 8px 16px;
+	border-radius: 4px;
+	font-size: 13px;
+	cursor: pointer;
+	transition: background-color 0.15s, border-color 0.15s;
+}
+
+.secondary-btn:hover {
+	background-color: var(--vscode-list-hoverBackground);
 	border-color: var(--vscode-focusBorder);
 }

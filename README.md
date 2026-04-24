@@ -11,6 +11,8 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 📤 **Import/Export Config** - Backup and restore your provider configurations
 - 💾 **Auto Save Chat History** - Automatically save chat conversations to local files
 - 🔄 **Copilot Records Migration** - Import and export Copilot chat records between machines
+- 🖥️ **Global & Project System Prompt Settings** - Dual system prompt inputs (global + workspace-scoped) appended to user messages for better model adherence
+- ✅ **Enhanced TODO Settings** - When enabled, the model is strongly instructed to create, track, and update all tasks through the TODO tool before taking any action
 
 ## Supported APIs
 
@@ -141,6 +143,25 @@ Migrate your Copilot chat records between different machines:
 2. Click "Import" in the Copilot Records section
 3. The extension will find the latest exported records and copy them to VS Code storage
 4. Close and reopen VS Code to load the migrated chat records
+
+## Changelog
+
+### 2.0.0
+
+- **Enhanced TODO Settings**: Renamed "Force TODO" to "Enhanced TODO" throughout the configuration UI for clearer terminology
+- **Mandatory TODO Tool Usage**: When Enhanced TODO is enabled, the model is now strongly instructed to use the TODO tool before taking any action, with clear requirements that all TODO items must be detailed, specific, and include actionable steps
+- **Global & Project System Prompt Settings**: Added global and workspace-scoped system prompt settings with dual input fields in the configuration UI. System prompts are appended to user messages for better model adherence
+
+### 1.3.3
+
+- **Custom System Prompt**: Global and workspace-scoped custom system prompts with dual input fields in configuration UI
+- **System Prompt Merging**: Multiple system prompt sources (global, workspace, VS Code Copilot) are merged into a single system message
+- **User Message Prompt Appendix**: Custom prompts are also appended to the last user message for better model adherence
+
+### 1.3.0
+
+- **Anthropic API Support**: Full support for Anthropic Messages API (`/v1/messages`) alongside OpenAI-compatible endpoints
+- **Automatic Format Conversion**: Bidirectional conversion between OpenAI and Anthropic formats
 
 ## License
 

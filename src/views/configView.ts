@@ -529,6 +529,14 @@ After completing the operations, please reply with the following message in both
 					vscode.env.openExternal(vscode.Uri.parse(url));
 				}
 				break;
+
+			case 'openGlobalSettingsTab':
+				await ConfigViewPanel.openPanel(this._extensionUri, this._configManager, this._chatProvider, 'global');
+				break;
+
+			case 'openProjectSettingsTab':
+				await ConfigViewPanel.openPanel(this._extensionUri, this._configManager, this._chatProvider, 'project');
+				break;
 		}
 	}
 
@@ -733,44 +741,13 @@ After completing the operations, please reply with the following message in both
 						<p class="header-subtitle">OpenAPI Compatible Copilot</p>
 					</header>
 
-					<section class="config-section chat-history-section">
-						<div class="section-header">
-							<div class="section-title-group">
-								<svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2L1 2v9l1 1h3v2.5l.854.354L8.707 12H14l1-1V2l-1-1zm0 10H8.293L5.146 14.146 6 13.293V11H2V2h12v9z"/><path d="M3 4h10v1H3V4zm0 2h8v1H3V6zm0 2h6v1H3V8z"/></svg>
-								<h2>Save Chat History</h2>
-							</div>
-							<button id="settingsBtn" class="icon-btn compact" title="Chat History Settings">
-								<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M3.5 2h-1v5h1V2zm6.1 5H6.4L6 6.45v-1L6.4 5h3.2l.4.5v1l-.4.5zm-5 3H1.4L1 9.5v-1l.4-.5h3.2l.4.5v1l-.4.5zm3.9-8h-1v2h1V2zm-1 6h1v6h-1V8zm-4 3h-1v3h1v-3zm7.9 0h3.19l.4-.5v-1l-.4-.5H11.4l-.4.5v1l.4.5zm2.1-9h-1v6h1V2zm-1 10h1v2h-1v-2z"/></svg>
-								<span>Settings</span>
-							</button>
+					<!-- Settings Section (Unified) -->
+					<section class="config-section settings-section">
+						<div class="settings-buttons-row">
+							<button id="openGlobalSettingsBtn" class="primary-btn">Global Settings</button>
+							<button id="openProjectSettingsBtn" class="primary-btn">Project Settings</button>
 						</div>
-					</section>
-
-					<section class="config-section chat-records-section">
-						<div class="section-header">
-							<div class="section-title-group">
-								<svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1H2L1 2v9l1 1h3v2.5l.854.354L8.707 12H14l1-1V2l-1-1zm0 10H8.293L5.146 14.146 6 13.293V11H2V2h12v9z"/><path d="M3 4h10v1H3V4zm0 2h8v1H3V6zm0 2h6v1H3V8z"/></svg>
-								<h2>Copilot Records</h2>
-							</div>
-							<div class="section-actions">
-								<button id="importRecordsBtn" class="secondary-btn">Import</button>
-								<button id="exportRecordsBtn" class="secondary-btn">Export</button>
-							</div>
-						</div>
-						<p class="section-description">Import and export Copilot chat records for migration between different machines.</p>
-					</section>
-
-					<section class="config-section system-prompt-section">
-						<div class="section-header">
-							<div class="section-title-group">
-								<svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M15 1H1c-.55 0-1 .45-1 1v2c0 .55.45 1 1 1h14c.55 0 1-.45 1-1V2c0-.55-.45-1-1-1zm0 5H1c-.55 0-1 .45-1 1v2c0 .55.45 1 1 1h14c.55 0 1-.45 1-1V7c0-.55-.45-1-1-1zm0 5H1c-.55 0-1 .45-1 1v2c0 .55.45 1 1 1h14c.55 0 1-.45 1-1v-2c0-.55-.45-1-1-1z"/></svg>
-								<h2>System Prompt</h2>
-							</div>
-							<div class="section-actions">
-								<button id="editSystemPromptBtn" class="secondary-btn">Edit</button>
-							</div>
-						</div>
-						<p class="section-description">Customize the system prompt that will be prepended to all chat messages.</p>
+						<div class="settings-hint">System Prompt, Chat History, Import/Export Copilot Records, Enhanced TODO Settings</div>
 					</section>
 
 					<section class="config-section providers-section">
@@ -968,6 +945,99 @@ After completing the operations, please reply with the following message in both
 					</div>
 				</div>
 
+				<!-- Global Settings Modal (Unified) -->
+				<div id="globalSettingsModal" class="modal">
+					<div class="modal-content modal-large">
+						<div class="modal-header">
+							<h2>Global Settings</h2>
+							<button id="closeGlobalSettingsModal" class="close-btn">&times;</button>
+						</div>
+						
+						<!-- Global System Prompt Section -->
+						<div class="modal-section">
+							<h3>Global System Prompt</h3>
+							<div class="form-group">
+								<textarea id="modalGlobalSystemPrompt" rows="6" placeholder="Enter global system prompt here..."></textarea>
+								<div class="help-text">Applied to all workspaces. Stored in global settings.</div>
+							</div>
+						</div>
+						
+						<!-- Chat History Section -->
+						<div class="modal-section">
+							<h3>Chat History</h3>
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input type="checkbox" id="modalChatHistoryEnabled" />
+									Auto Save Chat History
+								</label>
+								<div class="help-text">Automatically save chat conversations to local files</div>
+							</div>
+							<div class="form-group">
+								<label for="modalChatHistorySavePath">Save Path</label>
+								<input type="text" id="modalChatHistorySavePath" placeholder="Path to save chat history" />
+								<div class="help-text">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
+							</div>
+						</div>
+						
+						<!-- Enhanced TODO Section -->
+						<div class="modal-section">
+							<h3>Enhanced TODO</h3>
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input type="checkbox" id="modalForceTodoEnabled" />
+									Enable Enhanced TODO
+								</label>
+								<div class="help-text">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
+							</div>
+						</div>
+						
+						<!-- Copilot Records Section -->
+						<div class="modal-section">
+							<h3>Copilot Records</h3>
+							<div class="form-group">
+								<div class="help-text">Import/export chat records from VS Code Copilot</div>
+							</div>
+							<div class="form-actions">
+								<button type="button" id="modalImportRecordsBtn" class="secondary-btn">Import Records</button>
+								<button type="button" id="modalExportRecordsBtn" class="secondary-btn">Export Records</button>
+							</div>
+						</div>
+						
+						<div class="form-actions">
+							<button type="button" id="cancelGlobalSettingsBtn" class="secondary-btn">Cancel</button>
+							<button type="button" id="saveGlobalSettingsBtn" class="primary-btn">Save All</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- Project Settings Modal -->
+				<div id="projectSettingsModal" class="modal">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h2>Project Settings</h2>
+							<button id="closeProjectSettingsModal" class="close-btn">&times;</button>
+						</div>
+						<div class="modal-section">
+							<h3>Project System Prompt</h3>
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input type="checkbox" id="modalProjectForceTodoEnabled" />
+									Enable Enhanced TODO
+								</label>
+								<div class="help-text">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
+							</div>
+							<div class="form-group">
+								<textarea id="modalProjectSystemPrompt" rows="8" placeholder="Enter project-specific system prompt here..."></textarea>
+								<div class="help-text">Applied only to current workspace. Stored in workspace settings.</div>
+							</div>
+						</div>
+						<div class="form-actions">
+							<button type="button" id="cancelProjectSettingsBtn" class="secondary-btn">Cancel</button>
+							<button type="button" id="saveProjectSettingsBtn" class="primary-btn">Save</button>
+						</div>
+					</div>
+				</div>
+
 				<script nonce="${nonce}">window.VSCODE_LOCALE = '${vscodeLocale}';</script>
 			<script nonce="${nonce}">alert('INLINE_SCRIPT_LOADED');</script>
 				<script nonce="${nonce}" src="${scriptUri}?v=${version}"></script>
@@ -988,6 +1058,377 @@ After completing the operations, please reply with the following message in both
 	}
 
 	private _getNonce(): string {
+		let text = '';
+		const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		for (let i = 0; i < 32; i++) {
+			text += possible.charAt(Math.floor(Math.random() * possible.length));
+		}
+		return text;
+	}
+}
+
+/**
+ * ConfigViewPanel - Opens configuration in editor area as a WebviewPanel
+ */
+export class ConfigViewPanel {
+	private static readonly viewType = 'openapicopilot.configPanel';
+	private static _currentPanel: vscode.WebviewPanel | undefined;
+	private static _extensionUri: vscode.Uri | undefined;
+	private static _configManager: ConfigManager | undefined;
+	private static _chatProvider: any | undefined;
+
+	public static async openPanel(extensionUri: vscode.Uri, configManager: ConfigManager, chatProvider: any, mode: 'global' | 'project' = 'global') {
+		const column = vscode.window.activeTextEditor?.viewColumn;
+
+		this._extensionUri = extensionUri;
+		this._configManager = configManager;
+		this._chatProvider = chatProvider;
+
+		// If we already have a panel, show it and navigate to the requested mode
+		if (ConfigViewPanel._currentPanel) {
+			ConfigViewPanel._currentPanel.reveal(column, true);
+			// Update the webview content for the requested mode
+			ConfigViewPanel._currentPanel.webview.html = await this._getHtmlForMode(mode);
+			return;
+		}
+
+		// Create a new panel
+		const panel = vscode.window.createWebviewPanel(
+			ConfigViewPanel.viewType,
+			'LLS OAI Settings',
+			column || vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+				localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'assets')]
+			}
+		);
+
+		ConfigViewPanel._currentPanel = panel;
+
+		// Set the HTML content
+		panel.webview.html = await this._getHtmlForMode(mode);
+
+		// Handle messages from the webview
+		panel.webview.onDidReceiveMessage(async (message) => {
+			await this._handleMessage(message);
+		});
+
+		// Clean up when the panel is closed
+		panel.onDidDispose(() => {
+			ConfigViewPanel._currentPanel = undefined;
+		});
+	}
+
+	private static async _getHtmlForMode(mode: 'global' | 'project'): Promise<string> {
+		if (!this._extensionUri || !this._configManager) {
+			return '<html><body><p>Error: Extension not initialized</p></body></html>';
+		}
+
+		const webview = this._currentPanel!.webview;
+		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'assets', 'configView', 'configView.js'));
+		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'assets', 'configView', 'configView.css'));
+		const nonce = this._getNonce();
+		const version = new Date().getTime();
+
+		// Get current settings
+		const settings = await this._getCurrentSettings();
+
+		// Generate HTML based on mode
+		const modalHtml = mode === 'global' ? this._getGlobalSettingsHtml(settings, nonce, scriptUri, styleUri, version) : this._getProjectSettingsHtml(settings, nonce, scriptUri, styleUri, version);
+
+		return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https: data:; font-src ${webview.cspSource} data:;">
+	<title>LLS OAI ${mode === 'global' ? 'Global' : 'Project'} Settings</title>
+	<link href="${styleUri}?v=${version}" rel="stylesheet">
+</head>
+<body>
+	<div class="config-view-container">
+		${modalHtml}
+	</div>
+
+	<script nonce="${nonce}">window.VSCODE_LOCALE = '${vscode.env.language}';</script>
+	<script nonce="${nonce}" src="${scriptUri}?v=${version}"></script>
+</body>
+</html>`;
+	}
+
+	private static async _getCurrentSettings(): Promise<any> {
+		if (!this._configManager) {
+			return {};
+		}
+
+		const chatHistorySettings = await this._configManager.getChatHistorySettings();
+		const globalSystemPrompt = this._configManager.getGlobalSystemPrompt() || '';
+		const projectSystemPrompt = this._configManager.getWorkspaceSystemPrompt() || '';
+		const globalForceTodoEnabled = this._configManager.getGlobalForceTodoEnabled();
+		const projectForceTodoEnabled = this._configManager.getWorkspaceForceTodoEnabled();
+
+		return {
+			chatHistoryEnabled: chatHistorySettings.enabled,
+			chatHistorySavePath: chatHistorySettings.savePath || this._getDefaultSavePath(),
+			globalSystemPrompt,
+			projectSystemPrompt,
+			globalForceTodoEnabled,
+			projectForceTodoEnabled
+		};
+	}
+
+	private static _getGlobalSettingsHtml(settings: any, nonce: string, scriptUri: vscode.Uri, styleUri: vscode.Uri, version: number): string {
+		const escapedGlobalPrompt = (settings.globalSystemPrompt || '').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+
+		return `
+			<div class="settings-panel-header">
+				<h1>Global Settings</h1>
+			</div>
+
+			<!-- Global System Prompt Section -->
+			<section class="config-section">
+				<h2>Global System Prompt</h2>
+				<div class="form-group">
+					<textarea id="panelGlobalSystemPrompt" rows="6" placeholder="Enter global system prompt here...">${settings.globalSystemPrompt || ''}</textarea>
+					<div class="help-text">Applied to all workspaces. Stored in global settings.</div>
+				</div>
+			</section>
+
+			<!-- Chat History Section -->
+			<section class="config-section">
+				<h2>Chat History</h2>
+				<div class="form-group">
+					<label class="checkbox-label">
+						<input type="checkbox" id="panelChatHistoryEnabled" ${settings.chatHistoryEnabled ? 'checked' : ''} />
+						Auto Save Chat History
+					</label>
+					<div class="help-text">Automatically save chat conversations to local files</div>
+				</div>
+				<div class="form-group">
+					<label for="panelChatHistorySavePath">Save Path</label>
+					<input type="text" id="panelChatHistorySavePath" value="${settings.chatHistorySavePath || this._getDefaultSavePath()}" />
+					<div class="help-text">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
+				</div>
+			</section>
+
+			<!-- Enhanced TODO Section -->
+			<section class="config-section">
+				<h2>Enhanced TODO</h2>
+				<div class="form-group">
+					<label class="checkbox-label">
+						<input type="checkbox" id="panelForceTodoEnabled" ${settings.globalForceTodoEnabled ? 'checked' : ''} />
+						Enable Enhanced TODO
+					</label>
+					<div class="help-text">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
+				</div>
+			</section>
+
+			<!-- Copilot Records Section -->
+			<section class="config-section">
+				<h2>Copilot Records</h2>
+				<div class="form-group">
+					<div class="help-text">Import/export chat records from VS Code Copilot</div>
+				</div>
+				<div class="form-actions">
+					<button type="button" id="panelImportRecordsBtn" class="secondary-btn">Import Records</button>
+					<button type="button" id="panelExportRecordsBtn" class="secondary-btn">Export Records</button>
+				</div>
+			</section>
+
+			<div class="form-actions sticky-footer">
+				<button type="button" id="panelCancelBtn" class="secondary-btn">Cancel</button>
+				<button type="button" id="panelSaveBtn" class="primary-btn">Save All</button>
+			</div>
+
+			<script nonce="${nonce}">
+				window.settingsMode = 'global';
+			</script>
+		`;
+	}
+
+	private static _getProjectSettingsHtml(settings: any, nonce: string, scriptUri: vscode.Uri, styleUri: vscode.Uri, version: number): string {
+		const escapedProjectPrompt = (settings.projectSystemPrompt || '').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+
+		return `
+			<div class="settings-panel-header">
+				<h1>Project Settings</h1>
+			</div>
+
+			<!-- Project System Prompt Section -->
+			<section class="config-section">
+				<h2>Project System Prompt</h2>
+				<div class="form-group">
+					<label class="checkbox-label">
+						<input type="checkbox" id="panelProjectForceTodoEnabled" ${settings.projectForceTodoEnabled ? 'checked' : ''} />
+						Enable Enhanced TODO
+					</label>
+					<div class="help-text">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
+				</div>
+				<div class="form-group">
+					<textarea id="panelProjectSystemPrompt" rows="8" placeholder="Enter project-specific system prompt here...">${settings.projectSystemPrompt || ''}</textarea>
+					<div class="help-text">Applied only to current workspace. Stored in workspace settings.</div>
+				</div>
+			</section>
+
+			<div class="form-actions sticky-footer">
+				<button type="button" id="panelCancelBtn" class="secondary-btn">Cancel</button>
+				<button type="button" id="panelSaveBtn" class="primary-btn">Save</button>
+			</div>
+
+			<script nonce="${nonce}">
+				window.settingsMode = 'project';
+			</script>
+		`;
+	}
+
+	private static async _handleMessage(message: any): Promise<void> {
+		if (!this._configManager) {
+			return;
+		}
+
+		const { command, data } = message;
+
+		switch (command) {
+			case 'getChatHistorySettings':
+				const settings = await this._configManager.getChatHistorySettings();
+				this._currentPanel?.webview.postMessage({
+					command: 'chatHistorySettingsLoaded',
+					data: settings
+				});
+				break;
+
+			case 'getSystemPrompt':
+				const globalPrompt = this._configManager.getGlobalSystemPrompt();
+				const workspacePrompt = this._configManager.getWorkspaceSystemPrompt();
+				this._currentPanel?.webview.postMessage({
+					command: 'systemPromptLoaded',
+					data: { globalPrompt, workspacePrompt }
+				});
+				break;
+
+			case 'saveGlobalSettings':
+				await this._configManager.updateGlobalSystemPrompt(data.globalSystemPrompt);
+				await this._configManager.updateChatHistorySettings({
+					enabled: data.chatHistoryEnabled,
+					savePath: data.chatHistorySavePath
+				});
+				await this._configManager.updateGlobalForceTodoEnabled(!!data.forceTodoEnabled);
+				this._currentPanel?.dispose();
+				vscode.window.showInformationMessage('Global settings saved!');
+				break;
+
+			case 'saveProjectSettings':
+				await this._configManager.updateWorkspaceSystemPrompt(data.projectSystemPrompt);
+				await this._configManager.updateWorkspaceForceTodoEnabled(!!data.forceTodoEnabled);
+				this._currentPanel?.dispose();
+				vscode.window.showInformationMessage('Project settings saved!');
+				break;
+
+			case 'openGlobalSettings':
+				this._currentPanel!.webview.html = await this._getHtmlForMode('global');
+				break;
+
+			case 'openProjectSettings':
+				this._currentPanel!.webview.html = await this._getHtmlForMode('project');
+				break;
+
+			case 'importRecords':
+				try {
+					const home = process.env.HOME || process.env.USERPROFILE || '';
+					let workspaceStoragePath = '';
+					if (process.platform === 'darwin') {
+						workspaceStoragePath = `${home}/Library/Application Support/Code/User/workspaceStorage`;
+					} else if (process.platform === 'win32') {
+						const appData = process.env.APPDATA || `${home}/AppData/Roaming`;
+						workspaceStoragePath = `${appData}/Code/User/workspaceStorage`;
+					} else {
+						workspaceStoragePath = `${home}/.config/Code/User/workspaceStorage`;
+					}
+
+					const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+					const workspacePath = workspaceFolder?.uri.fsPath || 'unknown';
+
+					const prompt = `Please help me import chat records:
+
+1. Current project path: ${workspacePath}
+2. VS Code chat records directory: ${workspaceStoragePath}
+
+Please perform the following operations:
+- Check if the .LLSOAI directory exists in the current project
+- If it does not exist, prompt the user to place the exported records folder into the .LLSOAI directory
+- If it exists, list all subdirectories under .LLSOAI and find the one with the most recent modification time
+- Traverse ALL subdirectories under ${workspaceStoragePath} and read each workspace.json file
+- Find the subdirectory whose workspace.json "folder" field matches the current project path (${workspacePath})
+- Once found, force copy ALL contents from the latest .LLSOAI directory into that matched subdirectory (overwrite any existing files)
+
+After completing the operations, please reply with the following message in both English and Chinese:
+"Import completed successfully. Please close the current editor and reopen it to load the migrated data. If the chat records do not appear after reopening, please try importing again and then close and reopen the editor once more.
+导入完成。请关闭当前编辑器并重新打开以载入迁移的数据。如果重新打开后没有看到聊天记录，请再次尝试导入，完成后再次关闭并重新打开编辑器。"`;
+
+					await vscode.commands.executeCommand('workbench.action.chat.open', {
+						query: prompt,
+					});
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to import records: ${errorMessage}`);
+				}
+				break;
+
+			case 'exportRecords':
+				try {
+					const home = process.env.HOME || process.env.USERPROFILE || '';
+					let workspaceStoragePath = '';
+					if (process.platform === 'darwin') {
+						workspaceStoragePath = `${home}/Library/Application Support/Code/User/workspaceStorage`;
+					} else if (process.platform === 'win32') {
+						const appData = process.env.APPDATA || `${home}/AppData/Roaming`;
+						workspaceStoragePath = `${appData}/Code/User/workspaceStorage`;
+					} else {
+						workspaceStoragePath = `${home}/.config/Code/User/workspaceStorage`;
+					}
+
+					const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+					const workspacePath = workspaceFolder?.uri.fsPath || 'unknown';
+
+					const prompt = `Please help me export chat records:
+
+1. VS Code chat records directory: ${workspaceStoragePath}
+2. Current project path: ${workspacePath}
+
+Please perform the following operations:
+- Traverse all subdirectories under ${workspaceStoragePath}
+- Read the workspace.json file in each subdirectory
+- Find the subdirectory whose folder field equals the current project path (${workspacePath})
+- Create a .LLSOAI/current-timestamp folder under the current project
+- Copy all contents from the matched subdirectory (including workspace.json and chatSessions folder) to the .LLSOAI/current-timestamp folder`;
+
+					await vscode.commands.executeCommand('workbench.action.chat.newChat');
+					await vscode.commands.executeCommand('workbench.action.chat.open', {
+						query: prompt,
+					});
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to export records: ${errorMessage}`);
+				}
+				break;
+
+			case 'cancelPanel':
+				this._currentPanel?.dispose();
+				break;
+		}
+	}
+
+	private static _getDefaultSavePath(): string {
+		const home = process.env.HOME || process.env.USERPROFILE || '';
+		if (process.platform === 'win32') {
+			const appData = process.env.APPDATA || '';
+			return appData ? `${appData}/LLSOAI` : `${home}/AppData/Roaming/LLSOAI`;
+		}
+		return `${home}/.LLSOAI`;
+	}
+
+	private static _getNonce(): string {
 		let text = '';
 		const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 		for (let i = 0; i < 32; i++) {
