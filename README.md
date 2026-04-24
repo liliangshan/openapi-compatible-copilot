@@ -11,6 +11,7 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 📤 **Import/Export Config** - Backup and restore your provider configurations
 - 💾 **Auto Save Chat History** - Automatically save chat conversations to local files
 - 🔄 **Copilot Records Migration** - Import and export Copilot chat records between machines
+- 🌐 **Multi-language UI** - Supports English, Simplified Chinese, Traditional Chinese, Korean, Japanese, French, and German. Auto mode follows the VS Code display language and falls back to English for unsupported languages
 - 🖥️ **Global & Project System Prompt Settings** - Dual system prompt inputs (global + workspace-scoped) appended to user messages for better model adherence
 - ✅ **Enhanced TODO Settings** - When enabled, the model is strongly instructed to create, track, and update all tasks through the TODO tool before taking any action
 
@@ -92,6 +93,20 @@ You can backup and restore your provider configurations:
 
 **Note**: API keys are not included in exports for security reasons. You'll need to re-enter them after importing.
 
+## Multi-language UI
+
+The configuration UI supports multiple display languages:
+
+- English
+- Simplified Chinese
+- Traditional Chinese
+- Korean
+- Japanese
+- French
+- German
+
+Use the language selector above the Global Settings and Project Settings buttons to switch languages. The `Auto (VS Code)` option follows the VS Code display language. Unsupported or unknown languages fall back to English.
+
 ## Auto Save Chat History
 
 You can configure automatic chat history saving:
@@ -145,6 +160,12 @@ Migrate your Copilot chat records between different machines:
 4. Close and reopen VS Code to load the migrated chat records
 
 ## Changelog
+
+### 2.1.0
+
+- **Multi-language UI**: Added UI language selection with English, Simplified Chinese, Traditional Chinese, Korean, Japanese, French, and German support
+- **Auto Language Detection**: The Auto option follows the VS Code display language and falls back to English when the language is unsupported
+- **Localized Configuration UI**: Provider management, settings panels, modals, validation messages, and dynamic UI text are localized
 
 ### 2.0.0
 

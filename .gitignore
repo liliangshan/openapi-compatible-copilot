@@ -3,4 +3,3 @@ out/
 *.vsix
 .vscode-test/
 .LLSOAI/
-.vscodeignore

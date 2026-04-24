@@ -166,6 +166,39 @@ body {
 	margin-bottom: 12px;
 }
 
+.language-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 12px;
+	margin-bottom: 8px;
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 6px;
+}
+
+.language-row label {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--vscode-foreground);
+	min-width: 64px;
+}
+
+.language-select {
+	flex: 1;
+	min-width: 0;
+	padding: 5px 8px;
+	background-color: var(--vscode-dropdown-background);
+	color: var(--vscode-dropdown-foreground);
+	border: 1px solid var(--vscode-dropdown-border);
+	border-radius: 2px;
+	font-size: 12px;
+	font-family: var(--vscode-font-family);
+}
+
+.language-select:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+}
+
 .settings-row-header {
 	display: flex;
 	justify-content: space-between;

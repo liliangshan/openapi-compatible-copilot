@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0
+
+### Added
+- **Multi-language UI**: Added language selector support for English, Simplified Chinese, Traditional Chinese, Korean, Japanese, French, and German
+- **Auto Language Detection**: Added Auto language mode that follows the VS Code display language and falls back to English for unsupported languages
+- **Localized Configuration UI**: Localized provider management, settings panels, modals, validation messages, dynamic provider/model text, and language selector labels
+
+### Changed
+- **Language Labels**: Renamed the Chinese language option to "Simplified Chinese" and added "Traditional Chinese" directly below it
+
 ## 2.0.0
 
 ### Added

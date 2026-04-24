@@ -1,0 +1,20 @@
+.vscode/**
+.vscode-test/**
+.LLSOAI/**
+*.vsix
+
+# Development sources/config not required at runtime
+src/**
+tsconfig.json
+
+# Dependency folders are restored by VS Code Marketplace packaging flow when needed
+node_modules/**.vscode/**
+.git/**
+.gitignore
+node_modules/**
+.vscode-test/**
+src/**
+tsconfig.json
+package-lock.json
+.LLSOAI/**
+*.vsix

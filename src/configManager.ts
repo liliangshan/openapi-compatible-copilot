@@ -21,6 +21,11 @@ export interface ChatHistorySettings {
 	savePath: string;
 }
 
+export type AppLanguage = 'auto' | 'en' | 'zh-cn' | 'zh-tw' | 'ko' | 'ja' | 'fr' | 'de';
+export type ResolvedAppLanguage = 'en' | 'zh-cn' | 'zh-tw' | 'ko' | 'ja' | 'fr' | 'de';
+
+const SUPPORTED_APP_LANGUAGES: readonly ResolvedAppLanguage[] = ['en', 'zh-cn', 'zh-tw', 'ko', 'ja', 'fr', 'de'];
+
 /**
  * Get default chat history save path based on platform
  */
@@ -45,6 +50,7 @@ export class ConfigManager {
 	private static readonly CHAT_HISTORY_KEY = 'openapicopilot.chatHistorySettings';
 	private static readonly GLOBAL_FORCE_TODO_KEY = 'openapicopilot.globalForceTodoEnabled';
 	private static readonly WORKSPACE_FORCE_TODO_KEY = 'openapicopilot.workspaceForceTodoEnabled';
+	private static readonly LANGUAGE_CONFIG_KEY = 'language';
 
 	constructor(
 		private readonly context: vscode.ExtensionContext,
@@ -238,6 +244,45 @@ export class ConfigManager {
 	 */
 	async updateWorkspaceForceTodoEnabled(enabled: boolean): Promise<void> {
 		await this.context.workspaceState.update(ConfigManager.WORKSPACE_FORCE_TODO_KEY, enabled);
+	}
+
+	/**
+	 * Get configured UI language from global settings.
+	 * Auto means following VS Code display language.
+	 */
+	getConfiguredLanguage(): AppLanguage {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		const language = config.get<AppLanguage>(ConfigManager.LANGUAGE_CONFIG_KEY, 'auto');
+		return language === 'auto' || SUPPORTED_APP_LANGUAGES.includes(language as ResolvedAppLanguage) ? language : 'auto';
+	}
+
+	/**
+	 * Resolve the effective UI language.
+	 */
+	getResolvedLanguage(): ResolvedAppLanguage {
+		const configuredLanguage = this.getConfiguredLanguage();
+		if (configuredLanguage !== 'auto') {
+			return configuredLanguage;
+		}
+
+		const vscodeLanguage = vscode.env.language.toLowerCase();
+		if (vscodeLanguage.startsWith('zh-tw') || vscodeLanguage.startsWith('zh-hk') || vscodeLanguage.startsWith('zh-mo') || vscodeLanguage.startsWith('zh-hant')) { return 'zh-tw'; }
+		if (vscodeLanguage.startsWith('zh')) { return 'zh-cn'; }
+		if (vscodeLanguage.startsWith('ko')) { return 'ko'; }
+		if (vscodeLanguage.startsWith('ja')) { return 'ja'; }
+		if (vscodeLanguage.startsWith('fr')) { return 'fr'; }
+		if (vscodeLanguage.startsWith('de')) { return 'de'; }
+
+		return 'en';
+	}
+
+	/**
+	 * Update global UI language setting.
+	 */
+	async updateLanguage(language: AppLanguage): Promise<void> {
+		const normalizedLanguage: AppLanguage = language === 'auto' || SUPPORTED_APP_LANGUAGES.includes(language as ResolvedAppLanguage) ? language : 'auto';
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update(ConfigManager.LANGUAGE_CONFIG_KEY, normalizedLanguage, true);
 	}
 
 	/**

@@ -12,6 +12,269 @@
 	const expandedProviders = new Set();
 	const loadingProviders = new Set(); // Track providers that are fetching models
 	let isInitialLoad = true; // Track whether this is the first providersLoaded
+	let configuredLanguage = 'auto';
+	function resolveLanguage(language) {
+		const normalized = (language || '').toLowerCase();
+		if (normalized.startsWith('zh-tw') || normalized.startsWith('zh-hk') || normalized.startsWith('zh-mo') || normalized.startsWith('zh-hant')) { return 'zh-tw'; }
+		if (normalized.startsWith('zh')) { return 'zh-cn'; }
+		if (normalized.startsWith('ko')) { return 'ko'; }
+		if (normalized.startsWith('ja')) { return 'ja'; }
+		if (normalized.startsWith('fr')) { return 'fr'; }
+		if (normalized.startsWith('de')) { return 'de'; }
+		return 'en';
+	}
+	let currentLanguage = resolveLanguage(window.VSCODE_LOCALE);
+
+	const translations = {
+		'en': {
+			importConfiguration: 'Import Configuration',
+			exportConfiguration: 'Export Configuration',
+			import: 'Import',
+			export: 'Export',
+			subtitle: 'OpenAPI Compatible Copilot',
+			languageLabel: 'Language',
+			languageAuto: 'Auto (VS Code)',
+			languageEnglish: 'English',
+			languageChinese: '简体中文',
+			languageTraditionalChinese: '繁體中文',
+			languageKorean: '한국어',
+			languageJapanese: '日本語',
+			languageFrench: 'Français',
+			languageGerman: 'Deutsch',
+			globalSettings: 'Global Settings',
+			projectSettings: 'Project Settings',
+			settingsHint: 'System Prompt, Chat History, Import/Export Copilot Records, Enhanced TODO Settings',
+			providers: 'Providers',
+			noProviders: 'No providers configured yet',
+			addFirstProvider: 'Add Your First Provider',
+			enabled: 'Enabled',
+			disabled: 'Disabled',
+			apiType: 'API Type',
+			baseUrl: 'Base URL',
+			apiKey: 'API Key',
+			configured: '**** Configured',
+			notSet: '⚠️ Not Set',
+			autoFetchModels: 'Auto Fetch Models',
+			autoFetchModelsTitle: 'Automatically fetch models from API when settings open',
+			models: 'Models',
+			fetchingModels: 'Fetching models...',
+			noModels: '⚠️ No models (check API Key)',
+			edit: 'Edit',
+			delete: 'Delete',
+			fetchModels: 'Fetch Models',
+			loading: 'Loading...',
+			addModel: '+ Add Model',
+			showInChatSelector: 'Show in Chat Selector',
+			addProvider: 'Add Provider',
+			editProvider: 'Edit Provider',
+			providerName: 'Provider Name',
+			providerNamePlaceholder: 'e.g., MyOpenAI, LocalLLM',
+			providerNameHelp: 'A unique name to identify this provider in Copilot',
+			apiTypeHelp: 'The API protocol used by this provider',
+			baseUrlPlaceholder: 'https://api.openai.com/v1',
+			baseUrlHelp: 'The API endpoint',
+			apiKeyPlaceholder: 'sk-...',
+			apiKeyHelp: 'Leave empty to keep existing key (when editing)',
+			cancel: 'Cancel',
+			save: 'Save',
+			saveProvider: 'Save Provider',
+			editModel: 'Edit Model',
+			modelId: 'Model ID',
+			modelIdPlaceholder: 'e.g., gpt-4o',
+			displayName: 'Display Name',
+			displayNamePlaceholder: 'e.g., GPT-4o',
+			contextLength: 'Context Length',
+			maxTokens: 'Max Tokens',
+			visionSupport: 'Vision Support',
+			toolCalling: 'Tool Calling',
+			transformThinkTags: 'Transform Think Tags (<|im_start|>/♩)',
+			temperature: 'Temperature',
+			topP: 'Top P',
+			samplingMode: 'Sampling Mode',
+			samplingBoth: 'Both (temperature + top_p)',
+			samplingTemperature: 'Temperature only',
+			samplingTopP: 'Top P only',
+			samplingNone: 'None (do not pass)',
+			samplingHelp: 'Some models (e.g. Claude) only accept one sampling parameter at a time',
+			saveModel: 'Save Model',
+			chatHistorySettings: 'Chat History Settings',
+			autoSaveChatHistory: 'Auto Save Chat History',
+			chatHistoryHelp: 'Automatically save chat conversations to local files',
+			savePath: 'Save Path',
+			savePathPlaceholder: 'Path to save chat history',
+			defaultSavePathHelp: 'Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI',
+			editSystemPrompt: 'Edit System Prompt',
+			globalSystemPrompt: 'Global System Prompt',
+			globalSystemPromptPlaceholder: 'Enter global system prompt here...',
+			globalSystemPromptHelp: 'Applied to all workspaces. Stored in global settings.',
+			projectSystemPrompt: 'Project System Prompt',
+			projectWorkspaceSystemPrompt: 'Project (Workspace) System Prompt',
+			projectSystemPromptPlaceholder: 'Enter project-specific system prompt here...',
+			projectSystemPromptHelp: 'Applied only to current workspace. Stored in workspace settings.',
+			chatHistory: 'Chat History',
+			enhancedTodo: 'Enhanced TODO',
+			enableEnhancedTodo: 'Enable Enhanced TODO',
+			enhancedTodoHelp: 'If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.',
+			copilotRecords: 'Copilot Records',
+			copilotRecordsHelp: 'Import/export chat records from VS Code Copilot',
+			importRecords: 'Import Records',
+			exportRecords: 'Export Records',
+			saveAll: 'Save All',
+			errorExtensionNotInitialized: 'Error: Extension not initialized',
+			modelIdRequired: 'Model ID is required',
+			enterProviderName: 'Please enter a provider name',
+			enterBaseUrl: 'Please enter a base URL',
+			enterApiKey: 'Please enter an API key for new providers',
+			chatHistoryEnabled: 'Enabled',
+			chatHistoryDisabled: 'Disabled',
+			adLabel: 'AD'
+		},
+		'zh-cn': {
+			importConfiguration: '导入配置',
+			exportConfiguration: '导出配置',
+			import: '导入',
+			export: '导出',
+			subtitle: 'OpenAPI 兼容 Copilot',
+			languageLabel: '语言',
+			languageAuto: '自动（跟随 VS Code）',
+			languageEnglish: 'English',
+			languageChinese: '简体中文',
+			languageTraditionalChinese: '繁體中文',
+			languageKorean: '한국어',
+			languageJapanese: '日本語',
+			languageFrench: 'Français',
+			languageGerman: 'Deutsch',
+			globalSettings: '全局设置',
+			projectSettings: '项目设置',
+			settingsHint: '系统提示词、聊天历史、导入/导出 Copilot 记录、增强 TODO 设置',
+			providers: '提供商',
+			noProviders: '还没有配置提供商',
+			addFirstProvider: '添加第一个提供商',
+			enabled: '已启用',
+			disabled: '已禁用',
+			apiType: 'API 类型',
+			baseUrl: 'Base URL',
+			apiKey: 'API Key',
+			configured: '**** 已配置',
+			notSet: '⚠️ 未设置',
+			autoFetchModels: '自动获取模型',
+			autoFetchModelsTitle: '打开设置时自动从 API 获取模型',
+			models: '模型',
+			fetchingModels: '正在获取模型...',
+			noModels: '⚠️ 无模型（请检查 API Key）',
+			edit: '编辑',
+			delete: '删除',
+			fetchModels: '获取模型',
+			loading: '加载中...',
+			addModel: '+ 添加模型',
+			showInChatSelector: '显示在聊天选择器中',
+			addProvider: '添加提供商',
+			editProvider: '编辑提供商',
+			providerName: '提供商名称',
+			providerNamePlaceholder: '例如：MyOpenAI、LocalLLM',
+			providerNameHelp: '用于在 Copilot 中识别此提供商的唯一名称',
+			apiTypeHelp: '此提供商使用的 API 协议',
+			baseUrlPlaceholder: 'https://api.openai.com/v1',
+			baseUrlHelp: 'API 端点地址',
+			apiKeyPlaceholder: 'sk-...',
+			apiKeyHelp: '编辑时留空表示保留现有密钥',
+			cancel: '取消',
+			save: '保存',
+			saveProvider: '保存提供商',
+			editModel: '编辑模型',
+			modelId: '模型 ID',
+			modelIdPlaceholder: '例如：gpt-4o',
+			displayName: '显示名称',
+			displayNamePlaceholder: '例如：GPT-4o',
+			contextLength: '上下文长度',
+			maxTokens: '最大 Token 数',
+			visionSupport: '视觉支持',
+			toolCalling: '工具调用',
+			transformThinkTags: '转换 Think 标签（<|im_start|>/♩）',
+			temperature: 'Temperature',
+			topP: 'Top P',
+			samplingMode: '采样模式',
+			samplingBoth: '同时传递 temperature + top_p',
+			samplingTemperature: '仅传递 Temperature',
+			samplingTopP: '仅传递 Top P',
+			samplingNone: '不传递采样参数',
+			samplingHelp: '部分模型（例如 Claude）一次只接受一个采样参数',
+			saveModel: '保存模型',
+			chatHistorySettings: '聊天历史设置',
+			autoSaveChatHistory: '自动保存聊天历史',
+			chatHistoryHelp: '自动将聊天对话保存到本地文件',
+			savePath: '保存路径',
+			savePathPlaceholder: '聊天历史保存路径',
+			defaultSavePathHelp: '默认：Windows: %APPDATA%/LLSOAI，macOS/Linux: ~/.LLSOAI',
+			editSystemPrompt: '编辑系统提示词',
+			globalSystemPrompt: '全局系统提示词',
+			globalSystemPromptPlaceholder: '在此输入全局系统提示词...',
+			globalSystemPromptHelp: '应用于所有工作区，保存在全局设置中。',
+			projectSystemPrompt: '项目系统提示词',
+			projectWorkspaceSystemPrompt: '项目（工作区）系统提示词',
+			projectSystemPromptPlaceholder: '在此输入项目专属系统提示词...',
+			projectSystemPromptHelp: '仅应用于当前工作区，保存在工作区设置中。',
+			chatHistory: '聊天历史',
+			enhancedTodo: '增强 TODO',
+			enableEnhancedTodo: '启用增强 TODO',
+			enhancedTodoHelp: '启用后会自动将 TODO 保存到项目目录；创建新 TODO 时会检查是否存在未完成 TODO。',
+			copilotRecords: 'Copilot 记录',
+			copilotRecordsHelp: '导入/导出 VS Code Copilot 聊天记录',
+			importRecords: '导入记录',
+			exportRecords: '导出记录',
+			saveAll: '全部保存',
+			errorExtensionNotInitialized: '错误：扩展未初始化',
+			modelIdRequired: '模型 ID 不能为空',
+			enterProviderName: '请输入提供商名称',
+			enterBaseUrl: '请输入 Base URL',
+			enterApiKey: '请为新提供商输入 API Key',
+			chatHistoryEnabled: '已启用',
+			chatHistoryDisabled: '已禁用',
+			adLabel: '广告'
+		}
+	};
+
+	translations['zh-tw'] = {
+		...translations['zh-cn'],
+		importConfiguration: '匯入設定', exportConfiguration: '匯出設定', import: '匯入', export: '匯出', subtitle: 'OpenAPI 相容 Copilot', languageAuto: '自動（跟隨 VS Code）', globalSettings: '全域設定', projectSettings: '專案設定', settingsHint: '系統提示詞、聊天歷史、匯入/匯出 Copilot 記錄、增強 TODO 設定', providers: '提供商', noProviders: '尚未設定提供商', addFirstProvider: '新增第一個提供商', enabled: '已啟用', disabled: '已停用', apiType: 'API 類型', configured: '**** 已設定', notSet: '⚠️ 未設定', autoFetchModels: '自動取得模型', autoFetchModelsTitle: '開啟設定時自動從 API 取得模型', models: '模型', fetchingModels: '正在取得模型...', noModels: '⚠️ 無模型（請檢查 API Key）', edit: '編輯', delete: '刪除', fetchModels: '取得模型', loading: '載入中...', addModel: '+ 新增模型', showInChatSelector: '顯示在聊天選擇器中', addProvider: '新增提供商', editProvider: '編輯提供商', providerName: '提供商名稱', providerNamePlaceholder: '例如：MyOpenAI、LocalLLM', providerNameHelp: '用於在 Copilot 中識別此提供商的唯一名稱', apiTypeHelp: '此提供商使用的 API 協定', baseUrlHelp: 'API 端點位址', apiKeyHelp: '編輯時留空表示保留現有金鑰', cancel: '取消', save: '儲存', saveProvider: '儲存提供商', editModel: '編輯模型', modelId: '模型 ID', modelIdPlaceholder: '例如：gpt-4o', displayName: '顯示名稱', displayNamePlaceholder: '例如：GPT-4o', contextLength: '上下文長度', maxTokens: '最大 Token 數', visionSupport: '視覺支援', toolCalling: '工具呼叫', transformThinkTags: '轉換 Think 標籤（<|im_start|>/♩）', samplingMode: '取樣模式', samplingBoth: '同時傳遞 temperature + top_p', samplingTemperature: '僅傳遞 Temperature', samplingTopP: '僅傳遞 Top P', samplingNone: '不傳遞取樣參數', samplingHelp: '部分模型（例如 Claude）一次只接受一個取樣參數', saveModel: '儲存模型', chatHistorySettings: '聊天歷史設定', autoSaveChatHistory: '自動儲存聊天歷史', chatHistoryHelp: '自動將聊天對話儲存到本機檔案', savePath: '儲存路徑', savePathPlaceholder: '聊天歷史儲存路徑', defaultSavePathHelp: '預設：Windows: %APPDATA%/LLSOAI，macOS/Linux: ~/.LLSOAI', editSystemPrompt: '編輯系統提示詞', globalSystemPrompt: '全域系統提示詞', globalSystemPromptPlaceholder: '在此輸入全域系統提示詞...', globalSystemPromptHelp: '套用於所有工作區，儲存在全域設定中。', projectSystemPrompt: '專案系統提示詞', projectWorkspaceSystemPrompt: '專案（工作區）系統提示詞', projectSystemPromptPlaceholder: '在此輸入專案專屬系統提示詞...', projectSystemPromptHelp: '僅套用於目前工作區，儲存在工作區設定中。', chatHistory: '聊天歷史', enhancedTodo: '增強 TODO', enableEnhancedTodo: '啟用增強 TODO', enhancedTodoHelp: '啟用後會自動將 TODO 儲存到專案目錄；建立新 TODO 時會檢查是否存在未完成 TODO。', copilotRecords: 'Copilot 記錄', copilotRecordsHelp: '匯入/匯出 VS Code Copilot 聊天記錄', importRecords: '匯入記錄', exportRecords: '匯出記錄', saveAll: '全部儲存', errorExtensionNotInitialized: '錯誤：擴充功能未初始化', modelIdRequired: '模型 ID 不能為空', enterProviderName: '請輸入提供商名稱', enterBaseUrl: '請輸入 Base URL', enterApiKey: '請為新提供商輸入 API Key', chatHistoryEnabled: '已啟用', chatHistoryDisabled: '已停用', adLabel: '廣告'
+	};
+
+	translations.ko = {
+		...translations.en,
+		importConfiguration: '구성 가져오기', exportConfiguration: '구성 내보내기', import: '가져오기', export: '내보내기', subtitle: 'OpenAPI 호환 Copilot', languageLabel: '언어', languageAuto: '자동(VS Code 따름)', globalSettings: '전역 설정', projectSettings: '프로젝트 설정', settingsHint: '시스템 프롬프트, 채팅 기록, Copilot 기록 가져오기/내보내기, 향상된 TODO 설정', providers: '공급자', noProviders: '아직 구성된 공급자가 없습니다', addFirstProvider: '첫 공급자 추가', enabled: '활성화됨', disabled: '비활성화됨', apiType: 'API 유형', configured: '**** 구성됨', notSet: '⚠️ 설정되지 않음', autoFetchModels: '모델 자동 가져오기', autoFetchModelsTitle: '설정을 열 때 API에서 모델을 자동으로 가져오기', models: '모델', fetchingModels: '모델 가져오는 중...', noModels: '⚠️ 모델 없음(API Key 확인)', edit: '편집', delete: '삭제', fetchModels: '모델 가져오기', loading: '로딩 중...', addModel: '+ 모델 추가', showInChatSelector: '채팅 선택기에 표시', addProvider: '공급자 추가', editProvider: '공급자 편집', providerName: '공급자 이름', providerNameHelp: 'Copilot에서 이 공급자를 식별하는 고유한 이름', apiTypeHelp: '이 공급자가 사용하는 API 프로토콜', baseUrlHelp: 'API 엔드포인트', apiKeyHelp: '편집 시 비워 두면 기존 키 유지', cancel: '취소', save: '저장', saveProvider: '공급자 저장', editModel: '모델 편집', modelId: '모델 ID', displayName: '표시 이름', contextLength: '컨텍스트 길이', maxTokens: '최대 토큰 수', visionSupport: '비전 지원', toolCalling: '도구 호출', transformThinkTags: 'Think 태그 변환(<|im_start|>/♩)', samplingMode: '샘플링 모드', samplingBoth: '둘 다 전달(temperature + top_p)', samplingTemperature: 'Temperature만 전달', samplingTopP: 'Top P만 전달', samplingNone: '전달하지 않음', samplingHelp: '일부 모델(예: Claude)은 한 번에 하나의 샘플링 매개변수만 허용합니다', saveModel: '모델 저장', chatHistorySettings: '채팅 기록 설정', autoSaveChatHistory: '채팅 기록 자동 저장', chatHistoryHelp: '채팅 대화를 로컬 파일에 자동 저장', savePath: '저장 경로', savePathPlaceholder: '채팅 기록 저장 경로', defaultSavePathHelp: '기본값: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI', editSystemPrompt: '시스템 프롬프트 편집', globalSystemPrompt: '전역 시스템 프롬프트', globalSystemPromptPlaceholder: '전역 시스템 프롬프트를 입력하세요...', globalSystemPromptHelp: '모든 작업 영역에 적용되며 전역 설정에 저장됩니다.', projectSystemPrompt: '프로젝트 시스템 프롬프트', projectWorkspaceSystemPrompt: '프로젝트(작업 영역) 시스템 프롬프트', projectSystemPromptPlaceholder: '프로젝트 전용 시스템 프롬프트를 입력하세요...', projectSystemPromptHelp: '현재 작업 영역에만 적용되며 작업 영역 설정에 저장됩니다.', chatHistory: '채팅 기록', enhancedTodo: '향상된 TODO', enableEnhancedTodo: '향상된 TODO 활성화', enhancedTodoHelp: '활성화하면 TODO 항목을 프로젝트 디렉터리에 자동 저장하고 새 TODO 생성 시 미완료 TODO를 확인합니다.', copilotRecords: 'Copilot 기록', copilotRecordsHelp: 'VS Code Copilot 채팅 기록 가져오기/내보내기', importRecords: '기록 가져오기', exportRecords: '기록 내보내기', saveAll: '모두 저장', errorExtensionNotInitialized: '오류: 확장이 초기화되지 않았습니다', modelIdRequired: '모델 ID는 필수입니다', enterProviderName: '공급자 이름을 입력하세요', enterBaseUrl: 'Base URL을 입력하세요', enterApiKey: '새 공급자의 API Key를 입력하세요', chatHistoryEnabled: '활성화됨', chatHistoryDisabled: '비활성화됨', adLabel: '광고'
+	};
+	translations.ja = {
+		...translations.en,
+		importConfiguration: '設定をインポート', exportConfiguration: '設定をエクスポート', import: 'インポート', export: 'エクスポート', subtitle: 'OpenAPI 互換 Copilot', languageLabel: '言語', languageAuto: '自動（VS Code に従う）', globalSettings: 'グローバル設定', projectSettings: 'プロジェクト設定', settingsHint: 'システムプロンプト、チャット履歴、Copilot 記録のインポート/エクスポート、拡張 TODO 設定', providers: 'プロバイダー', noProviders: 'プロバイダーはまだ設定されていません', addFirstProvider: '最初のプロバイダーを追加', enabled: '有効', disabled: '無効', apiType: 'API タイプ', configured: '**** 設定済み', notSet: '⚠️ 未設定', autoFetchModels: 'モデルを自動取得', autoFetchModelsTitle: '設定を開いたときに API からモデルを自動取得', models: 'モデル', fetchingModels: 'モデルを取得中...', noModels: '⚠️ モデルなし（API Key を確認）', edit: '編集', delete: '削除', fetchModels: 'モデルを取得', loading: '読み込み中...', addModel: '+ モデルを追加', showInChatSelector: 'チャット選択に表示', addProvider: 'プロバイダーを追加', editProvider: 'プロバイダーを編集', providerName: 'プロバイダー名', providerNameHelp: 'Copilot でこのプロバイダーを識別する一意の名前', apiTypeHelp: 'このプロバイダーが使用する API プロトコル', baseUrlHelp: 'API エンドポイント', apiKeyHelp: '編集中は空のままにすると既存キーを保持します', cancel: 'キャンセル', save: '保存', saveProvider: 'プロバイダーを保存', editModel: 'モデルを編集', modelId: 'モデル ID', displayName: '表示名', contextLength: 'コンテキスト長', maxTokens: '最大トークン数', visionSupport: 'ビジョン対応', toolCalling: 'ツール呼び出し', transformThinkTags: 'Think タグを変換（<|im_start|>/♩）', samplingMode: 'サンプリングモード', samplingBoth: '両方を渡す（temperature + top_p）', samplingTemperature: 'Temperature のみ', samplingTopP: 'Top P のみ', samplingNone: '渡さない', samplingHelp: '一部のモデル（例: Claude）は一度に 1 つのサンプリングパラメーターのみ受け付けます', saveModel: 'モデルを保存', chatHistorySettings: 'チャット履歴設定', autoSaveChatHistory: 'チャット履歴を自動保存', chatHistoryHelp: 'チャット会話をローカルファイルに自動保存', savePath: '保存先', savePathPlaceholder: 'チャット履歴の保存先', defaultSavePathHelp: '既定: Windows: %APPDATA%/LLSOAI、macOS/Linux: ~/.LLSOAI', editSystemPrompt: 'システムプロンプトを編集', globalSystemPrompt: 'グローバルシステムプロンプト', globalSystemPromptPlaceholder: 'グローバルシステムプロンプトを入力...', globalSystemPromptHelp: 'すべてのワークスペースに適用され、グローバル設定に保存されます。', projectSystemPrompt: 'プロジェクトシステムプロンプト', projectWorkspaceSystemPrompt: 'プロジェクト（ワークスペース）システムプロンプト', projectSystemPromptPlaceholder: 'プロジェクト専用システムプロンプトを入力...', projectSystemPromptHelp: '現在のワークスペースにのみ適用され、ワークスペース設定に保存されます。', chatHistory: 'チャット履歴', enhancedTodo: '拡張 TODO', enableEnhancedTodo: '拡張 TODO を有効化', enhancedTodoHelp: '有効にすると TODO をプロジェクトディレクトリに自動保存し、新規 TODO 作成時に未完了 TODO を確認します。', copilotRecords: 'Copilot 記録', copilotRecordsHelp: 'VS Code Copilot チャット記録をインポート/エクスポート', importRecords: '記録をインポート', exportRecords: '記録をエクスポート', saveAll: 'すべて保存', errorExtensionNotInitialized: 'エラー: 拡張機能が初期化されていません', modelIdRequired: 'モデル ID は必須です', enterProviderName: 'プロバイダー名を入力してください', enterBaseUrl: 'Base URL を入力してください', enterApiKey: '新しいプロバイダーの API Key を入力してください', chatHistoryEnabled: '有効', chatHistoryDisabled: '無効', adLabel: '広告'
+	};
+	translations.fr = {
+		...translations.en,
+		importConfiguration: 'Importer la configuration', exportConfiguration: 'Exporter la configuration', import: 'Importer', export: 'Exporter', subtitle: 'Copilot compatible OpenAPI', languageLabel: 'Langue', languageAuto: 'Auto (suivre VS Code)', globalSettings: 'Paramètres globaux', projectSettings: 'Paramètres du projet', settingsHint: 'Prompt système, historique de chat, import/export des enregistrements Copilot, paramètres TODO avancés', providers: 'Fournisseurs', noProviders: 'Aucun fournisseur configuré', addFirstProvider: 'Ajouter votre premier fournisseur', enabled: 'Activé', disabled: 'Désactivé', apiType: 'Type d’API', configured: '**** Configuré', notSet: '⚠️ Non défini', autoFetchModels: 'Récupérer automatiquement les modèles', autoFetchModelsTitle: 'Récupérer automatiquement les modèles depuis l’API à l’ouverture des paramètres', models: 'Modèles', fetchingModels: 'Récupération des modèles...', noModels: '⚠️ Aucun modèle (vérifiez l’API Key)', edit: 'Modifier', delete: 'Supprimer', fetchModels: 'Récupérer les modèles', loading: 'Chargement...', addModel: '+ Ajouter un modèle', showInChatSelector: 'Afficher dans le sélecteur de chat', addProvider: 'Ajouter un fournisseur', editProvider: 'Modifier le fournisseur', providerName: 'Nom du fournisseur', providerNameHelp: 'Nom unique pour identifier ce fournisseur dans Copilot', apiTypeHelp: 'Protocole API utilisé par ce fournisseur', baseUrlHelp: 'Point de terminaison API', apiKeyHelp: 'Laissez vide pour conserver la clé existante lors de la modification', cancel: 'Annuler', save: 'Enregistrer', saveProvider: 'Enregistrer le fournisseur', editModel: 'Modifier le modèle', modelId: 'ID du modèle', displayName: 'Nom d’affichage', contextLength: 'Longueur du contexte', maxTokens: 'Tokens max.', visionSupport: 'Support vision', toolCalling: 'Appel d’outils', transformThinkTags: 'Transformer les balises Think (<|im_start|>/♩)', samplingMode: 'Mode d’échantillonnage', samplingBoth: 'Les deux (temperature + top_p)', samplingTemperature: 'Temperature seulement', samplingTopP: 'Top P seulement', samplingNone: 'Aucun', samplingHelp: 'Certains modèles (ex. Claude) n’acceptent qu’un seul paramètre d’échantillonnage à la fois', saveModel: 'Enregistrer le modèle', chatHistorySettings: 'Paramètres de l’historique de chat', autoSaveChatHistory: 'Enregistrer automatiquement l’historique', chatHistoryHelp: 'Enregistrer automatiquement les conversations dans des fichiers locaux', savePath: 'Chemin d’enregistrement', savePathPlaceholder: 'Chemin de sauvegarde de l’historique', defaultSavePathHelp: 'Par défaut : Windows : %APPDATA%/LLSOAI, macOS/Linux : ~/.LLSOAI', editSystemPrompt: 'Modifier le prompt système', globalSystemPrompt: 'Prompt système global', globalSystemPromptPlaceholder: 'Saisissez le prompt système global...', globalSystemPromptHelp: 'Appliqué à tous les espaces de travail et stocké dans les paramètres globaux.', projectSystemPrompt: 'Prompt système du projet', projectWorkspaceSystemPrompt: 'Prompt système du projet (espace de travail)', projectSystemPromptPlaceholder: 'Saisissez le prompt système propre au projet...', projectSystemPromptHelp: 'Appliqué uniquement à l’espace de travail actuel et stocké dans ses paramètres.', chatHistory: 'Historique de chat', enhancedTodo: 'TODO avancé', enableEnhancedTodo: 'Activer TODO avancé', enhancedTodoHelp: 'Si activé, les TODO sont automatiquement enregistrés dans le projet et les TODO incomplets sont vérifiés lors d’une nouvelle création.', copilotRecords: 'Enregistrements Copilot', copilotRecordsHelp: 'Importer/exporter les historiques de chat VS Code Copilot', importRecords: 'Importer les enregistrements', exportRecords: 'Exporter les enregistrements', saveAll: 'Tout enregistrer', errorExtensionNotInitialized: 'Erreur : extension non initialisée', modelIdRequired: 'L’ID du modèle est requis', enterProviderName: 'Veuillez saisir un nom de fournisseur', enterBaseUrl: 'Veuillez saisir une Base URL', enterApiKey: 'Veuillez saisir une API Key pour les nouveaux fournisseurs', chatHistoryEnabled: 'Activé', chatHistoryDisabled: 'Désactivé', adLabel: 'Pub'
+	};
+	translations.de = {
+		...translations.en,
+		importConfiguration: 'Konfiguration importieren', exportConfiguration: 'Konfiguration exportieren', import: 'Importieren', export: 'Exportieren', subtitle: 'OpenAPI-kompatibler Copilot', languageLabel: 'Sprache', languageAuto: 'Automatisch (VS Code folgen)', globalSettings: 'Globale Einstellungen', projectSettings: 'Projekteinstellungen', settingsHint: 'System-Prompt, Chatverlauf, Copilot-Datensätze importieren/exportieren, erweiterte TODO-Einstellungen', providers: 'Anbieter', noProviders: 'Noch keine Anbieter konfiguriert', addFirstProvider: 'Ersten Anbieter hinzufügen', enabled: 'Aktiviert', disabled: 'Deaktiviert', apiType: 'API-Typ', configured: '**** Konfiguriert', notSet: '⚠️ Nicht festgelegt', autoFetchModels: 'Modelle automatisch abrufen', autoFetchModelsTitle: 'Modelle beim Öffnen der Einstellungen automatisch von der API abrufen', models: 'Modelle', fetchingModels: 'Modelle werden abgerufen...', noModels: '⚠️ Keine Modelle (API Key prüfen)', edit: 'Bearbeiten', delete: 'Löschen', fetchModels: 'Modelle abrufen', loading: 'Wird geladen...', addModel: '+ Modell hinzufügen', showInChatSelector: 'Im Chat-Auswahlmenü anzeigen', addProvider: 'Anbieter hinzufügen', editProvider: 'Anbieter bearbeiten', providerName: 'Anbietername', providerNameHelp: 'Eindeutiger Name zur Identifizierung dieses Anbieters in Copilot', apiTypeHelp: 'Von diesem Anbieter verwendetes API-Protokoll', baseUrlHelp: 'API-Endpunkt', apiKeyHelp: 'Beim Bearbeiten leer lassen, um den vorhandenen Schlüssel beizubehalten', cancel: 'Abbrechen', save: 'Speichern', saveProvider: 'Anbieter speichern', editModel: 'Modell bearbeiten', modelId: 'Modell-ID', displayName: 'Anzeigename', contextLength: 'Kontextlänge', maxTokens: 'Max. Tokens', visionSupport: 'Vision-Unterstützung', toolCalling: 'Tool-Aufrufe', transformThinkTags: 'Think-Tags umwandeln (<|im_start|>/♩)', samplingMode: 'Sampling-Modus', samplingBoth: 'Beide (temperature + top_p)', samplingTemperature: 'Nur Temperature', samplingTopP: 'Nur Top P', samplingNone: 'Keine', samplingHelp: 'Einige Modelle (z. B. Claude) akzeptieren jeweils nur einen Sampling-Parameter', saveModel: 'Modell speichern', chatHistorySettings: 'Chatverlauf-Einstellungen', autoSaveChatHistory: 'Chatverlauf automatisch speichern', chatHistoryHelp: 'Chatunterhaltungen automatisch in lokalen Dateien speichern', savePath: 'Speicherpfad', savePathPlaceholder: 'Pfad zum Speichern des Chatverlaufs', defaultSavePathHelp: 'Standard: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI', editSystemPrompt: 'System-Prompt bearbeiten', globalSystemPrompt: 'Globaler System-Prompt', globalSystemPromptPlaceholder: 'Globalen System-Prompt hier eingeben...', globalSystemPromptHelp: 'Gilt für alle Arbeitsbereiche und wird in globalen Einstellungen gespeichert.', projectSystemPrompt: 'Projekt-System-Prompt', projectWorkspaceSystemPrompt: 'Projekt-/Arbeitsbereich-System-Prompt', projectSystemPromptPlaceholder: 'Projektspezifischen System-Prompt hier eingeben...', projectSystemPromptHelp: 'Gilt nur für den aktuellen Arbeitsbereich und wird in Arbeitsbereichseinstellungen gespeichert.', chatHistory: 'Chatverlauf', enhancedTodo: 'Erweitertes TODO', enableEnhancedTodo: 'Erweitertes TODO aktivieren', enhancedTodoHelp: 'Wenn aktiviert, werden TODOs automatisch im Projektverzeichnis gespeichert; beim Erstellen neuer TODOs wird auf unvollständige TODOs geprüft.', copilotRecords: 'Copilot-Datensätze', copilotRecordsHelp: 'Chatdatensätze aus VS Code Copilot importieren/exportieren', importRecords: 'Datensätze importieren', exportRecords: 'Datensätze exportieren', saveAll: 'Alle speichern', errorExtensionNotInitialized: 'Fehler: Erweiterung nicht initialisiert', modelIdRequired: 'Modell-ID ist erforderlich', enterProviderName: 'Bitte Anbietername eingeben', enterBaseUrl: 'Bitte Base URL eingeben', enterApiKey: 'Bitte API Key für neue Anbieter eingeben', chatHistoryEnabled: 'Aktiviert', chatHistoryDisabled: 'Deaktiviert', adLabel: 'Anzeige'
+	};
+
+	function t(key) {
+		return translations[currentLanguage]?.[key] || translations.en[key] || key;
+	}
+
+	function applyI18n() {
+		document.documentElement.lang = currentLanguage;
+		document.querySelectorAll('[data-i18n]').forEach(el => {
+			el.textContent = t(el.dataset.i18n);
+		});
+		document.querySelectorAll('[data-i18n-title]').forEach(el => {
+			el.setAttribute('title', t(el.dataset.i18nTitle));
+		});
+		document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+			el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
+		});
+		document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+			el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
+		});
+	}
 
 	// DOM Elements
 	const providersList = document.getElementById('providersList');
@@ -76,10 +339,12 @@
 	// Settings buttons
 	const openGlobalSettingsBtn = document.getElementById('openGlobalSettingsBtn');
 	const openProjectSettingsBtn = document.getElementById('openProjectSettingsBtn');
+	const languageSelect = document.getElementById('languageSelect');
 	const chatHistoryStatus = document.getElementById('chatHistoryStatus');
 	const isPanelMode = !!document.getElementById('panelSaveBtn');
 
 	// Initialize
+	vscode.postMessage({ command: 'getLanguageSettings' });
 	if (isPanelMode) {
 		if (window.settingsMode === 'global') {
 			vscode.postMessage({ command: 'getChatHistorySettings' });
@@ -114,6 +379,13 @@
 		});
 		importBtn.addEventListener('click', () => vscode.postMessage({ command: 'importConfig' }));
 		exportBtn.addEventListener('click', () => vscode.postMessage({ command: 'exportConfig' }));
+		languageSelect?.addEventListener('change', () => {
+			configuredLanguage = languageSelect.value || 'auto';
+			vscode.postMessage({
+				command: 'updateLanguageSettings',
+				data: { language: configuredLanguage }
+			});
+		});
 		
 		// Settings modal
 		settingsBtn?.addEventListener('click', () => openSettingsModal());
@@ -387,6 +659,16 @@
 		const message = event.data;
 
 		switch (message.command) {
+			case 'languageSettingsLoaded':
+				configuredLanguage = message.data?.configuredLanguage || 'auto';
+				currentLanguage = message.data?.resolvedLanguage || resolveLanguage(window.VSCODE_LOCALE);
+				if (languageSelect) {
+					languageSelect.value = configuredLanguage;
+				}
+				applyI18n();
+				renderProviders();
+				break;
+
 			case 'providersLoaded':
 				providers = message.data || [];
 				// Only mark providers as loading on initial load (triggered by getProviders)
@@ -456,7 +738,7 @@
 					
 					// Update the chat history status display
 					if (chatHistoryStatus) {
-						chatHistoryStatus.textContent = message.data.enabled ? 'Enabled' : 'Disabled';
+						chatHistoryStatus.textContent = message.data.enabled ? t('chatHistoryEnabled') : t('chatHistoryDisabled');
 					}
 					
 					// Also update the modal fields for unified global settings modal
@@ -512,8 +794,8 @@
 		if (providers.length === 0) {
 			providersList.innerHTML = `
 				<div class="empty-state">
-					<p>No providers configured yet</p>
-					<button class="primary-btn" onclick="document.getElementById('addProviderBtn').click()">Add Your First Provider</button>
+					<p>${t('noProviders')}</p>
+					<button class="primary-btn" onclick="document.getElementById('addProviderBtn').click()">${t('addFirstProvider')}</button>
 				</div>
 			`;
 			return;
@@ -525,7 +807,7 @@
 					<span class="provider-name">${escapeHtml(provider.name)}</span>
 					<div class="provider-status">
 						<span class="status-badge ${provider.enabled ? 'enabled' : 'disabled'}">
-							${provider.enabled ? 'Enabled' : 'Disabled'}
+							${provider.enabled ? t('enabled') : t('disabled')}
 						</span>
 						<label class="toggle">
 							<input type="checkbox" ${provider.enabled ? 'checked' : ''} data-id="${provider.id}">
@@ -535,20 +817,20 @@
 				</div>
 				<div class="provider-details">
 					<div class="provider-detail-item">
-						<span class="provider-detail-label">API Type</span>
+						<span class="provider-detail-label">${t('apiType')}</span>
 						<span>${provider.apiType === 'anthropic' ? 'Anthropic' : 'OpenAI-Compatible'}</span>
 					</div>
 					<div class="provider-detail-item">
-						<span class="provider-detail-label">Base URL</span>
+						<span class="provider-detail-label">${t('baseUrl')}</span>
 						<span>${escapeHtml(provider.baseUrl)}</span>
 					</div>
 					<div class="provider-detail-item">
-						<span class="provider-detail-label">API Key</span>
-						<span>${provider.hasApiKey ? '**** Configured' : '⚠️ Not Set'}</span>
+						<span class="provider-detail-label">${t('apiKey')}</span>
+						<span>${provider.hasApiKey ? t('configured') : t('notSet')}</span>
 					</div>
 					<div class="provider-detail-item">
-						<span class="provider-detail-label">Auto Fetch Models</span>
-						<label class="toggle auto-fetch-toggle" title="Automatically fetch models from API when settings open">
+						<span class="provider-detail-label">${t('autoFetchModels')}</span>
+						<label class="toggle auto-fetch-toggle" title="${t('autoFetchModelsTitle')}">
 							<input type="checkbox" class="auto-fetch-checkbox" ${provider.autoFetchModels !== false ? 'checked' : ''} data-id="${provider.id}">
 							<span class="toggle-slider"></span>
 						</label>
@@ -557,7 +839,7 @@
 				${(provider.models || provider.apiModels) && (provider.models || provider.apiModels).length > 0 ? `
 					<div class="provider-models">
 						<h4 class="models-header">
-							<span>Models (${(provider.models || provider.apiModels).length})</span>
+							<span>${t('models')} (${(provider.models || provider.apiModels).length})</span>
 							<button class="models-toggle-btn" data-provider-id="${provider.id}">
 								<span class="toggle-icon">${expandedProviders.has(provider.id) ? '▼' : '▶'}</span>
 							</button>
@@ -567,30 +849,30 @@
 								<div class="model-item" data-model-id="${escapeHtml(m.modelId)}" data-provider-id="${provider.id}">
 									<span class="model-item-name">${escapeHtml(m.displayName || m.modelId)}</span>
 									<div class="model-item-actions">
-										<label class="toggle model-toggle" title="Show in Chat Selector">
+										<label class="toggle model-toggle" title="${t('showInChatSelector')}">
 											<input type="checkbox" class="model-selector-toggle" data-model-id="${escapeHtml(m.modelId)}" data-provider-id="${provider.id}" ${m.isUserSelectable === true ? 'checked' : ''}>
 											<span class="toggle-slider"></span>
 										</label>
-										<button class="model-item-btn edit-model-btn" data-model-id="${escapeHtml(m.modelId)}" data-provider-id="${provider.id}">Edit</button>
-										<button class="model-item-btn delete delete-model-btn" data-model-id="${escapeHtml(m.modelId)}" data-provider-id="${provider.id}">Delete</button>
+										<button class="model-item-btn edit-model-btn" data-model-id="${escapeHtml(m.modelId)}" data-provider-id="${provider.id}">${t('edit')}</button>
+										<button class="model-item-btn delete delete-model-btn" data-model-id="${escapeHtml(m.modelId)}" data-provider-id="${provider.id}">${t('delete')}</button>
 									</div>
 								</div>
 							`).join('')}
 						</div>
 					</div>
 				` : (provider.enabled && provider.hasApiKey && provider.autoFetchModels !== false && loadingProviders.has(provider.id))
-					? '<div class="provider-detail-item"><span class="provider-detail-label">Models</span><span class="loading-text"><span class="loading-spinner"></span> Fetching models...</span></div>'
-					: '<div class="provider-detail-item"><span class="provider-detail-label">Models</span><span>⚠️ No models (check API Key)</span></div>'}
+					? `<div class="provider-detail-item"><span class="provider-detail-label">${t('models')}</span><span class="loading-text"><span class="loading-spinner"></span> ${t('fetchingModels')}</span></div>`
+					: `<div class="provider-detail-item"><span class="provider-detail-label">${t('models')}</span><span>${t('noModels')}</span></div>`}
 				<div class="provider-actions">
-					<button class="secondary-btn edit-btn" data-id="${provider.id}">Edit</button>
-					<button class="secondary-btn delete-btn" data-id="${provider.id}">Delete</button>
+					<button class="secondary-btn edit-btn" data-id="${provider.id}">${t('edit')}</button>
+					<button class="secondary-btn delete-btn" data-id="${provider.id}">${t('delete')}</button>
 					${provider.autoFetchModels !== false ? `
 						<button class="primary-btn fetch-models-btn" data-provider-id="${provider.id}" ${loadingProviders.has(provider.id) ? 'disabled' : ''}>
-							${loadingProviders.has(provider.id) ? '<span class="btn-loading"><span class="btn-spinner"></span> Loading...</span>' : 'Fetch Models'}
+							${loadingProviders.has(provider.id) ? `<span class="btn-loading"><span class="btn-spinner"></span> ${t('loading')}</span>` : t('fetchModels')}
 						</button>
 					` : `
 						<button class="primary-btn add-model-btn" data-provider-id="${provider.id}" ${loadingProviders.has(provider.id) ? 'disabled' : ''}>
-							${loadingProviders.has(provider.id) ? '<span class="btn-loading"><span class="btn-spinner"></span> Loading...</span>' : '+ Add Model'}
+							${loadingProviders.has(provider.id) ? `<span class="btn-loading"><span class="btn-spinner"></span> ${t('loading')}</span>` : t('addModel')}
 						</button>
 					`}
 				</div>
@@ -601,7 +883,7 @@
 	// Open modal for adding a new provider
 	function openAddProviderModal() {
 		editingProviderId = null;
-		modalTitle.textContent = 'Add Provider';
+		modalTitle.textContent = t('addProvider');
 		providerId.value = '';
 		providerName.value = '';
 		providerApiType.value = 'openai-compatible';
@@ -617,7 +899,7 @@
 		if (!provider) return;
 
 		editingProviderId = id;
-		modalTitle.textContent = 'Edit Provider';
+		modalTitle.textContent = t('editProvider');
 		providerId.value = provider.id;
 		providerName.value = provider.name;
 		providerApiType.value = provider.apiType || 'openai-compatible';
@@ -766,7 +1048,7 @@
 		const modelTransformThink = document.getElementById('editModelTransformThink');
 		
 		if (!modelName || !modelName.value.trim()) {
-			alert('Model ID is required');
+			alert(t('modelIdRequired'));
 			return;
 		}
 		
@@ -860,17 +1142,17 @@
 		const autoFetchModels = providerAutoFetchModels.checked;
 
 		if (!name) {
-			alert('Please enter a provider name');
+			alert(t('enterProviderName'));
 			return;
 		}
 
 		if (!baseUrl) {
-			alert('Please enter a base URL');
+			alert(t('enterBaseUrl'));
 			return;
 		}
 
 		if (!editingProviderId && !apiKey) {
-			alert('Please enter an API key for new providers');
+			alert(t('enterApiKey'));
 			return;
 		}
 
@@ -1032,7 +1314,7 @@
                         const { image, url } = message.data;
                         if (image && url) {
                                 adUrl = url;
-                                const adLabel = (window.VSCODE_LOCALE || '').startsWith('zh') ? '广告' : 'AD';
+								const adLabel = t('adLabel');
                                 adBanner.innerHTML = `<span class="ad-label">${adLabel}</span><img src="${image}" alt="Ad" />`;
                                 adBanner.style.display = 'block';
                         }

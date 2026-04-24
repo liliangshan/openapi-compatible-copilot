@@ -4,7 +4,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.0.0",
+	"version": "2.1.0",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -82,7 +82,8 @@
 				{
 					"type": "webview",
 					"id": "openapicopilot.configView",
-					"name": "Provider Management"
+					"name": "Provider Management",
+					"icon": "$(plug)"
 				}
 			]
 		},
@@ -94,6 +95,22 @@
 					"default": "",
 					"description": "Custom system prompt to prepend to system messages",
 					"scope": "resource"
+				},
+				"openapicopilot.language": {
+					"type": "string",
+					"enum": [
+						"auto",
+						"en",
+						"zh-cn",
+						"zh-tw",
+						"ko",
+						"ja",
+						"fr",
+						"de"
+					],
+					"default": "auto",
+					"description": "Display language for the LLS OAI UI. Auto follows the VS Code display language.",
+					"scope": "application"
 				}
 			}
 		}

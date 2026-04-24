@@ -83,6 +83,35 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 	private async _handleMessage(message: WebviewMessage): Promise<void> {
 		switch (message.command) {
+			case 'getLanguageSettings':
+				this._getWebview()?.postMessage({
+					command: 'languageSettingsLoaded',
+					data: {
+						configuredLanguage: this._configManager.getConfiguredLanguage(),
+						resolvedLanguage: this._configManager.getResolvedLanguage(),
+						vscodeLanguage: vscode.env.language
+					}
+				});
+				break;
+
+			case 'updateLanguageSettings':
+				try {
+					const { language } = message.data as { language: 'auto' | 'en' | 'zh-cn' };
+					await this._configManager.updateLanguage(language);
+					this._getWebview()?.postMessage({
+						command: 'languageSettingsLoaded',
+						data: {
+							configuredLanguage: this._configManager.getConfiguredLanguage(),
+							resolvedLanguage: this._configManager.getResolvedLanguage(),
+							vscodeLanguage: vscode.env.language
+						}
+					});
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to update language settings: ${errorMessage}`);
+				}
+				break;
+
 			case 'getProviders':
 				const providers = await this._configManager.getProviders();
 				
@@ -728,38 +757,51 @@ After completing the operations, please reply with the following message in both
 						<div class="header-top">
 							<h1>LLS OAI</h1>
 							<div class="header-actions">
-								<button id="importBtn" class="icon-btn" title="Import Configuration">
+								<button id="importBtn" class="icon-btn" title="Import Configuration" data-i18n-title="importConfiguration">
 									<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M11.5 1h-7l-.5.5v4H1.5l-.5.5v8l.5.5h13l.5-.5v-8l-.5-.5H12V1.5l-.5-.5zM5 5V2h6v3H5zm9 9H2V6h3v1.5l.5.5h5l.5-.5V6h3v8z"/><path d="M6 10h4v1H6v-1z"/></svg>
-									<span>Import</span>
+									<span data-i18n="import">Import</span>
 								</button>
-								<button id="exportBtn" class="icon-btn" title="Export Configuration">
+								<button id="exportBtn" class="icon-btn" title="Export Configuration" data-i18n-title="exportConfiguration">
 									<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M11.5 1h-7l-.5.5v4H1.5l-.5.5v8l.5.5h13l.5-.5v-8l-.5-.5H12V1.5l-.5-.5zM5 5V2h6v3H5zm9 9H2V6h3v1.5l.5.5h5l.5-.5V6h3v8z"/><path d="M6 8h1v3h2V8h1L8 5.5 6 8z"/></svg>
-									<span>Export</span>
+									<span data-i18n="export">Export</span>
 								</button>
 							</div>
 						</div>
-						<p class="header-subtitle">OpenAPI Compatible Copilot</p>
+						<p class="header-subtitle" data-i18n="subtitle">OpenAPI Compatible Copilot</p>
 					</header>
 
 					<!-- Settings Section (Unified) -->
 					<section class="config-section settings-section">
-						<div class="settings-buttons-row">
-							<button id="openGlobalSettingsBtn" class="primary-btn">Global Settings</button>
-							<button id="openProjectSettingsBtn" class="primary-btn">Project Settings</button>
+						<div class="language-row">
+							<label for="languageSelect" data-i18n="languageLabel">Language</label>
+							<select id="languageSelect" class="language-select" aria-label="Language" data-i18n-aria-label="languageLabel">
+								<option value="auto" data-i18n="languageAuto">Auto (VS Code)</option>
+								<option value="en" data-i18n="languageEnglish">English</option>
+								<option value="zh-cn" data-i18n="languageChinese">简体中文</option>
+								<option value="zh-tw" data-i18n="languageTraditionalChinese">繁體中文</option>
+								<option value="ko" data-i18n="languageKorean">한국어</option>
+								<option value="ja" data-i18n="languageJapanese">日本語</option>
+								<option value="fr" data-i18n="languageFrench">Français</option>
+								<option value="de" data-i18n="languageGerman">Deutsch</option>
+							</select>
 						</div>
-						<div class="settings-hint">System Prompt, Chat History, Import/Export Copilot Records, Enhanced TODO Settings</div>
+						<div class="settings-buttons-row">
+							<button id="openGlobalSettingsBtn" class="primary-btn" data-i18n="globalSettings">Global Settings</button>
+							<button id="openProjectSettingsBtn" class="primary-btn" data-i18n="projectSettings">Project Settings</button>
+						</div>
+						<div class="settings-hint" data-i18n="settingsHint">System Prompt, Chat History, Import/Export Copilot Records, Enhanced TODO Settings</div>
 					</section>
 
 					<section class="config-section providers-section">
 						<div class="section-header">
 							<div class="section-title-group">
 								<svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.5 1H2.5L2 1.5V5l.5.5h1.639l.138.248 1.14 2.06-.638 2.148L4.5 10.5H3v3l.5.5h9l.5-.5v-3h-1.5l-.279-.544-.638-2.148 1.14-2.06.138-.248H13.5l.5-.5V1.5l-.5-.5zM13 5H3V2h10v3zm-2.621 5H5.621l.579-1.948-.758-1.37L4.5 5h7l-.942 1.682-.758 1.37L10.379 10zM12 13H4v-2h8v2z"/></svg>
-								<h2>Providers</h2>
+								<h2 data-i18n="providers">Providers</h2>
 								<span class="provider-count" id="providerCount"></span>
 							</div>
 							<button id="addProviderBtn" class="primary-btn add-provider-btn">
 								<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 7v1H8v6H7V8H1V7h6V1h1v6h6z"/></svg>
-								<span>Add Provider</span>
+								<span data-i18n="addProvider">Add Provider</span>
 							</button>
 						</div>
 						<div id="providersList" class="providers-list">
@@ -772,44 +814,44 @@ After completing the operations, please reply with the following message in both
 				<div id="providerModal" class="modal">
 					<div class="modal-content">
 						<div class="modal-header">
-							<h2 id="modalTitle">Add Provider</h2>
+							<h2 id="modalTitle" data-i18n="addProvider">Add Provider</h2>
 							<button id="closeModal" class="close-btn">&times;</button>
 						</div>
 						<form id="providerForm">
 							<input type="hidden" id="providerId" />
 							<div class="form-group">
-								<label for="providerName">Provider Name</label>
-								<input type="text" id="providerName" placeholder="e.g., MyOpenAI, LocalLLM" required />
-								<div class="help-text">A unique name to identify this provider in Copilot</div>
+								<label for="providerName" data-i18n="providerName">Provider Name</label>
+								<input type="text" id="providerName" placeholder="e.g., MyOpenAI, LocalLLM" data-i18n-placeholder="providerNamePlaceholder" required />
+								<div class="help-text" data-i18n="providerNameHelp">A unique name to identify this provider in Copilot</div>
 							</div>
 							<div class="form-group">
-								<label for="providerApiType">API Type</label>
+								<label for="providerApiType" data-i18n="apiType">API Type</label>
 								<select id="providerApiType">
 									<option value="openai-compatible">OpenAI-Compatible</option>
 									<option value="anthropic">Anthropic</option>
 								</select>
-								<div class="help-text">The API protocol used by this provider</div>
+								<div class="help-text" data-i18n="apiTypeHelp">The API protocol used by this provider</div>
 							</div>
 							<div class="form-group">
-								<label for="providerBaseUrl">Base URL</label>
-								<input type="url" id="providerBaseUrl" placeholder="https://api.openai.com/v1" required />
-								<div class="help-text">The API endpoint</div>
+								<label for="providerBaseUrl" data-i18n="baseUrl">Base URL</label>
+								<input type="url" id="providerBaseUrl" placeholder="https://api.openai.com/v1" data-i18n-placeholder="baseUrlPlaceholder" required />
+								<div class="help-text" data-i18n="baseUrlHelp">The API endpoint</div>
 							</div>
 							<div class="form-group">
-								<label for="providerApiKey">API Key</label>
-								<input type="password" id="providerApiKey" placeholder="sk-..." />
-								<div class="help-text">Leave empty to keep existing key (when editing)</div>
+								<label for="providerApiKey" data-i18n="apiKey">API Key</label>
+								<input type="password" id="providerApiKey" placeholder="sk-..." data-i18n-placeholder="apiKeyPlaceholder" />
+								<div class="help-text" data-i18n="apiKeyHelp">Leave empty to keep existing key (when editing)</div>
 							</div>
 							<div class="form-group">
 								<label class="checkbox-label">
 									<input type="checkbox" id="providerAutoFetchModels" checked />
-									Auto Fetch Models
+									<span data-i18n="autoFetchModels">Auto Fetch Models</span>
 								</label>
-								<div class="help-text">Automatically fetch models from API when settings open</div>
+								<div class="help-text" data-i18n="autoFetchModelsTitle">Automatically fetch models from API when settings open</div>
 							</div>
 							<div class="form-actions">
-								<button type="button" id="cancelBtn" class="secondary-btn">Cancel</button>
-								<button type="submit" class="primary-btn">Save Provider</button>
+								<button type="button" id="cancelBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
+								<button type="submit" class="primary-btn" data-i18n="saveProvider">Save Provider</button>
 							</div>
 						</form>
 					</div>
@@ -819,24 +861,24 @@ After completing the operations, please reply with the following message in both
 				<div id="editModelModal" class="modal">
 					<div class="modal-content">
 						<div class="modal-header">
-							<h2 id="editModelTitle">Edit Model</h2>
+							<h2 id="editModelTitle" data-i18n="editModel">Edit Model</h2>
 							<button id="closeEditModelBtn" class="close-btn">&times;</button>
 						</div>
 						<div class="form-group">
-							<label for="editModelName">Model ID</label>
-							<input type="text" id="editModelName" placeholder="e.g., gpt-4o" required />
+							<label for="editModelName" data-i18n="modelId">Model ID</label>
+							<input type="text" id="editModelName" placeholder="e.g., gpt-4o" data-i18n-placeholder="modelIdPlaceholder" required />
 						</div>
 						<div class="form-group">
-							<label for="editModelDisplayName">Display Name</label>
-							<input type="text" id="editModelDisplayName" placeholder="e.g., GPT-4o" />
+							<label for="editModelDisplayName" data-i18n="displayName">Display Name</label>
+							<input type="text" id="editModelDisplayName" placeholder="e.g., GPT-4o" data-i18n-placeholder="displayNamePlaceholder" />
 						</div>
 						<div class="form-row">
 							<div class="form-group">
-								<label for="editModelContextLength">Context Length</label>
+								<label for="editModelContextLength" data-i18n="contextLength">Context Length</label>
 								<input type="number" id="editModelContextLength" value="128000" min="1" />
 							</div>
 							<div class="form-group">
-								<label for="editModelMaxTokens">Max Tokens</label>
+								<label for="editModelMaxTokens" data-i18n="maxTokens">Max Tokens</label>
 								<input type="number" id="editModelMaxTokens" value="16000" min="1" />
 							</div>
 						</div>
@@ -844,19 +886,19 @@ After completing the operations, please reply with the following message in both
 							<div class="form-group">
 								<label class="checkbox-label">
 									<input type="checkbox" id="editModelVision" />
-									Vision Support
+									<span data-i18n="visionSupport">Vision Support</span>
 								</label>
 							</div>
 							<div class="form-group">
 								<label class="checkbox-label">
 									<input type="checkbox" id="editModelToolCalling" />
-									Tool Calling
+									<span data-i18n="toolCalling">Tool Calling</span>
 								</label>
 							</div>
 							<div class="form-group">
 								<label class="checkbox-label">
 									<input type="checkbox" id="editModelUserSelectable" />
-									Show in Chat Selector
+									<span data-i18n="showInChatSelector">Show in Chat Selector</span>
 								</label>
 							</div>
 						</div>
@@ -864,33 +906,33 @@ After completing the operations, please reply with the following message in both
 							<div class="form-group">
 								<label class="checkbox-label">
 									<input type="checkbox" id="editModelTransformThink" />
-									Transform Think Tags (<|im_start|>/♩)
+									<span data-i18n="transformThinkTags">Transform Think Tags (&lt;|im_start|&gt;/♩)</span>
 								</label>
 							</div>
 						</div>
 						<div class="form-row">
 							<div class="form-group">
-								<label for="editModelTemperature">Temperature</label>
+								<label for="editModelTemperature" data-i18n="temperature">Temperature</label>
 								<input type="number" id="editModelTemperature" value="0.7" min="0" max="2" step="0.1" />
 							</div>
 							<div class="form-group">
-								<label for="editModelTopP">Top P</label>
+								<label for="editModelTopP" data-i18n="topP">Top P</label>
 								<input type="number" id="editModelTopP" value="1.0" min="0" max="1" step="0.1" />
 							</div>
 						</div>
 						<div class="form-group">
-							<label for="editModelSamplingMode">Sampling Mode</label>
+							<label for="editModelSamplingMode" data-i18n="samplingMode">Sampling Mode</label>
 							<select id="editModelSamplingMode">
-								<option value="both">Both (temperature + top_p)</option>
-								<option value="temperature">Temperature only</option>
-								<option value="top_p">Top P only</option>
-								<option value="none">None (do not pass)</option>
+								<option value="both" data-i18n="samplingBoth">Both (temperature + top_p)</option>
+								<option value="temperature" data-i18n="samplingTemperature">Temperature only</option>
+								<option value="top_p" data-i18n="samplingTopP">Top P only</option>
+								<option value="none" data-i18n="samplingNone">None (do not pass)</option>
 							</select>
-							<div class="help-text">Some models (e.g. Claude) only accept one sampling parameter at a time</div>
+							<div class="help-text" data-i18n="samplingHelp">Some models (e.g. Claude) only accept one sampling parameter at a time</div>
 						</div>
 						<div class="form-actions">
-							<button type="button" id="cancelEditModelBtn" class="secondary-btn">Cancel</button>
-							<button type="button" id="saveEditModelBtn" class="primary-btn">Save Model</button>
+							<button type="button" id="cancelEditModelBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
+							<button type="button" id="saveEditModelBtn" class="primary-btn" data-i18n="saveModel">Save Model</button>
 						</div>
 					</div>
 				</div>
@@ -899,24 +941,24 @@ After completing the operations, please reply with the following message in both
 				<div id="settingsModal" class="modal">
 					<div class="modal-content">
 						<div class="modal-header">
-							<h2>Chat History Settings</h2>
+							<h2 data-i18n="chatHistorySettings">Chat History Settings</h2>
 							<button id="closeSettingsModal" class="close-btn">&times;</button>
 						</div>
 						<div class="form-group">
 							<label class="checkbox-label">
 								<input type="checkbox" id="chatHistoryEnabled" />
-								Auto Save Chat History
+								<span data-i18n="autoSaveChatHistory">Auto Save Chat History</span>
 							</label>
-							<div class="help-text">Automatically save chat conversations to local files</div>
+							<div class="help-text" data-i18n="chatHistoryHelp">Automatically save chat conversations to local files</div>
 						</div>
 						<div class="form-group">
-							<label for="chatHistorySavePath">Save Path</label>
-							<input type="text" id="chatHistorySavePath" placeholder="Path to save chat history" />
-							<div class="help-text">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
+							<label for="chatHistorySavePath" data-i18n="savePath">Save Path</label>
+							<input type="text" id="chatHistorySavePath" placeholder="Path to save chat history" data-i18n-placeholder="savePathPlaceholder" />
+							<div class="help-text" data-i18n="defaultSavePathHelp">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
 						</div>
 						<div class="form-actions">
-							<button type="button" id="cancelSettingsBtn" class="secondary-btn">Cancel</button>
-							<button type="button" id="saveSettingsBtn" class="primary-btn">Save</button>
+							<button type="button" id="cancelSettingsBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
+							<button type="button" id="saveSettingsBtn" class="primary-btn" data-i18n="save">Save</button>
 						</div>
 					</div>
 				</div>
@@ -925,22 +967,22 @@ After completing the operations, please reply with the following message in both
 				<div id="systemPromptModal" class="modal">
 					<div class="modal-content">
 						<div class="modal-header">
-							<h2>Edit System Prompt</h2>
+							<h2 data-i18n="editSystemPrompt">Edit System Prompt</h2>
 							<button id="closeSystemPromptModal" class="close-btn">&times;</button>
 						</div>
 						<div class="form-group">
-						<label for="globalSystemPromptTextarea">Global System Prompt</label>
-						<textarea id="globalSystemPromptTextarea" rows="6" placeholder="Enter global system prompt here..."></textarea>
-						<div class="help-text">Applied to all workspaces. Stored in global settings.</div>
+						<label for="globalSystemPromptTextarea" data-i18n="globalSystemPrompt">Global System Prompt</label>
+						<textarea id="globalSystemPromptTextarea" rows="6" placeholder="Enter global system prompt here..." data-i18n-placeholder="globalSystemPromptPlaceholder"></textarea>
+						<div class="help-text" data-i18n="globalSystemPromptHelp">Applied to all workspaces. Stored in global settings.</div>
 					</div>
 					<div class="form-group">
-						<label for="workspaceSystemPromptTextarea">Project (Workspace) System Prompt</label>
-						<textarea id="workspaceSystemPromptTextarea" rows="6" placeholder="Enter project-specific system prompt here..."></textarea>
-						<div class="help-text">Applied only to current workspace. Stored in workspace settings.</div>
+						<label for="workspaceSystemPromptTextarea" data-i18n="projectWorkspaceSystemPrompt">Project (Workspace) System Prompt</label>
+						<textarea id="workspaceSystemPromptTextarea" rows="6" placeholder="Enter project-specific system prompt here..." data-i18n-placeholder="projectSystemPromptPlaceholder"></textarea>
+						<div class="help-text" data-i18n="projectSystemPromptHelp">Applied only to current workspace. Stored in workspace settings.</div>
 						</div>
 						<div class="form-actions">
-							<button type="button" id="cancelSystemPromptBtn" class="secondary-btn">Cancel</button>
-							<button type="button" id="saveSystemPromptBtn" class="primary-btn">Save</button>
+							<button type="button" id="cancelSystemPromptBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
+							<button type="button" id="saveSystemPromptBtn" class="primary-btn" data-i18n="save">Save</button>
 						</div>
 					</div>
 				</div>
@@ -949,63 +991,63 @@ After completing the operations, please reply with the following message in both
 				<div id="globalSettingsModal" class="modal">
 					<div class="modal-content modal-large">
 						<div class="modal-header">
-							<h2>Global Settings</h2>
+							<h2 data-i18n="globalSettings">Global Settings</h2>
 							<button id="closeGlobalSettingsModal" class="close-btn">&times;</button>
 						</div>
 						
 						<!-- Global System Prompt Section -->
 						<div class="modal-section">
-							<h3>Global System Prompt</h3>
+							<h3 data-i18n="globalSystemPrompt">Global System Prompt</h3>
 							<div class="form-group">
-								<textarea id="modalGlobalSystemPrompt" rows="6" placeholder="Enter global system prompt here..."></textarea>
-								<div class="help-text">Applied to all workspaces. Stored in global settings.</div>
+								<textarea id="modalGlobalSystemPrompt" rows="6" placeholder="Enter global system prompt here..." data-i18n-placeholder="globalSystemPromptPlaceholder"></textarea>
+								<div class="help-text" data-i18n="globalSystemPromptHelp">Applied to all workspaces. Stored in global settings.</div>
 							</div>
 						</div>
 						
 						<!-- Chat History Section -->
 						<div class="modal-section">
-							<h3>Chat History</h3>
+							<h3 data-i18n="chatHistory">Chat History</h3>
 							<div class="form-group">
 								<label class="checkbox-label">
 									<input type="checkbox" id="modalChatHistoryEnabled" />
-									Auto Save Chat History
+									<span data-i18n="autoSaveChatHistory">Auto Save Chat History</span>
 								</label>
-								<div class="help-text">Automatically save chat conversations to local files</div>
+								<div class="help-text" data-i18n="chatHistoryHelp">Automatically save chat conversations to local files</div>
 							</div>
 							<div class="form-group">
-								<label for="modalChatHistorySavePath">Save Path</label>
-								<input type="text" id="modalChatHistorySavePath" placeholder="Path to save chat history" />
-								<div class="help-text">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
+								<label for="modalChatHistorySavePath" data-i18n="savePath">Save Path</label>
+								<input type="text" id="modalChatHistorySavePath" placeholder="Path to save chat history" data-i18n-placeholder="savePathPlaceholder" />
+								<div class="help-text" data-i18n="defaultSavePathHelp">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
 							</div>
 						</div>
 						
 						<!-- Enhanced TODO Section -->
 						<div class="modal-section">
-							<h3>Enhanced TODO</h3>
+							<h3 data-i18n="enhancedTodo">Enhanced TODO</h3>
 							<div class="form-group">
 								<label class="checkbox-label">
 									<input type="checkbox" id="modalForceTodoEnabled" />
-									Enable Enhanced TODO
+									<span data-i18n="enableEnhancedTodo">Enable Enhanced TODO</span>
 								</label>
-								<div class="help-text">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
+								<div class="help-text" data-i18n="enhancedTodoHelp">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
 							</div>
 						</div>
 						
 						<!-- Copilot Records Section -->
 						<div class="modal-section">
-							<h3>Copilot Records</h3>
+							<h3 data-i18n="copilotRecords">Copilot Records</h3>
 							<div class="form-group">
-								<div class="help-text">Import/export chat records from VS Code Copilot</div>
+								<div class="help-text" data-i18n="copilotRecordsHelp">Import/export chat records from VS Code Copilot</div>
 							</div>
 							<div class="form-actions">
-								<button type="button" id="modalImportRecordsBtn" class="secondary-btn">Import Records</button>
-								<button type="button" id="modalExportRecordsBtn" class="secondary-btn">Export Records</button>
+								<button type="button" id="modalImportRecordsBtn" class="secondary-btn" data-i18n="importRecords">Import Records</button>
+								<button type="button" id="modalExportRecordsBtn" class="secondary-btn" data-i18n="exportRecords">Export Records</button>
 							</div>
 						</div>
 						
 						<div class="form-actions">
-							<button type="button" id="cancelGlobalSettingsBtn" class="secondary-btn">Cancel</button>
-							<button type="button" id="saveGlobalSettingsBtn" class="primary-btn">Save All</button>
+							<button type="button" id="cancelGlobalSettingsBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
+							<button type="button" id="saveGlobalSettingsBtn" class="primary-btn" data-i18n="saveAll">Save All</button>
 						</div>
 					</div>
 				</div>
@@ -1014,32 +1056,31 @@ After completing the operations, please reply with the following message in both
 				<div id="projectSettingsModal" class="modal">
 					<div class="modal-content">
 						<div class="modal-header">
-							<h2>Project Settings</h2>
+							<h2 data-i18n="projectSettings">Project Settings</h2>
 							<button id="closeProjectSettingsModal" class="close-btn">&times;</button>
 						</div>
 						<div class="modal-section">
-							<h3>Project System Prompt</h3>
+							<h3 data-i18n="projectSystemPrompt">Project System Prompt</h3>
 							<div class="form-group">
 								<label class="checkbox-label">
 									<input type="checkbox" id="modalProjectForceTodoEnabled" />
-									Enable Enhanced TODO
+									<span data-i18n="enableEnhancedTodo">Enable Enhanced TODO</span>
 								</label>
-								<div class="help-text">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
+								<div class="help-text" data-i18n="enhancedTodoHelp">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
 							</div>
 							<div class="form-group">
-								<textarea id="modalProjectSystemPrompt" rows="8" placeholder="Enter project-specific system prompt here..."></textarea>
-								<div class="help-text">Applied only to current workspace. Stored in workspace settings.</div>
+								<textarea id="modalProjectSystemPrompt" rows="8" placeholder="Enter project-specific system prompt here..." data-i18n-placeholder="projectSystemPromptPlaceholder"></textarea>
+								<div class="help-text" data-i18n="projectSystemPromptHelp">Applied only to current workspace. Stored in workspace settings.</div>
 							</div>
 						</div>
 						<div class="form-actions">
-							<button type="button" id="cancelProjectSettingsBtn" class="secondary-btn">Cancel</button>
-							<button type="button" id="saveProjectSettingsBtn" class="primary-btn">Save</button>
+							<button type="button" id="cancelProjectSettingsBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
+							<button type="button" id="saveProjectSettingsBtn" class="primary-btn" data-i18n="save">Save</button>
 						</div>
 					</div>
 				</div>
 
 				<script nonce="${nonce}">window.VSCODE_LOCALE = '${vscodeLocale}';</script>
-			<script nonce="${nonce}">alert('INLINE_SCRIPT_LOADED');</script>
 				<script nonce="${nonce}" src="${scriptUri}?v=${version}"></script>
 			</body>
 			</html>`;
@@ -1122,7 +1163,7 @@ export class ConfigViewPanel {
 
 	private static async _getHtmlForMode(mode: 'global' | 'project'): Promise<string> {
 		if (!this._extensionUri || !this._configManager) {
-			return '<html><body><p>Error: Extension not initialized</p></body></html>';
+			return '<html><body><p data-i18n="errorExtensionNotInitialized">Error: Extension not initialized</p></body></html>';
 		}
 
 		const webview = this._currentPanel!.webview;
@@ -1183,62 +1224,62 @@ export class ConfigViewPanel {
 
 		return `
 			<div class="settings-panel-header">
-				<h1>Global Settings</h1>
+				<h1 data-i18n="globalSettings">Global Settings</h1>
 			</div>
 
 			<!-- Global System Prompt Section -->
 			<section class="config-section">
-				<h2>Global System Prompt</h2>
+				<h2 data-i18n="globalSystemPrompt">Global System Prompt</h2>
 				<div class="form-group">
-					<textarea id="panelGlobalSystemPrompt" rows="6" placeholder="Enter global system prompt here...">${settings.globalSystemPrompt || ''}</textarea>
-					<div class="help-text">Applied to all workspaces. Stored in global settings.</div>
+					<textarea id="panelGlobalSystemPrompt" rows="6" placeholder="Enter global system prompt here..." data-i18n-placeholder="globalSystemPromptPlaceholder">${settings.globalSystemPrompt || ''}</textarea>
+					<div class="help-text" data-i18n="globalSystemPromptHelp">Applied to all workspaces. Stored in global settings.</div>
 				</div>
 			</section>
 
 			<!-- Chat History Section -->
 			<section class="config-section">
-				<h2>Chat History</h2>
+				<h2 data-i18n="chatHistory">Chat History</h2>
 				<div class="form-group">
 					<label class="checkbox-label">
 						<input type="checkbox" id="panelChatHistoryEnabled" ${settings.chatHistoryEnabled ? 'checked' : ''} />
-						Auto Save Chat History
+						<span data-i18n="autoSaveChatHistory">Auto Save Chat History</span>
 					</label>
-					<div class="help-text">Automatically save chat conversations to local files</div>
+					<div class="help-text" data-i18n="chatHistoryHelp">Automatically save chat conversations to local files</div>
 				</div>
 				<div class="form-group">
-					<label for="panelChatHistorySavePath">Save Path</label>
+					<label for="panelChatHistorySavePath" data-i18n="savePath">Save Path</label>
 					<input type="text" id="panelChatHistorySavePath" value="${settings.chatHistorySavePath || this._getDefaultSavePath()}" />
-					<div class="help-text">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
+					<div class="help-text" data-i18n="defaultSavePathHelp">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
 				</div>
 			</section>
 
 			<!-- Enhanced TODO Section -->
 			<section class="config-section">
-				<h2>Enhanced TODO</h2>
+				<h2 data-i18n="enhancedTodo">Enhanced TODO</h2>
 				<div class="form-group">
 					<label class="checkbox-label">
 						<input type="checkbox" id="panelForceTodoEnabled" ${settings.globalForceTodoEnabled ? 'checked' : ''} />
-						Enable Enhanced TODO
+						<span data-i18n="enableEnhancedTodo">Enable Enhanced TODO</span>
 					</label>
-					<div class="help-text">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
+					<div class="help-text" data-i18n="enhancedTodoHelp">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
 				</div>
 			</section>
 
 			<!-- Copilot Records Section -->
 			<section class="config-section">
-				<h2>Copilot Records</h2>
+				<h2 data-i18n="copilotRecords">Copilot Records</h2>
 				<div class="form-group">
-					<div class="help-text">Import/export chat records from VS Code Copilot</div>
+					<div class="help-text" data-i18n="copilotRecordsHelp">Import/export chat records from VS Code Copilot</div>
 				</div>
 				<div class="form-actions">
-					<button type="button" id="panelImportRecordsBtn" class="secondary-btn">Import Records</button>
-					<button type="button" id="panelExportRecordsBtn" class="secondary-btn">Export Records</button>
+					<button type="button" id="panelImportRecordsBtn" class="secondary-btn" data-i18n="importRecords">Import Records</button>
+					<button type="button" id="panelExportRecordsBtn" class="secondary-btn" data-i18n="exportRecords">Export Records</button>
 				</div>
 			</section>
 
 			<div class="form-actions sticky-footer">
-				<button type="button" id="panelCancelBtn" class="secondary-btn">Cancel</button>
-				<button type="button" id="panelSaveBtn" class="primary-btn">Save All</button>
+				<button type="button" id="panelCancelBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
+				<button type="button" id="panelSaveBtn" class="primary-btn" data-i18n="saveAll">Save All</button>
 			</div>
 
 			<script nonce="${nonce}">
@@ -1252,28 +1293,28 @@ export class ConfigViewPanel {
 
 		return `
 			<div class="settings-panel-header">
-				<h1>Project Settings</h1>
+				<h1 data-i18n="projectSettings">Project Settings</h1>
 			</div>
 
 			<!-- Project System Prompt Section -->
 			<section class="config-section">
-				<h2>Project System Prompt</h2>
+				<h2 data-i18n="projectSystemPrompt">Project System Prompt</h2>
 				<div class="form-group">
 					<label class="checkbox-label">
 						<input type="checkbox" id="panelProjectForceTodoEnabled" ${settings.projectForceTodoEnabled ? 'checked' : ''} />
-						Enable Enhanced TODO
+						<span data-i18n="enableEnhancedTodo">Enable Enhanced TODO</span>
 					</label>
-					<div class="help-text">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
+					<div class="help-text" data-i18n="enhancedTodoHelp">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
 				</div>
 				<div class="form-group">
-					<textarea id="panelProjectSystemPrompt" rows="8" placeholder="Enter project-specific system prompt here...">${settings.projectSystemPrompt || ''}</textarea>
-					<div class="help-text">Applied only to current workspace. Stored in workspace settings.</div>
+					<textarea id="panelProjectSystemPrompt" rows="8" placeholder="Enter project-specific system prompt here..." data-i18n-placeholder="projectSystemPromptPlaceholder">${settings.projectSystemPrompt || ''}</textarea>
+					<div class="help-text" data-i18n="projectSystemPromptHelp">Applied only to current workspace. Stored in workspace settings.</div>
 				</div>
 			</section>
 
 			<div class="form-actions sticky-footer">
-				<button type="button" id="panelCancelBtn" class="secondary-btn">Cancel</button>
-				<button type="button" id="panelSaveBtn" class="primary-btn">Save</button>
+				<button type="button" id="panelCancelBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
+				<button type="button" id="panelSaveBtn" class="primary-btn" data-i18n="save">Save</button>
 			</div>
 
 			<script nonce="${nonce}">
@@ -1290,6 +1331,29 @@ export class ConfigViewPanel {
 		const { command, data } = message;
 
 		switch (command) {
+			case 'getLanguageSettings':
+				this._currentPanel?.webview.postMessage({
+					command: 'languageSettingsLoaded',
+					data: {
+						configuredLanguage: this._configManager.getConfiguredLanguage(),
+						resolvedLanguage: this._configManager.getResolvedLanguage(),
+						vscodeLanguage: vscode.env.language
+					}
+				});
+				break;
+
+			case 'updateLanguageSettings':
+				await this._configManager.updateLanguage(data?.language);
+				this._currentPanel?.webview.postMessage({
+					command: 'languageSettingsLoaded',
+					data: {
+						configuredLanguage: this._configManager.getConfiguredLanguage(),
+						resolvedLanguage: this._configManager.getResolvedLanguage(),
+						vscodeLanguage: vscode.env.language
+					}
+				});
+				break;
+
 			case 'getChatHistorySettings':
 				const settings = await this._configManager.getChatHistorySettings();
 				this._currentPanel?.webview.postMessage({
