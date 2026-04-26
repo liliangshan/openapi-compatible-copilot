@@ -1057,6 +1057,130 @@ body {
 	color: var(--vscode-foreground);
 }
 
+.global-settings-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+	align-items: stretch;
+}
+
+.global-settings-grid .config-section {
+	margin-bottom: 0;
+}
+
+.expert-settings-card {
+	background: linear-gradient(135deg, color-mix(in srgb, var(--vscode-input-background) 72%, transparent), var(--vscode-editor-background));
+	border-color: color-mix(in srgb, var(--vscode-focusBorder) 34%, var(--vscode-input-border));
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.expert-settings-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+	margin-bottom: 14px;
+}
+
+.expert-settings-header h2 {
+	margin-bottom: 4px;
+}
+
+.expert-settings-header p {
+	margin: 0;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.expert-status-pill {
+	flex-shrink: 0;
+	padding: 3px 9px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	border: 1px solid var(--vscode-input-border);
+	background-color: var(--vscode-input-background);
+}
+
+.expert-status-pill.enabled {
+	color: #3fb950;
+	border-color: rgba(63, 185, 80, 0.45);
+	background-color: rgba(63, 185, 80, 0.12);
+}
+
+.expert-status-pill.disabled {
+	color: var(--vscode-descriptionForeground);
+}
+
+.expert-state-options {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+	margin-bottom: 16px;
+}
+
+.expert-state-option {
+	display: grid;
+	grid-template-columns: 16px 1fr;
+	grid-template-rows: auto auto;
+	column-gap: 8px;
+	row-gap: 2px;
+	padding: 10px;
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 8px;
+	background-color: color-mix(in srgb, var(--vscode-input-background) 65%, transparent);
+	cursor: pointer;
+	transition: border-color 0.15s, background-color 0.15s, transform 0.15s;
+}
+
+.expert-state-option:hover {
+	border-color: var(--vscode-focusBorder);
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.expert-state-option.selected,
+.expert-state-option:has(input:checked) {
+	border-color: var(--vscode-focusBorder);
+	background-color: color-mix(in srgb, var(--vscode-focusBorder) 13%, var(--vscode-input-background));
+}
+
+.expert-state-option input {
+	grid-row: 1 / span 2;
+	margin-top: 2px;
+}
+
+.expert-state-title {
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.expert-state-desc {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	line-height: 1.35;
+}
+
+.expert-model-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.expert-model-grid .form-group {
+	margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+	.global-settings-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.expert-state-options,
+	.expert-model-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
 .form-group {
 	margin-bottom: 12px;
 }

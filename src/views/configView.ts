@@ -2,6 +2,17 @@ import * as vscode from 'vscode';
 import { ConfigManager } from '../configManager';
 import { WebviewMessage, ProviderConfigWithoutSecrets } from '../types';
 
+function getExpertSelectableProviders(providers: any[]): any[] {
+	return (providers || [])
+		.filter((provider: any) => provider?.enabled)
+		.map((provider: any) => ({
+			...provider,
+			models: ((provider.models || []) as any[]).filter((model: any) => model?.isUserSelectable === true),
+			apiModels: ((provider.apiModels || []) as any[]).filter((model: any) => model?.isUserSelectable === true),
+		}))
+		.filter((provider: any) => ((provider.models || provider.apiModels || []) as any[]).length > 0);
+}
+
 /**
  * Webview panel for managing OpenAPI-compatible providers
  */
@@ -405,6 +416,45 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					command: 'chatHistorySettingsLoaded',
 					data: settings
 				});
+				break;
+
+			case 'getExpertModeSettings':
+				try {
+					const expertModeSettings = this._configManager.getEffectiveExpertModeConfig();
+					const expertModeProviders = getExpertSelectableProviders(await this._configManager.getProviders());
+					this._getWebview()?.postMessage({
+						command: 'expertModeSettingsLoaded',
+						data: {
+							settings: expertModeSettings,
+							globalSettings: this._configManager.getExpertModeConfig(),
+							workspaceSettings: this._configManager.getWorkspaceExpertModeConfig(),
+							providers: expertModeProviders,
+						}
+					});
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to load expert mode settings: ${errorMessage}`);
+				}
+				break;
+
+			case 'updateExpertModeSettings':
+				try {
+					const { enabled, providerId, modelId } = message.data as { enabled: boolean; providerId: string; modelId: string };
+					const updatedExpertModeSettings = await this._configManager.updateExpertModeConfig({ enabled, providerId, modelId });
+					const expertModeProviders = getExpertSelectableProviders(await this._configManager.getProviders());
+					this._getWebview()?.postMessage({
+						command: 'expertModeSettingsLoaded',
+						data: {
+							settings: updatedExpertModeSettings,
+							providers: expertModeProviders,
+						},
+						success: true
+					});
+					vscode.window.showInformationMessage('Expert mode settings updated.');
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to update expert mode settings: ${errorMessage}`);
+				}
 				break;
 
 			case 'updateChatHistorySettings':
@@ -1021,6 +1071,28 @@ After completing the operations, please reply with the following message in both
 							</div>
 						</div>
 						
+						<!-- Expert Mode Section -->
+						<div class="modal-section">
+							<h3 data-i18n="expertMode">Expert Mode</h3>
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input type="checkbox" id="modalExpertModeEnabled" />
+									<span data-i18n="enableExpertMode">Enable Expert Mode</span>
+								</label>
+								<div class="help-text" data-i18n="expertModeHelp">When enabled, the main model can delegate difficult tasks to a selected expert model.</div>
+							</div>
+							<div class="form-row">
+								<div class="form-group">
+									<label for="modalExpertModeProvider" data-i18n="expertProvider">Expert Provider</label>
+									<select id="modalExpertModeProvider"></select>
+								</div>
+								<div class="form-group">
+									<label for="modalExpertModeModel" data-i18n="expertModel">Expert Model</label>
+									<select id="modalExpertModeModel"></select>
+								</div>
+							</div>
+						</div>
+
 						<!-- Enhanced TODO Section -->
 						<div class="modal-section">
 							<h3 data-i18n="enhancedTodo">Enhanced TODO</h3>
@@ -1204,14 +1276,24 @@ export class ConfigViewPanel {
 		}
 
 		const chatHistorySettings = await this._configManager.getChatHistorySettings();
+		const expertModeSettings = this._configManager.getExpertModeConfig();
+		const projectExpertModeSettings = this._configManager.getWorkspaceExpertModeConfig();
+		const effectiveExpertModeSettings = this._configManager.getEffectiveExpertModeConfig();
+		const providers = await this._configManager.getProviders();
 		const globalSystemPrompt = this._configManager.getGlobalSystemPrompt() || '';
 		const projectSystemPrompt = this._configManager.getWorkspaceSystemPrompt() || '';
 		const globalForceTodoEnabled = this._configManager.getGlobalForceTodoEnabled();
 		const projectForceTodoEnabled = this._configManager.getWorkspaceForceTodoEnabled();
+		const expertProviders = getExpertSelectableProviders(providers);
 
 		return {
 			chatHistoryEnabled: chatHistorySettings.enabled,
 			chatHistorySavePath: chatHistorySettings.savePath || this._getDefaultSavePath(),
+			expertModeSettings,
+			projectExpertModeSettings,
+			effectiveExpertModeSettings,
+			providers,
+			expertProviders,
 			globalSystemPrompt,
 			projectSystemPrompt,
 			globalForceTodoEnabled,
@@ -1221,6 +1303,20 @@ export class ConfigViewPanel {
 
 	private static _getGlobalSettingsHtml(settings: any, nonce: string, scriptUri: vscode.Uri, styleUri: vscode.Uri, version: number): string {
 		const escapedGlobalPrompt = (settings.globalSystemPrompt || '').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+		const expertProviders = settings.expertProviders || [];
+		const selectedExpertProviderId = settings.expertModeSettings?.providerId || '';
+		const selectedExpertProvider = expertProviders.find((provider: any) => provider.id === selectedExpertProviderId) || expertProviders[0];
+		const selectedExpertModelId = settings.expertModeSettings?.modelId || '';
+		const expertProviderOptions = [
+			`<option value="" data-i18n="expertSelectProvider">Select provider</option>`,
+			...expertProviders.map((provider: any) => `<option value="${this._escapeHtml(provider.id)}" ${provider.id === selectedExpertProviderId ? 'selected' : ''}>${this._escapeHtml(provider.name)}</option>`)
+		].join('');
+		const expertModelOptions = [
+			`<option value="" data-i18n="expertSelectModel">Select model</option>`,
+			...((selectedExpertProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedExpertModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
+		].join('');
+		const panelProvidersJson = JSON.stringify(expertProviders).replace(/</g, '\\u003c');
+		const panelExpertModeSettingsJson = JSON.stringify(settings.expertModeSettings || { enabled: false, providerId: '', modelId: '' }).replace(/</g, '\\u003c');
 
 		return `
 			<div class="settings-panel-header">
@@ -1236,46 +1332,71 @@ export class ConfigViewPanel {
 				</div>
 			</section>
 
-			<!-- Chat History Section -->
-			<section class="config-section">
-				<h2 data-i18n="chatHistory">Chat History</h2>
-				<div class="form-group">
-					<label class="checkbox-label">
-						<input type="checkbox" id="panelChatHistoryEnabled" ${settings.chatHistoryEnabled ? 'checked' : ''} />
-						<span data-i18n="autoSaveChatHistory">Auto Save Chat History</span>
-					</label>
-					<div class="help-text" data-i18n="chatHistoryHelp">Automatically save chat conversations to local files</div>
-				</div>
-				<div class="form-group">
-					<label for="panelChatHistorySavePath" data-i18n="savePath">Save Path</label>
-					<input type="text" id="panelChatHistorySavePath" value="${settings.chatHistorySavePath || this._getDefaultSavePath()}" />
-					<div class="help-text" data-i18n="defaultSavePathHelp">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
-				</div>
-			</section>
 
-			<!-- Enhanced TODO Section -->
-			<section class="config-section">
-				<h2 data-i18n="enhancedTodo">Enhanced TODO</h2>
-				<div class="form-group">
-					<label class="checkbox-label">
-						<input type="checkbox" id="panelForceTodoEnabled" ${settings.globalForceTodoEnabled ? 'checked' : ''} />
-						<span data-i18n="enableEnhancedTodo">Enable Enhanced TODO</span>
-					</label>
-					<div class="help-text" data-i18n="enhancedTodoHelp">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
-				</div>
-			</section>
+			<div class="global-settings-grid">
+				<!-- Chat History Section -->
+				<section class="config-section">
+					<h2 data-i18n="chatHistory">Chat History</h2>
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input type="checkbox" id="panelChatHistoryEnabled" ${settings.chatHistoryEnabled ? 'checked' : ''} />
+							<span data-i18n="autoSaveChatHistory">Auto Save Chat History</span>
+						</label>
+						<div class="help-text" data-i18n="chatHistoryHelp">Automatically save chat conversations to local files</div>
+					</div>
+					<div class="form-group">
+						<label for="panelChatHistorySavePath" data-i18n="savePath">Save Path</label>
+						<input type="text" id="panelChatHistorySavePath" value="${settings.chatHistorySavePath || this._getDefaultSavePath()}" />
+						<div class="help-text" data-i18n="defaultSavePathHelp">Default: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI</div>
+					</div>
+				</section>
 
-			<!-- Copilot Records Section -->
-			<section class="config-section">
-				<h2 data-i18n="copilotRecords">Copilot Records</h2>
-				<div class="form-group">
-					<div class="help-text" data-i18n="copilotRecordsHelp">Import/export chat records from VS Code Copilot</div>
-				</div>
-				<div class="form-actions">
-					<button type="button" id="panelImportRecordsBtn" class="secondary-btn" data-i18n="importRecords">Import Records</button>
-					<button type="button" id="panelExportRecordsBtn" class="secondary-btn" data-i18n="exportRecords">Export Records</button>
-				</div>
-			</section>
+				<!-- Expert Mode Section -->
+				<section class="config-section">
+					<h2 data-i18n="expertMode">Expert Mode</h2>
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input type="checkbox" id="panelExpertModeEnabled" ${settings.expertModeSettings?.enabled ? 'checked' : ''} />
+							<span data-i18n="enableExpertMode">Enable Expert Mode</span>
+						</label>
+						<div class="help-text" data-i18n="expertModeHelp">When enabled, the main model can delegate difficult tasks to a selected expert model.</div>
+					</div>
+					<div class="form-row">
+						<div class="form-group">
+							<label for="panelExpertModeProvider" data-i18n="expertProvider">Expert Provider</label>
+							<select id="panelExpertModeProvider">${expertProviderOptions}</select>
+						</div>
+						<div class="form-group">
+							<label for="panelExpertModeModel" data-i18n="expertModel">Expert Model</label>
+							<select id="panelExpertModeModel">${expertModelOptions}</select>
+						</div>
+					</div>
+				</section>
+
+				<!-- Enhanced TODO Section -->
+				<section class="config-section">
+					<h2 data-i18n="enhancedTodo">Enhanced TODO</h2>
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input type="checkbox" id="panelForceTodoEnabled" ${settings.globalForceTodoEnabled ? 'checked' : ''} />
+							<span data-i18n="enableEnhancedTodo">Enable Enhanced TODO</span>
+						</label>
+						<div class="help-text" data-i18n="enhancedTodoHelp">If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.</div>
+					</div>
+				</section>
+
+				<!-- Copilot Records Section -->
+				<section class="config-section">
+					<h2 data-i18n="copilotRecords">Copilot Records</h2>
+					<div class="form-group">
+						<div class="help-text" data-i18n="copilotRecordsHelp">Import/export chat records from VS Code Copilot</div>
+					</div>
+					<div class="form-actions">
+						<button type="button" id="panelImportRecordsBtn" class="secondary-btn" data-i18n="importRecords">Import Records</button>
+						<button type="button" id="panelExportRecordsBtn" class="secondary-btn" data-i18n="exportRecords">Export Records</button>
+					</div>
+				</section>
+			</div>
 
 			<div class="form-actions sticky-footer">
 				<button type="button" id="panelCancelBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
@@ -1284,12 +1405,43 @@ export class ConfigViewPanel {
 
 			<script nonce="${nonce}">
 				window.settingsMode = 'global';
+				window.panelProviders = ${panelProvidersJson};
+				window.panelExpertModeSettings = ${panelExpertModeSettingsJson};
 			</script>
 		`;
 	}
 
+	private static _escapeHtml(value: string): string {
+		return String(value ?? '')
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
+	}
+
 	private static _getProjectSettingsHtml(settings: any, nonce: string, scriptUri: vscode.Uri, styleUri: vscode.Uri, version: number): string {
 		const escapedProjectPrompt = (settings.projectSystemPrompt || '').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+		const expertProviders = settings.expertProviders || [];
+		const projectExpertSettings = settings.projectExpertModeSettings || { enabled: false, enabledState: 'global', providerId: '', modelId: '' };
+		const effectiveExpertSettings = settings.effectiveExpertModeSettings || settings.expertModeSettings || { enabled: false, providerId: '', modelId: '' };
+		const enabledState = projectExpertSettings.enabledState === 'enabled' || projectExpertSettings.enabledState === 'disabled' ? projectExpertSettings.enabledState : 'global';
+		const selectedExpertProviderId = projectExpertSettings.providerId || '';
+		const selectedExpertProvider = expertProviders.find((provider: any) => provider.id === selectedExpertProviderId);
+		const selectedExpertModelId = projectExpertSettings.modelId || '';
+		const effectiveExpertEnabledKey = effectiveExpertSettings.enabled ? 'enabled' : 'disabled';
+		const effectiveProviderLabel = this._escapeHtml(effectiveExpertSettings.providerId || 'not set');
+		const effectiveModelLabel = this._escapeHtml(effectiveExpertSettings.modelId || 'not set');
+		const expertProviderOptions = [
+			`<option value="" data-i18n-template="expertUseGlobalProvider" data-i18n-value-value="${effectiveProviderLabel}">Use global expert provider (${effectiveProviderLabel})</option>`,
+			...expertProviders.map((provider: any) => `<option value="${this._escapeHtml(provider.id)}" ${provider.id === selectedExpertProviderId ? 'selected' : ''}>${this._escapeHtml(provider.name)}</option>`)
+		].join('');
+		const expertModelOptions = [
+			`<option value="" data-i18n-template="expertUseGlobalModel" data-i18n-value-value="${effectiveModelLabel}">Use global expert model (${effectiveModelLabel})</option>`,
+			...((selectedExpertProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedExpertModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
+		].join('');
+		const panelProvidersJson = JSON.stringify(expertProviders).replace(/</g, '\\u003c');
+		const panelExpertModeSettingsJson = JSON.stringify(projectExpertSettings).replace(/</g, '\\u003c');
 
 		return `
 			<div class="settings-panel-header">
@@ -1312,6 +1464,45 @@ export class ConfigViewPanel {
 				</div>
 			</section>
 
+			<!-- Project Expert Mode Section -->
+			<section class="config-section expert-settings-card">
+				<div class="expert-settings-header">
+					<div>
+						<h2 data-i18n="expertMode">Expert Mode</h2>
+						<p data-i18n="expertProjectDescription">Configure how this project uses the LLSOAI expert model.</p>
+					</div>
+					<span class="expert-status-pill ${effectiveExpertSettings.enabled ? 'enabled' : 'disabled'}" data-i18n-template="expertGlobalStatus" data-i18n-key-state="${effectiveExpertEnabledKey}">Global ${effectiveExpertSettings.enabled ? 'Enabled' : 'Disabled'}</span>
+				</div>
+				<div class="expert-state-options">
+					<label class="expert-state-option ${enabledState === 'global' ? 'selected' : ''}">
+						<input type="radio" name="panelExpertModeEnabledState" value="global" ${enabledState === 'global' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="expertUseGlobal">Use global</span>
+						<span class="expert-state-desc" data-i18n-template="expertFollowGlobalState" data-i18n-key-state="${effectiveExpertEnabledKey}">Follow global state: ${effectiveExpertSettings.enabled ? 'enabled' : 'disabled'}</span>
+					</label>
+					<label class="expert-state-option ${enabledState === 'enabled' ? 'selected' : ''}">
+						<input type="radio" name="panelExpertModeEnabledState" value="enabled" ${enabledState === 'enabled' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="enabled">Enabled</span>
+						<span class="expert-state-desc" data-i18n="expertForceEnabledDesc">Force expert mode on for this project.</span>
+					</label>
+					<label class="expert-state-option ${enabledState === 'disabled' ? 'selected' : ''}">
+						<input type="radio" name="panelExpertModeEnabledState" value="disabled" ${enabledState === 'disabled' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="disabled">Disabled</span>
+						<span class="expert-state-desc" data-i18n="expertForceDisabledDesc">Force expert mode off for this project.</span>
+					</label>
+				</div>
+				<div class="expert-model-grid">
+					<div class="form-group">
+						<label for="panelExpertModeProvider" data-i18n="expertProvider">Expert Provider</label>
+						<select id="panelExpertModeProvider" data-placeholder-key="expertUseGlobalProvider" data-placeholder-value="${effectiveProviderLabel}">${expertProviderOptions}</select>
+					</div>
+					<div class="form-group">
+						<label for="panelExpertModeModel" data-i18n="expertModel">Expert Model</label>
+						<select id="panelExpertModeModel" data-placeholder-key="expertUseGlobalModel" data-placeholder-value="${effectiveModelLabel}">${expertModelOptions}</select>
+					</div>
+				</div>
+				<div class="help-text" data-i18n="expertModelOverrideHelp">Select both provider and model to override the global expert model. Leave either empty to keep using the global expert model.</div>
+			</section>
+
 			<div class="form-actions sticky-footer">
 				<button type="button" id="panelCancelBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
 				<button type="button" id="panelSaveBtn" class="primary-btn" data-i18n="save">Save</button>
@@ -1319,6 +1510,8 @@ export class ConfigViewPanel {
 
 			<script nonce="${nonce}">
 				window.settingsMode = 'project';
+				window.panelProviders = ${panelProvidersJson};
+				window.panelExpertModeSettings = ${panelExpertModeSettingsJson};
 			</script>
 		`;
 	}
@@ -1362,6 +1555,19 @@ export class ConfigViewPanel {
 				});
 				break;
 
+			case 'getExpertModeSettings':
+				const expertModeProviders = getExpertSelectableProviders(await this._configManager.getProviders());
+				this._currentPanel?.webview.postMessage({
+					command: 'expertModeSettingsLoaded',
+					data: {
+						settings: this._configManager.getEffectiveExpertModeConfig(),
+						globalSettings: this._configManager.getExpertModeConfig(),
+						workspaceSettings: this._configManager.getWorkspaceExpertModeConfig(),
+						providers: expertModeProviders,
+					}
+				});
+				break;
+
 			case 'getSystemPrompt':
 				const globalPrompt = this._configManager.getGlobalSystemPrompt();
 				const workspacePrompt = this._configManager.getWorkspaceSystemPrompt();
@@ -1377,6 +1583,11 @@ export class ConfigViewPanel {
 					enabled: data.chatHistoryEnabled,
 					savePath: data.chatHistorySavePath
 				});
+				await this._configManager.updateExpertModeConfig({
+					enabled: !!data.expertModeEnabled,
+					providerId: data.expertModeProviderId || '',
+					modelId: data.expertModeModelId || '',
+				});
 				await this._configManager.updateGlobalForceTodoEnabled(!!data.forceTodoEnabled);
 				this._currentPanel?.dispose();
 				vscode.window.showInformationMessage('Global settings saved!');
@@ -1385,6 +1596,11 @@ export class ConfigViewPanel {
 			case 'saveProjectSettings':
 				await this._configManager.updateWorkspaceSystemPrompt(data.projectSystemPrompt);
 				await this._configManager.updateWorkspaceForceTodoEnabled(!!data.forceTodoEnabled);
+				await this._configManager.updateWorkspaceExpertModeConfig({
+					enabledState: data.expertModeEnabledState || 'global',
+					providerId: data.expertModeProviderId || '',
+					modelId: data.expertModeModelId || '',
+				});
 				this._currentPanel?.dispose();
 				vscode.window.showInformationMessage('Project settings saved!');
 				break;

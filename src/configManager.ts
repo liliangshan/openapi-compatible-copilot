@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { ProviderConfig, ProviderConfigWithoutSecrets } from './types';
+import { ExpertModeConfig, ProviderConfig, ProviderConfigWithoutSecrets, WorkspaceExpertModeConfig, WorkspaceExpertModeEnabledState } from './types';
 
 /**
  * Generate a unique ID
@@ -48,6 +48,11 @@ export class ConfigManager {
 	private static readonly PROVIDERS_KEY = 'openapicopilot.providers';
 	private static readonly SECRET_PREFIX = 'openapicopilot.apiKey.';
 	private static readonly CHAT_HISTORY_KEY = 'openapicopilot.chatHistorySettings';
+	private static readonly EXPERT_MODE_CONFIG_KEY = 'openapicopilot.expertModeConfig';
+	private static readonly EXPERT_MODE_ENABLED_CONFIG_KEY = 'expertMode.enabled';
+	private static readonly EXPERT_MODE_PROVIDER_CONFIG_KEY = 'expertMode.providerId';
+	private static readonly EXPERT_MODE_MODEL_CONFIG_KEY = 'expertMode.modelId';
+	private static readonly WORKSPACE_EXPERT_MODE_ENABLED_STATE_CONFIG_KEY = 'expertMode.enabledState';
 	private static readonly GLOBAL_FORCE_TODO_KEY = 'openapicopilot.globalForceTodoEnabled';
 	private static readonly WORKSPACE_FORCE_TODO_KEY = 'openapicopilot.workspaceForceTodoEnabled';
 	private static readonly LANGUAGE_CONFIG_KEY = 'language';
@@ -216,6 +221,79 @@ export class ConfigManager {
 		const updated = { ...current, ...settings };
 		await this.context.globalState.update(ConfigManager.CHAT_HISTORY_KEY, updated);
 		return updated;
+	}
+
+	/**
+	 * Get expert mode global settings
+	 */
+	getExpertModeConfig(): ExpertModeConfig {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		const stored = this.context.globalState.get<ExpertModeConfig>(ConfigManager.EXPERT_MODE_CONFIG_KEY);
+		const enabledInspect = config.inspect<boolean>(ConfigManager.EXPERT_MODE_ENABLED_CONFIG_KEY);
+		const providerInspect = config.inspect<string>(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY);
+		const modelInspect = config.inspect<string>(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY);
+		return {
+			enabled: enabledInspect?.globalValue ?? stored?.enabled ?? false,
+			providerId: providerInspect?.globalValue ?? stored?.providerId ?? '',
+			modelId: modelInspect?.globalValue ?? stored?.modelId ?? '',
+		};
+	}
+
+	/**
+	 * Get expert mode workspace settings. Empty provider/model means using global settings.
+	 */
+	getWorkspaceExpertModeConfig(): WorkspaceExpertModeConfig {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		const rawEnabledState = config.inspect<WorkspaceExpertModeEnabledState>(ConfigManager.WORKSPACE_EXPERT_MODE_ENABLED_STATE_CONFIG_KEY)?.workspaceValue;
+		const enabledState: WorkspaceExpertModeEnabledState = rawEnabledState === 'enabled' || rawEnabledState === 'disabled' ? rawEnabledState : 'global';
+		return {
+			enabled: enabledState === 'enabled',
+			enabledState,
+			providerId: config.inspect<string>(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY)?.workspaceValue ?? '',
+			modelId: config.inspect<string>(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY)?.workspaceValue ?? '',
+		};
+	}
+
+	/**
+	 * Get the effective expert mode settings. Workspace provider/model overrides global when set.
+	 */
+	getEffectiveExpertModeConfig(): ExpertModeConfig {
+		const globalConfig = this.getExpertModeConfig();
+		const workspaceConfig = this.getWorkspaceExpertModeConfig();
+		const hasWorkspaceExpert = !!workspaceConfig.providerId && !!workspaceConfig.modelId;
+		const baseConfig = hasWorkspaceExpert ? workspaceConfig : globalConfig;
+		return {
+			...baseConfig,
+			enabled: workspaceConfig.enabledState === 'global' ? globalConfig.enabled : workspaceConfig.enabledState === 'enabled',
+		};
+	}
+
+	/**
+	 * Update expert mode global settings
+	 */
+	async updateExpertModeConfig(settings: Partial<ExpertModeConfig>): Promise<ExpertModeConfig> {
+		const current = this.getExpertModeConfig();
+		const updated = { ...current, ...settings };
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update(ConfigManager.EXPERT_MODE_ENABLED_CONFIG_KEY, updated.enabled, true);
+		await config.update(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY, updated.providerId, true);
+		await config.update(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY, updated.modelId, true);
+		await this.context.globalState.update(ConfigManager.EXPERT_MODE_CONFIG_KEY, updated);
+		return updated;
+	}
+
+	/**
+	 * Update expert mode workspace settings
+	 */
+	async updateWorkspaceExpertModeConfig(settings: Partial<WorkspaceExpertModeConfig>): Promise<WorkspaceExpertModeConfig> {
+		const current = this.getWorkspaceExpertModeConfig();
+		const updated = { ...current, ...settings };
+		const enabledState: WorkspaceExpertModeEnabledState = updated.enabledState === 'enabled' || updated.enabledState === 'disabled' ? updated.enabledState : 'global';
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update(ConfigManager.WORKSPACE_EXPERT_MODE_ENABLED_STATE_CONFIG_KEY, enabledState, false);
+		await config.update(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY, updated.providerId, false);
+		await config.update(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY, updated.modelId, false);
+		return { ...updated, enabled: enabledState === 'enabled', enabledState };
 	}
 
 	/**

@@ -62,6 +62,28 @@ export interface ProviderConfigWithoutSecrets extends Omit<ProviderConfig, 'apiK
 }
 
 /**
+ * Expert mode global settings
+ */
+export interface ExpertModeConfig {
+	/** Whether expert mode is enabled */
+	enabled: boolean;
+	/** Provider used by expert mode */
+	providerId: string;
+	/** Model used by expert mode */
+	modelId: string;
+}
+
+export type WorkspaceExpertModeEnabledState = 'global' | 'enabled' | 'disabled';
+
+/**
+ * Expert mode workspace settings
+ */
+export interface WorkspaceExpertModeConfig extends ExpertModeConfig {
+	/** Whether the workspace uses global enabled state, forces enabled, or forces disabled */
+	enabledState: WorkspaceExpertModeEnabledState;
+}
+
+/**
  * Message types for Webview communication
  */
 export interface WebviewMessage {

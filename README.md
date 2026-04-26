@@ -14,6 +14,62 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 🌐 **Multi-language UI** - Supports English, Simplified Chinese, Traditional Chinese, Korean, Japanese, French, and German. Auto mode follows the VS Code display language and falls back to English for unsupported languages
 - 🖥️ **Global & Project System Prompt Settings** - Dual system prompt inputs (global + workspace-scoped) appended to user messages for better model adherence
 - ✅ **Enhanced TODO Settings** - When enabled, the model is strongly instructed to create, track, and update all tasks through the TODO tool before taking any action
+- 🎯 **Expert Mode** - Use mid/low-tier models for development tasks and high-tier models as expert reviewers for supplementation and quality assurance
+
+## 🎯 Expert Mode
+
+> Use **mid/low-tier models** for daily development work, and bring in **high-tier models** as expert reviewers when you need deeper insight — fast, cost-effective, and powerful.
+
+Expert Mode enables a **dual-model workflow** that maximizes both efficiency and quality. Your primary model handles the bulk of development tasks at high speed and low cost, while a high-tier expert model is called in to review, supplement, and elevate the output.
+
+### How It Works
+
+- **Main Model** — Your configured primary model (e.g., GPT-4o-mini, Claude Haiku) takes on all development tasks. It's fast, affordable, and capable for the majority of day-to-day coding work.
+- **Expert Model** — A high-tier model (e.g., GPT-4o, Claude 3.5/3.7 Sonnet/Opus) that reviews the main model's output and adds expert-level corrections, improvements, and additional context.
+
+### The Workflow
+
+```
+[User Request]
+       ↓
+[Main Model — Mid/Low-tier]
+  Fast, affordable development
+       ↓
+[Expert Model — High-tier]
+  Expert review & supplement
+       ↓
+[Enhanced Response → Copilot Chat]
+```
+
+### When to Use
+
+| Scenario | Main Model | Expert Model |
+|----------|-----------|-------------|
+| Routine coding, refactoring, bug fixes | ✅ | Optional |
+| Complex architecture decisions | ✅ | ✅ Recommended |
+| Security-sensitive or critical code | ✅ | ✅ Recommended |
+| Deep reasoning or edge-case analysis | ✅ | ✅ Recommended |
+
+### Configuration
+
+Expert Mode is configured in the provider settings:
+
+- **Main Model Tool Name** — The tool name (e.g., `ask_llsoai`) that triggers the main model in Copilot Chat
+- **Expert Model Tool Name** — The tool name for the expert model (e.g., `ask_llsoai_expert`)
+- **Expert Call Threshold** — Controls when the expert model is invoked:
+  - `Never` — Expert model is never called automatically
+  - `On Error` — Expert model is called when the main model returns an error
+  - `Always` — Expert model is always called to review the main model's response
+  - `Threshold` — Expert model is called when the main model's response score falls below the threshold value (0–100)
+- **Expert Settings Hint** — A custom hint displayed in the Expert Mode settings panel to guide the expert model's behavior
+
+### Benefits
+
+- 💰 **Cost Efficiency** — Handle the majority of tasks with affordable mid/low-tier models
+- ⚡ **Speed** — Main model responses are fast, reducing wait time during development
+- 🧠 **Quality Assurance** — Expert model reviews catch issues that smaller models might miss
+- 🔧 **Flexible** — Choose how often the expert model is involved based on your needs
+- 🔗 **Seamless** — Expert model output is automatically integrated into the Copilot Chat conversation
 
 ## Supported APIs
 

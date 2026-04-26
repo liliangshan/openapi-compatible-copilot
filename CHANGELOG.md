@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.0
+
+### Added
+- **Expert Mode** — A dual-model workflow that combines a fast, cost-effective main model with a high-tier expert model for review and supplementation. Enable mid/low-tier models (e.g., GPT-4o-mini, Claude Haiku) for daily development work, and bring in high-tier models (e.g., GPT-4o, Claude Sonnet/Opus) as expert reviewers when deeper insight is needed. Expert Mode supports flexible triggering strategies: Never, On Error, Always, or Threshold-based, and includes customizable expert behavior hints
+- **Expert Mode UI Localization** — Full internationalization support for Expert Mode UI strings across English, Simplified Chinese, Traditional Chinese, Korean, Japanese, French, and German
+
 ## 2.1.0
 
 ### Added

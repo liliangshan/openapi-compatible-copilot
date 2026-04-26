@@ -4,7 +4,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.1.0",
+	"version": "2.2.0",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -111,6 +111,35 @@
 					"default": "auto",
 					"description": "Display language for the LLS OAI UI. Auto follows the VS Code display language.",
 					"scope": "application"
+				},
+				"openapicopilot.expertMode.enabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable expert mode. When enabled, the main model can delegate difficult tasks to a selected expert model.",
+					"scope": "application"
+				},
+				"openapicopilot.expertMode.enabledState": {
+					"type": "string",
+					"enum": [
+						"global",
+						"enabled",
+						"disabled"
+					],
+					"default": "global",
+					"description": "Workspace expert mode enabled state. Use global, force enabled, or force disabled for this workspace.",
+					"scope": "resource"
+				},
+				"openapicopilot.expertMode.providerId": {
+					"type": "string",
+					"default": "",
+					"description": "Provider ID used by expert mode.",
+					"scope": "resource"
+				},
+				"openapicopilot.expertMode.modelId": {
+					"type": "string",
+					"default": "",
+					"description": "Model ID used by expert mode.",
+					"scope": "resource"
 				}
 			}
 		}

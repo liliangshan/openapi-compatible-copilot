@@ -13,6 +13,62 @@ import {
 const EXTENSION_LABEL = 'LLS OAI';
 const DEFAULT_CONTEXT_LENGTH = 128000;
 const DEFAULT_MAX_TOKENS = 16000;
+const ASK_LLSOAI_TOOL_NAME = 'ask_llsoai';
+const EXPERT_TOOL_CALL_PREFIX = 'llsoai';
+const TODO_TOOL_NAME = 'manage_todo_list';
+
+interface CollectedToolCall {
+	id: string;
+	name: string;
+	arguments: string;
+	input: any;
+}
+
+interface ModelRequestParams {
+	providerId: string;
+	modelId: string;
+	baseUrl: string;
+	apiType: string;
+	apiKey: string;
+	requestBody: any;
+	requestLabel?: string;
+	transformThink?: boolean;
+	progress?: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>;
+	token: vscode.CancellationToken;
+	reportText?: boolean;
+}
+
+interface ModelRequestResult {
+	text: string;
+	toolCalls: CollectedToolCall[];
+}
+
+interface ExpertRunState {
+	runId: string;
+	askLlsoaiCallId: string;
+	askLlsoaiArguments: any;
+	expertProviderId: string;
+	expertModelId: string;
+	expertRequestContext: MainRequestContext;
+	expertMessages: any[];
+	consumedToolResultCallIds: Set<string>;
+	originalMainMessages: any[];
+	mainRequestContext: MainRequestContext;
+	mainTools: readonly any[];
+	createdAt: number;
+}
+
+interface MainRequestContext {
+	providerId: string;
+	modelId: string;
+	baseUrl: string;
+	apiType: string;
+	apiKey: string;
+	temperature: number;
+	topP: number;
+	samplingMode: string;
+	transformThink: boolean;
+}
 
 /**
  * Get the debug directory path (cross-platform compatible).
@@ -265,6 +321,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	private _statusBarItem: vscode.StatusBarItem;
 	private _abortControllers: Map<string, AbortController> = new Map();
 	private _onDidChangeModels: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
+	private _expertRuns: Map<string, ExpertRunState> = new Map();
+	private _activeExpertRunId?: string;
 
 	/**
 	 * Event fired when the available set of language models changes.
@@ -402,6 +460,18 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			throw new Error('Model metadata not found');
 		}
 
+		const expertToolResult = this._findExpertToolResult(messages);
+		if (expertToolResult) {
+			await this._continueExpertFromToolResult(expertToolResult.runId, expertToolResult.originCallId, expertToolResult.prefixedCallId, expertToolResult.text, progress, token);
+			return;
+		}
+
+		const latestUserText = this._getLatestUserText(messages);
+		if (this._activeExpertRunId && latestUserText) {
+			await this._continueExpertFromUserMessage(this._activeExpertRunId, latestUserText, progress, token);
+			return;
+		}
+
 		const providerId = metadata.providerId as string;
 		const modelId = metadata.modelId as string;
 		const baseUrl = metadata.providerBaseUrl as string;
@@ -418,6 +488,20 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			throw new Error(`No API key configured for provider "${metadata.providerName}". Please configure it in the provider management UI.`);
 		}
 
+		const mainContext: MainRequestContext = {
+			providerId,
+			modelId,
+			baseUrl,
+			apiType,
+			apiKey,
+			temperature,
+			topP,
+			samplingMode,
+			transformThink,
+		};
+		const expertModel = await this._getConfiguredExpertModel();
+		const expertEnabled = !!expertModel;
+
 		// Update token usage status bar
 		await updateContextStatusBar(
 			messages,
@@ -430,7 +514,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		// Build request body
 		const requestBody: any = {
 			model: modelId,
-			messages: this._convertMessages(messages, model),
+			messages: this._withExpertPrompt(this._convertMessages(messages, model), expertEnabled),
 			stream: true,
 		};
 
@@ -460,8 +544,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 
 		// Handle tool calling if present
-		if (options.tools && options.tools.length > 0) {
-			requestBody.tools = options.tools
+		const apiTools = expertEnabled
+			? [...(options.tools ?? []), this._buildAskLlsoaiTool()]
+			: options.tools;
+		if (apiTools && apiTools.length > 0) {
+			requestBody.tools = apiTools
 				.map((tool: any) => ({
 					type: 'function',
 					function: {
@@ -474,260 +561,38 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				}));
 		}
 
-		// Make API request
-		const abortController = new AbortController();
-		this._abortControllers.set(providerId, abortController);
-		let assistantResponse = ''; // Collect full response for chat history
-		
-		// Debug variables (declared outside try for finally access)
-		let debugSseEvents: any[] = [];
-		let debugConvertedChunks: any[] = [];
-		let debugDeltaHandling: any[] = [];
-		let debugPendingToolCalls: Array<[number, { id?: string; name?: string; arguments: string }]> = [];
-
-		token.onCancellationRequested(() => {
-			abortController.abort();
+		const result = await this._requestModel({
+			...mainContext,
+			requestBody,
+			requestLabel: 'main',
+			progress,
+			token,
+			reportText: true,
 		});
 
-		try {
-			const isAnthropic = apiType === 'anthropic';
-			const normalizedBase = baseUrl.replace(/\/+$/, '');
-			const url = isAnthropic ? `${normalizedBase}/messages` : `${normalizedBase}/chat/completions`;
-			const headers: Record<string, string> = {
-				'Content-Type': 'application/json',
-			};
-			if (isAnthropic) {
-				headers['x-api-key'] = apiKey;
-				headers['anthropic-version'] = '2023-06-01';
-			} else {
-				headers['Authorization'] = `Bearer ${apiKey}`;
-			}
-			const finalBody = isAnthropic
-				? convertOpenAIRequestToAnthropic(requestBody)
-				: requestBody;
-
-			const response = await fetch(url, {
-				method: 'POST',
-				headers,
-				body: JSON.stringify(finalBody),
-				signal: abortController.signal,
-			});
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(`API request failed: ${response.status} ${response.statusText}\n${errorText}`);
-			}
-
-			if (!response.body) {
-				throw new Error('No response body');
-			}
-
-			// Process streaming response
-			const reader = response.body.getReader();
-			const decoder = new TextDecoder();
-			let buffer = '';
-			// Track in-progress tool calls across chunks
-			const pendingToolCalls: Map<number, { id?: string; name?: string; arguments: string }> = new Map();
-			// Track think tag state for transformThink
-			const thinkState = { isInThinkTag: false, thinkBuffer: '' };
-			// Anthropic streaming state (only used when isAnthropic)
-			const anthState: AnthropicStreamState | null = isAnthropic
-				? createAnthropicStreamState(modelId, true)
-				: null;
-			// Track the current SSE event name for Anthropic streams
-			let currentEventName = '';
-			let streamDone = false;
-
-			// Debug: Collect raw SSE events for inspection (Anthropic only)
-			debugSseEvents = [];
-			debugConvertedChunks = [];
-			debugDeltaHandling = [];
-
-			// Process a single OpenAI-style delta (used for both OpenAI and converted Anthropic chunks)
-			const handleOpenAIDelta = (delta: any) => {
-				if (!delta) return;
-				// Debug: Log delta handling
-				debugDeltaHandling.push({ delta, pendingBefore: Array.from(pendingToolCalls.entries()) });
-				const content: string | undefined = delta.content ?? undefined;
-				if (typeof content === 'string' && content.length > 0) {
-					if (transformThink) {
-						this._processThinkTags(content, (text) => {
-							progress.report(new vscode.LanguageModelTextPart(text));
-						}, thinkState);
-						assistantResponse += content;
+		if (result.toolCalls.length > 0) {
+			for (const toolCall of result.toolCalls) {
+				if (toolCall.name === ASK_LLSOAI_TOOL_NAME) {
+					if (expertModel) {
+						await this._startExpertRun(toolCall, expertModel, requestBody.messages, mainContext, options.tools ?? [], progress, token);
 					} else {
-						progress.report(new vscode.LanguageModelTextPart(content));
-						assistantResponse += content;
+						await this._continueMainAfterUnavailableExpert(toolCall, requestBody.messages, mainContext, options.tools ?? [], progress, token);
 					}
+					continue;
 				}
-
-				const toolCalls = delta.tool_calls;
-				if (toolCalls && Array.isArray(toolCalls)) {
-					for (const tc of toolCalls) {
-						const index = tc.index;
-						const existing = pendingToolCalls.get(index) || { arguments: '' };
-						if (tc.id) existing.id = tc.id;
-						if (tc.function?.name) existing.name = tc.function.name;
-						if (tc.function?.arguments !== undefined) existing.arguments += tc.function.arguments;
-						pendingToolCalls.set(index, existing);
-						// Don't try to parse/report here - wait for content_block_stop
-						// when all arguments have been received
-					}
+				let finalArgs = toolCall.input;
+				if (toolCall.name === TODO_TOOL_NAME) {
+					const mergedTodoInput = getMergedTodoInputForConflict(toolCall.input);
+					finalArgs = mergedTodoInput ?? toolCall.input;
+					saveTodoToolState(finalArgs, forceTodoEnabled);
 				}
-				if (debugDeltaHandling.length > 0) {
-					debugDeltaHandling[debugDeltaHandling.length - 1].pendingAfter = Array.from(pendingToolCalls.entries());
-				}
-			};
-
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done || streamDone) {
-				// Flush any remaining think content (without [Thinking] label)
-				if (transformThink && thinkState.thinkBuffer.length > 0) {
-					progress.report(new vscode.LanguageModelTextPart(`${thinkState.thinkBuffer}\n\n`));
-						thinkState.thinkBuffer = '';
-					}
-					// Flush any completed tool calls that didn't get reported
-					for (const [index, tc] of pendingToolCalls) {
-						if (tc.name) {
-							try {
-								// Empty arguments string means no parameters - treat as empty object
-								const argsStr = tc.arguments.trim();
-								const parsedArgs = argsStr === '' ? {} : JSON.parse(argsStr);
-								if (tc.name === 'manage_todo_list') {
-									const mergedTodoInput = getMergedTodoInputForConflict(parsedArgs);
-									const finalArgs = mergedTodoInput ?? parsedArgs;
-									saveTodoToolState(finalArgs, forceTodoEnabled);
-									progress.report(new vscode.LanguageModelToolCallPart(
-										tc.id || `call_${index}`,
-										tc.name,
-										finalArgs
-									));
-									continue;
-								}
-								progress.report(new vscode.LanguageModelToolCallPart(
-									tc.id || `call_${index}`,
-									tc.name,
-									parsedArgs
-								));
-							} catch {
-								// Invalid JSON, skip
-							}
-						}
-					}
-					break;
-				}
-
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split('\n');
-				buffer = lines.pop() || '';
-
-				for (const line of lines) {
-					const trimmedLine = line.trim();
-					if (!trimmedLine) {
-						// Blank line indicates end of one SSE event; reset event name
-						currentEventName = '';
-						continue;
-					}
-
-					if (isAnthropic && trimmedLine.startsWith('event:')) {
-						currentEventName = trimmedLine.slice(6).trim();
-						continue;
-					}
-
-					if (trimmedLine === 'data: [DONE]') {
-						continue;
-					}
-
-					if (trimmedLine.startsWith('data: ')) {
-						try {
-							const json = trimmedLine.slice(6);
-							const parsed = JSON.parse(json);
-
-							if (isAnthropic && anthState) {
-								const eventType = currentEventName || (typeof parsed.type === 'string' ? parsed.type : '');
-								// Debug: Collect important SSE events (non-text_delta)
-								if (eventType && eventType !== 'message_delta' && !parsed.delta?.text) {
-									debugSseEvents.push({ event: eventType, data: parsed });
-								}
-								const chunks: OpenAIChunk[] = convertAnthropicEventToOpenAIChunks(eventType, parsed, anthState);
-								// Debug: Record converted chunks
-								debugConvertedChunks.push({
-									event: eventType,
-									rawEvent: parsed,
-									convertedChunks: chunks
-								});
-								for (const chunk of chunks) {
-									if (chunk.done) {
-										streamDone = true;
-										break;
-									}
-									if (chunk.delta) {
-										handleOpenAIDelta(chunk.delta);
-									}
-								}
-								if (streamDone) break;
-							} else {
-								const delta = parsed.choices?.[0]?.delta;
-								handleOpenAIDelta(delta);
-							}
-						} catch (e) {
-							// Save SSE parse errors to file for debugging
-								writeDebugFile(`sse_error_${Date.now()}.json`, {
-									error: e instanceof Error ? { message: e.message, stack: e.stack } : String(e),
-									line: trimmedLine,
-									eventName: currentEventName,
-									modelId,
-									timestamp: new Date().toISOString()
-								});
-						}
-					}
-				}
-				if (streamDone) {
-					// Loop will exit on next iteration via top-of-loop check
-				}
+				progress.report(new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, finalArgs));
 			}
-			
-			// Debug: Capture pending tool calls before exiting
-			debugPendingToolCalls = Array.from(pendingToolCalls.entries());
-		} catch (error) {
-			if (error instanceof Error && error.name === 'AbortError') {
-				return; // Request was cancelled
-			}
-			// Save error details to file for debugging
-			writeDebugFile(`error_${Date.now()}.json`, {
-				error: error instanceof Error ? { message: error.message, stack: error.stack, name: error.name } : String(error),
-				modelId,
-				providerId,
-				apiType,
-				baseUrl,
-				requestBody,
-				timestamp: new Date().toISOString()
-			});
-			throw error;
-		} finally {
-			this._abortControllers.delete(providerId);
-			
-			// Save chat history after response completes
-			if (assistantResponse) {
-				const chatMessages = this._buildChatMessages(messages, assistantResponse);
-				await this._configManager.saveChatHistory(chatMessages, modelId, options.tools ? [...options.tools] : undefined);
-			}
+		}
 
-			// Debug: Write response data to file
-			writeDebugFile('debug_response.json', {
-				assistantResponse,
-				sseEvents: debugSseEvents,
-				pendingToolCalls: debugPendingToolCalls,
-				timestamp: new Date().toISOString()
-			});
-			// Also write detailed conversion debug
-			writeDebugFile('debug_conversion.json', {
-				convertedChunks: debugConvertedChunks,
-				deltaHandling: debugDeltaHandling,
-				finalPendingToolCalls: debugPendingToolCalls,
-				timestamp: new Date().toISOString()
-			});
+		if (result.text) {
+			const chatMessages = this._buildChatMessages(messages, result.text);
+			await this._configManager.saveChatHistory(chatMessages, modelId, options.tools ? [...options.tools] : undefined);
 		}
 	}
 
@@ -776,6 +641,612 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 		
 		return result;
+	}
+
+	private async _requestModel(params: ModelRequestParams): Promise<ModelRequestResult> {
+		const {
+			providerId,
+			modelId,
+			baseUrl,
+			apiType,
+			apiKey,
+			requestBody,
+			requestLabel = 'model',
+			transformThink = false,
+			progress,
+			token,
+			reportText = true,
+		} = params;
+		const abortController = new AbortController();
+		this._abortControllers.set(providerId, abortController);
+		let assistantResponse = '';
+		const collectedToolCalls: CollectedToolCall[] = [];
+		token.onCancellationRequested(() => {
+			abortController.abort();
+		});
+
+		try {
+			const isAnthropic = apiType === 'anthropic';
+			const normalizedBase = baseUrl.replace(/\/+$/, '');
+			const url = isAnthropic ? `${normalizedBase}/messages` : `${normalizedBase}/chat/completions`;
+			const headers: Record<string, string> = {
+				'Content-Type': 'application/json',
+			};
+			if (isAnthropic) {
+				headers['x-api-key'] = apiKey;
+				headers['anthropic-version'] = '2023-06-01';
+			} else {
+				headers['Authorization'] = `Bearer ${apiKey}`;
+			}
+			const finalBody = isAnthropic
+				? convertOpenAIRequestToAnthropic(requestBody)
+				: requestBody;
+			writeDebugFile(`request_${Date.now()}_${requestLabel}.json`, {
+				providerId,
+				modelId,
+				apiType,
+				url,
+				isAnthropic,
+				requestBody,
+				finalBody,
+				timestamp: new Date().toISOString(),
+			});
+
+			const response = await fetch(url, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(finalBody),
+				signal: abortController.signal,
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`API request failed: ${response.status} ${response.statusText}\n${errorText}`);
+			}
+
+			if (!response.body) {
+				throw new Error('No response body');
+			}
+
+			const reader = response.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = '';
+			const pendingToolCalls: Map<number, { id?: string; name?: string; arguments: string }> = new Map();
+			const thinkState = { isInThinkTag: false, thinkBuffer: '' };
+			const anthState: AnthropicStreamState | null = isAnthropic
+				? createAnthropicStreamState(modelId, true)
+				: null;
+			let currentEventName = '';
+			let streamDone = false;
+
+			const handleOpenAIDelta = (delta: any) => {
+				if (!delta) return;
+				const content: string | undefined = delta.content ?? undefined;
+				if (typeof content === 'string' && content.length > 0) {
+					assistantResponse += content;
+					if (reportText && progress) {
+						if (transformThink) {
+							this._processThinkTags(content, (text) => {
+								progress.report(new vscode.LanguageModelTextPart(text));
+							}, thinkState);
+						} else {
+							progress.report(new vscode.LanguageModelTextPart(content));
+						}
+					}
+				}
+
+				const toolCalls = delta.tool_calls;
+				if (toolCalls && Array.isArray(toolCalls)) {
+					for (const tc of toolCalls) {
+						const index = tc.index;
+						const existing = pendingToolCalls.get(index) || { arguments: '' };
+						if (tc.id) existing.id = tc.id;
+						if (tc.function?.name) existing.name = tc.function.name;
+						if (tc.function?.arguments !== undefined) existing.arguments += tc.function.arguments;
+						pendingToolCalls.set(index, existing);
+					}
+				}
+			};
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done || streamDone) {
+					if (reportText && progress && transformThink && thinkState.thinkBuffer.length > 0) {
+						progress.report(new vscode.LanguageModelTextPart(`${thinkState.thinkBuffer}\n\n`));
+						thinkState.thinkBuffer = '';
+					}
+					for (const [index, tc] of pendingToolCalls) {
+						if (!tc.name) {
+							continue;
+						}
+						try {
+							const argsStr = tc.arguments.trim();
+							const parsedArgs = argsStr === '' ? {} : JSON.parse(argsStr);
+							collectedToolCalls.push({
+								id: tc.id || `call_${index}`,
+								name: tc.name,
+								arguments: argsStr,
+								input: parsedArgs,
+							});
+						} catch {
+							// Invalid JSON, skip
+						}
+					}
+					break;
+				}
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					const trimmedLine = line.trim();
+					if (!trimmedLine) {
+						currentEventName = '';
+						continue;
+					}
+
+					if (isAnthropic && trimmedLine.startsWith('event:')) {
+						currentEventName = trimmedLine.slice(6).trim();
+						continue;
+					}
+
+					if (trimmedLine === 'data: [DONE]') {
+						continue;
+					}
+
+					if (trimmedLine.startsWith('data: ')) {
+						try {
+							const json = trimmedLine.slice(6);
+							const parsed = JSON.parse(json);
+
+							if (isAnthropic && anthState) {
+								const eventType = currentEventName || (typeof parsed.type === 'string' ? parsed.type : '');
+								const chunks: OpenAIChunk[] = convertAnthropicEventToOpenAIChunks(eventType, parsed, anthState);
+								for (const chunk of chunks) {
+									if (chunk.done) {
+										streamDone = true;
+										break;
+									}
+									if (chunk.delta) {
+										handleOpenAIDelta(chunk.delta);
+									}
+								}
+								if (streamDone) break;
+							} else {
+								const delta = parsed.choices?.[0]?.delta;
+								handleOpenAIDelta(delta);
+							}
+						} catch (e) {
+							writeDebugFile(`sse_error_${Date.now()}.json`, {
+								error: e instanceof Error ? { message: e.message, stack: e.stack } : String(e),
+								line: trimmedLine,
+								eventName: currentEventName,
+								modelId,
+								timestamp: new Date().toISOString()
+							});
+						}
+					}
+				}
+			}
+			return { text: assistantResponse, toolCalls: collectedToolCalls };
+		} catch (error) {
+			if (error instanceof Error && error.name === 'AbortError') {
+				return { text: assistantResponse, toolCalls: collectedToolCalls };
+			}
+			writeDebugFile(`error_${Date.now()}.json`, {
+				error: error instanceof Error ? { message: error.message, stack: error.stack, name: error.name } : String(error),
+				modelId,
+				providerId,
+				apiType,
+				baseUrl,
+				requestBody,
+				timestamp: new Date().toISOString()
+			});
+			throw error;
+		} finally {
+			this._abortControllers.delete(providerId);
+		}
+	}
+
+	private _applySamplingOptions(requestBody: any, context: MainRequestContext): void {
+		if (context.samplingMode === 'temperature') {
+			requestBody.temperature = context.temperature;
+		} else if (context.samplingMode === 'top_p') {
+			requestBody.top_p = context.topP;
+		} else if (context.samplingMode !== 'none') {
+			requestBody.temperature = context.temperature;
+			requestBody.top_p = context.topP;
+		}
+	}
+
+	private async _getConfiguredExpertModel(): Promise<(MainRequestContext & { providerName: string }) | null> {
+		const config = this._configManager.getEffectiveExpertModeConfig();
+		if (!config.enabled || !config.providerId || !config.modelId) {
+			return null;
+		}
+		const providers = await this._configManager.getProvidersWithSecrets();
+		const provider = providers.find(p => p.id === config.providerId && p.enabled);
+		const expertModel = provider?.models.find(m => m.modelId === config.modelId);
+		if (!provider || !expertModel || !provider.apiKey) {
+			return null;
+		}
+		return {
+			providerId: provider.id,
+			providerName: provider.name,
+			modelId: expertModel.modelId,
+			baseUrl: provider.baseUrl,
+			apiType: (provider as any).apiType ?? 'openai-compatible',
+			apiKey: provider.apiKey,
+			temperature: expertModel.temperature ?? 0.7,
+			topP: expertModel.topP ?? 1.0,
+			samplingMode: expertModel.samplingMode ?? 'both',
+			transformThink: expertModel.transformThink ?? false,
+		};
+	}
+
+	private _buildAskLlsoaiTool(): any {
+		return {
+			name: ASK_LLSOAI_TOOL_NAME,
+			description: 'Delegate a task to the configured LLS OAI expert model. This is not a pure analysis-only tool: the expert can independently analyze the problem and may use the same currently available VS Code tools as the main model, including file/search/error tools when available. Do not refuse delegation merely because the task may require tool or file access.',
+			inputSchema: {
+				type: 'object',
+				properties: {
+					question: { type: 'string', description: 'The concrete question or task for the expert model.' },
+					context: { type: 'string', description: 'Relevant context, constraints, attempted solutions, file names, errors, and expected output.' },
+				},
+				required: ['question'],
+			},
+		};
+	}
+
+	private _withExpertPrompt(messages: any[], enabled: boolean): any[] {
+		if (!enabled) {
+			return messages;
+		}
+		const prompt = `Expert mode is enabled. If you cannot confidently solve the task, need independent verification, need deeper investigation, or want another model to perform a tool-assisted subtask, call the tool ${ASK_LLSOAI_TOOL_NAME}. This tool starts an expert model run; it is not limited to pure analysis. The expert model can use the same currently available VS Code tools as you, including file/search/error tools when available. Do not refuse to call ${ASK_LLSOAI_TOOL_NAME} merely because the task may require tool or file access. Provide a clear question and all relevant context. After the expert returns, continue as the main model and produce the final user-facing answer.`;
+		const next = [...messages];
+		const system = next.find(m => m.role === 'system');
+		if (system && typeof system.content === 'string') {
+			system.content += `\n\n${prompt}`;
+		} else {
+			next.unshift({ role: 'system', content: prompt });
+		}
+		return next;
+	}
+
+	private async _startExpertRun(
+		toolCall: CollectedToolCall,
+		expertContext: MainRequestContext,
+		mainMessages: any[],
+		mainContext: MainRequestContext,
+		mainTools: readonly any[],
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+		const state: ExpertRunState = {
+			runId,
+			askLlsoaiCallId: toolCall.id,
+			askLlsoaiArguments: toolCall.input,
+			expertProviderId: expertContext.providerId,
+			expertModelId: expertContext.modelId,
+			expertRequestContext: expertContext,
+			expertMessages: this._buildExpertInitialMessages(toolCall.input, expertContext.modelId),
+			consumedToolResultCallIds: new Set<string>(),
+			originalMainMessages: mainMessages,
+			mainRequestContext: mainContext,
+			mainTools,
+			createdAt: Date.now(),
+		};
+		this._expertRuns.set(runId, state);
+		this._activeExpertRunId = runId;
+		progress.report(new vscode.LanguageModelTextPart(`\n\n### 🧠 LLSOAI Expert Mode Started\n\nrunId: ${runId}\n\n`));
+		await this._runExpertTurn(state, expertContext, progress, token);
+	}
+
+	private async _continueMainAfterUnavailableExpert(
+		toolCall: CollectedToolCall,
+		mainMessages: any[],
+		mainContext: MainRequestContext,
+		mainTools: readonly any[],
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const unavailableMessage = 'There is currently no available expert.';
+
+		const requestBody: any = {
+			model: mainContext.modelId,
+			messages: [
+				...mainMessages,
+				{
+					role: 'assistant',
+					tool_calls: [{
+						id: toolCall.id,
+						type: 'function',
+						function: {
+							name: ASK_LLSOAI_TOOL_NAME,
+							arguments: JSON.stringify(toolCall.input ?? {}),
+						},
+					}],
+				},
+				{
+					role: 'tool',
+					tool_call_id: toolCall.id,
+					content: unavailableMessage,
+				},
+			],
+			stream: true,
+		};
+		this._applySamplingOptions(requestBody, mainContext);
+		if (mainTools.length > 0) {
+			requestBody.tools = mainTools
+				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME)
+				.map((tool: any) => ({
+					type: 'function',
+					function: {
+						name: tool.name,
+						description: tool.description || '',
+						parameters: tool.inputSchema && Object.keys(tool.inputSchema).length > 0
+							? tool.inputSchema
+							: { type: 'object', properties: {} },
+					}
+				}));
+		}
+		const result = await this._requestModel({
+			...mainContext,
+			requestBody,
+			requestLabel: `main_after_unavailable_expert_${Date.now()}`,
+			progress,
+			token,
+			reportText: true,
+		});
+		for (const nextToolCall of result.toolCalls) {
+			if (nextToolCall.name === ASK_LLSOAI_TOOL_NAME) {
+				continue;
+			}
+			progress.report(new vscode.LanguageModelToolCallPart(nextToolCall.id, nextToolCall.name, nextToolCall.input));
+		}
+	}
+
+	private _buildExpertInitialMessages(input: any, expertModelId: string): any[] {
+		const question = typeof input?.question === 'string' ? input.question : JSON.stringify(input ?? {});
+		const context = typeof input?.context === 'string' ? input.context : '';
+		return [
+			{
+				role: 'system',
+				content: `You are LLSOAI expert mode. Your expert model ID is "${expertModelId}". Independently handle the delegated task. You are not limited to analysis only: when tools are available, use them to inspect files, search text, check errors, gather evidence, or perform other tool-assisted investigation as needed. You may call the same currently available VS Code tools as the main model. Do not use TODO enforcement. Make intermediate reasoning and actions visible enough for the user to verify. When you have enough information, provide a clear final expert conclusion for the main model.`,
+			},
+			{
+				role: 'user',
+				content: `Question:\n${question}\n\nContext:\n${context}`,
+			},
+		];
+	}
+
+	private _filterExpertTools(tools: readonly any[]): any[] {
+		return tools.filter((tool: any) => tool?.name !== TODO_TOOL_NAME);
+	}
+
+	private async _runExpertTurn(
+		state: ExpertRunState,
+		expertContext: MainRequestContext,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const requestBody: any = {
+			model: expertContext.modelId,
+			messages: state.expertMessages,
+			stream: true,
+		};
+		this._applySamplingOptions(requestBody, expertContext);
+		const expertTools = this._filterExpertTools(state.mainTools);
+		if (expertTools.length > 0) {
+			requestBody.tools = expertTools.map((tool: any) => ({
+				type: 'function',
+				function: {
+					name: tool.name,
+					description: tool.description || '',
+					parameters: tool.inputSchema && Object.keys(tool.inputSchema).length > 0
+						? tool.inputSchema
+						: { type: 'object', properties: {} },
+				}
+			}));
+		}
+
+		const result = await this._requestModel({
+			...expertContext,
+			requestBody,
+			requestLabel: `expert_${state.runId}`,
+			progress,
+			token,
+			reportText: true,
+		});
+
+		if (result.toolCalls.length > 0) {
+			const assistantMessage: any = { role: 'assistant', tool_calls: [] };
+			if (result.text) {
+				assistantMessage.content = result.text;
+			}
+			for (const toolCall of result.toolCalls) {
+				assistantMessage.tool_calls.push({
+					id: toolCall.id,
+					type: 'function',
+					function: {
+						name: toolCall.name,
+						arguments: toolCall.arguments || JSON.stringify(toolCall.input ?? {}),
+					},
+				});
+				progress.report(new vscode.LanguageModelToolCallPart(
+					`${EXPERT_TOOL_CALL_PREFIX}:${state.runId}:${toolCall.id}`,
+					toolCall.name,
+					toolCall.input
+				));
+			}
+			state.expertMessages.push(assistantMessage);
+			return;
+		}
+
+		state.expertMessages.push({ role: 'assistant', content: result.text || '' });
+		await this._finishExpertAndContinueMain(state, result.text || '', progress, token);
+	}
+
+	private async _continueExpertFromToolResult(
+		runId: string,
+		originCallId: string,
+		prefixedCallId: string,
+		text: string,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const state = this._expertRuns.get(runId);
+		if (!state) {
+			progress.report(new vscode.LanguageModelTextPart(`\n\nLLSOAI expert run ${runId} no longer exists. Unable to continue processing the tool result.\n\n`));
+			return;
+		}
+		const expertContext = await this._getExpertContextFromState(state);
+		state.consumedToolResultCallIds.add(prefixedCallId);
+		state.expertMessages.push({ role: 'tool', tool_call_id: originCallId, content: text });
+		await this._runExpertTurn(state, expertContext, progress, token);
+	}
+
+	private async _continueExpertFromUserMessage(
+		runId: string,
+		text: string,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const state = this._expertRuns.get(runId);
+		if (!state) {
+			this._activeExpertRunId = undefined;
+			return;
+		}
+		const expertContext = await this._getExpertContextFromState(state);
+		state.expertMessages.push({ role: 'user', content: text });
+		progress.report(new vscode.LanguageModelTextPart('\n\n### 🧠 User Follow-up Forwarded to LLSOAI Expert\n\n'));
+		await this._runExpertTurn(state, expertContext, progress, token);
+	}
+
+	private async _getExpertContextFromState(state: ExpertRunState): Promise<MainRequestContext> {
+		return state.expertRequestContext;
+	}
+
+	private async _finishExpertAndContinueMain(
+		state: ExpertRunState,
+		expertAnswer: string,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		this._expertRuns.delete(state.runId);
+		if (this._activeExpertRunId === state.runId) {
+			this._activeExpertRunId = undefined;
+		}
+		progress.report(new vscode.LanguageModelTextPart('\n\n### 🧠 LLSOAI Expert Result Returned to Main Model\n\n'));
+		const mainMessages = [
+			...state.originalMainMessages,
+			{
+				role: 'assistant',
+				tool_calls: [{
+					id: state.askLlsoaiCallId,
+					type: 'function',
+					function: {
+						name: ASK_LLSOAI_TOOL_NAME,
+						arguments: JSON.stringify(state.askLlsoaiArguments ?? {}),
+					},
+				}],
+			},
+			{
+				role: 'tool',
+				tool_call_id: state.askLlsoaiCallId,
+				content: `${expertAnswer}\n\nI have completed the task. Please verify my work.`,
+			},
+		];
+		const requestBody: any = {
+			model: state.mainRequestContext.modelId,
+			messages: mainMessages,
+			stream: true,
+		};
+		this._applySamplingOptions(requestBody, state.mainRequestContext);
+		if (state.mainTools.length > 0) {
+			requestBody.tools = state.mainTools
+				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME)
+				.map((tool: any) => ({
+				type: 'function',
+				function: {
+					name: tool.name,
+					description: tool.description || '',
+					parameters: tool.inputSchema && Object.keys(tool.inputSchema).length > 0
+						? tool.inputSchema
+						: { type: 'object', properties: {} },
+				}
+			}));
+		}
+		const result = await this._requestModel({
+			...state.mainRequestContext,
+			requestBody,
+			requestLabel: `main_after_expert_${state.runId}`,
+			progress,
+			token,
+			reportText: true,
+		});
+		for (const toolCall of result.toolCalls) {
+			if (toolCall.name === ASK_LLSOAI_TOOL_NAME) {
+				continue;
+			}
+			progress.report(new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, toolCall.input));
+		}
+	}
+
+	private _findExpertToolResult(messages: readonly vscode.LanguageModelChatRequestMessage[]): { runId: string; originCallId: string; prefixedCallId: string; text: string } | null {
+		const lastMessage = messages[messages.length - 1];
+		if (!lastMessage) {
+			return null;
+		}
+
+		for (const part of lastMessage.content) {
+			if (!isToolResultPart(part)) {
+				continue;
+			}
+			const parsed = this._parseExpertCallId(part.callId);
+			const state = parsed ? this._expertRuns.get(parsed.runId) : undefined;
+			if (parsed && state && !state.consumedToolResultCallIds.has(part.callId)) {
+				return { ...parsed, prefixedCallId: part.callId, text: collectToolResultText(part) };
+			}
+		}
+		return null;
+	}
+
+	private _parseExpertCallId(callId: string): { runId: string; originCallId: string } | null {
+		const prefix = `${EXPERT_TOOL_CALL_PREFIX}:`;
+		if (!callId.startsWith(prefix)) {
+			return null;
+		}
+		const rest = callId.slice(prefix.length);
+		const sep = rest.indexOf(':');
+		if (sep <= 0) {
+			return null;
+		}
+		return {
+			runId: rest.slice(0, sep),
+			originCallId: rest.slice(sep + 1),
+		};
+	}
+
+	private _getLatestUserText(messages: readonly vscode.LanguageModelChatRequestMessage[]): string {
+		const lastMessage = messages[messages.length - 1];
+		if (!lastMessage || lastMessage.role !== vscode.LanguageModelChatMessageRole.User) {
+			return '';
+		}
+
+		const text = lastMessage.content
+			.filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+			.map(part => part.value)
+			.join('\n')
+			.trim();
+		if (text) {
+			return text;
+		}
+		return '';
 	}
 
 	/**
@@ -886,9 +1357,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					} else {
 						result.push({ role: 'user', content });
 					}
-				} else if (toolResults.length === 0 && !canMerge) {
-					// Empty user message - send empty string
-					result.push({ role: 'user', content: '' });
+				} else if (toolResults.length === 0) {
+					// Skip empty user messages. VS Code may emit placeholder user messages
+					// during tool/expert continuations; sending empty content can break
+					// some OpenAI-compatible APIs.
+					continue;
 				}
 				// If only tool results, the tool messages above are sufficient
 			} else if (role === 'assistant') {
@@ -1007,6 +1480,9 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				const base64 = Buffer.from(part.data).toString('base64');
 				textParts.push({ type: 'image_url', image_url: { url: `data:${part.mimeType};base64,${base64}` } });
 			} else if (isToolResultPart(part)) {
+				if (this._parseExpertCallId(part.callId)) {
+					continue;
+				}
 				// Handle tool results using unified type guard (reference project approach)
 				const text = collectToolResultText(part);
 				toolResults.push({ tool_call_id: part.callId, text });
@@ -1082,9 +1558,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			if (part instanceof vscode.LanguageModelTextPart) {
 				textParts.push(part.value);
 			} else if (part instanceof vscode.LanguageModelToolCallPart) {
+				if (this._parseExpertCallId(part.callId)) {
+					continue;
+				}
 				toolCalls.push({
 					type: 'function',
-				id: part.callId || `call_${Date.now()}_${toolCalls.length}`,
+					id: part.callId || `call_${Date.now()}_${toolCalls.length}`,
 					function: {
 						name: part.name,
 						arguments: typeof part.input === 'string' ? part.input : JSON.stringify(part.input),
