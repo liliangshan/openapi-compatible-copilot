@@ -52,6 +52,9 @@ interface ExpertRunState {
 	expertRequestContext: MainRequestContext;
 	expertMessages: any[];
 	consumedToolResultCallIds: Set<string>;
+	pendingExpertToolCallIds: string[];
+	pendingExpertToolResults: Map<string, string>;
+	pendingExpertUserFollowUps: string[];
 	originalMainMessages: any[];
 	mainRequestContext: MainRequestContext;
 	mainTools: readonly any[];
@@ -460,9 +463,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			throw new Error('Model metadata not found');
 		}
 
-		const expertToolResult = this._findExpertToolResult(messages);
-		if (expertToolResult) {
-			await this._continueExpertFromToolResult(expertToolResult.runId, expertToolResult.originCallId, expertToolResult.prefixedCallId, expertToolResult.text, progress, token);
+		const expertToolResults = this._findExpertToolResults(messages);
+		if (expertToolResults.length > 0) {
+			for (const expertToolResult of expertToolResults) {
+				await this._continueExpertFromToolResult(expertToolResult.runId, expertToolResult.originCallId, expertToolResult.prefixedCallId, expertToolResult.text, progress, token);
+			}
 			return;
 		}
 
@@ -860,7 +865,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 	}
 
-	private async _getConfiguredExpertModel(): Promise<(MainRequestContext & { providerName: string }) | null> {
+	private async _getConfiguredExpertModel(): Promise<(MainRequestContext & { providerName: string; modelName: string }) | null> {
 		const config = this._configManager.getEffectiveExpertModeConfig();
 		if (!config.enabled || !config.providerId || !config.modelId) {
 			return null;
@@ -875,6 +880,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			providerId: provider.id,
 			providerName: provider.name,
 			modelId: expertModel.modelId,
+			modelName: (expertModel.displayName && expertModel.displayName.trim()) || expertModel.modelId,
 			baseUrl: provider.baseUrl,
 			apiType: (provider as any).apiType ?? 'openai-compatible',
 			apiKey: provider.apiKey,
@@ -917,7 +923,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 
 	private async _startExpertRun(
 		toolCall: CollectedToolCall,
-		expertContext: MainRequestContext,
+		expertContext: MainRequestContext & { providerName?: string; modelName?: string },
 		mainMessages: any[],
 		mainContext: MainRequestContext,
 		mainTools: readonly any[],
@@ -934,6 +940,9 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			expertRequestContext: expertContext,
 			expertMessages: this._buildExpertInitialMessages(toolCall.input, expertContext.modelId),
 			consumedToolResultCallIds: new Set<string>(),
+			pendingExpertToolCallIds: [],
+			pendingExpertToolResults: new Map<string, string>(),
+			pendingExpertUserFollowUps: [],
 			originalMainMessages: mainMessages,
 			mainRequestContext: mainContext,
 			mainTools,
@@ -941,7 +950,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		};
 		this._expertRuns.set(runId, state);
 		this._activeExpertRunId = runId;
-		progress.report(new vscode.LanguageModelTextPart(`\n\n### 🧠 LLSOAI Expert Mode Started\n\nrunId: ${runId}\n\n`));
+		const expertModelName = expertContext.modelName || expertContext.modelId;
+		progress.report(new vscode.LanguageModelTextPart(`\n\n### 🧠 LLSOAI Expert Mode Started\n\nmodelName: ${expertModelName}\n\nrunId: ${runId}\n\n`));
 		await this._runExpertTurn(state, expertContext, progress, token);
 	}
 
@@ -1068,6 +1078,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			if (result.text) {
 				assistantMessage.content = result.text;
 			}
+			state.pendingExpertToolCallIds = result.toolCalls.map(toolCall => toolCall.id);
+			state.pendingExpertToolResults = new Map<string, string>();
 			for (const toolCall of result.toolCalls) {
 				assistantMessage.tool_calls.push({
 					id: toolCall.id,
@@ -1106,7 +1118,35 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 		const expertContext = await this._getExpertContextFromState(state);
 		state.consumedToolResultCallIds.add(prefixedCallId);
-		state.expertMessages.push({ role: 'tool', tool_call_id: originCallId, content: text });
+		if (state.pendingExpertToolCallIds.length === 0) {
+			state.expertMessages.push({ role: 'tool', tool_call_id: originCallId, content: text });
+			await this._runExpertTurn(state, expertContext, progress, token);
+			return;
+		}
+
+		state.pendingExpertToolResults.set(originCallId, text);
+		const missingToolCallIds = state.pendingExpertToolCallIds.filter(toolCallId => !state.pendingExpertToolResults.has(toolCallId));
+		if (missingToolCallIds.length > 0) {
+			progress.report(new vscode.LanguageModelTextPart(`\n\nLLSOAI expert is waiting for ${missingToolCallIds.length} more tool result(s) before continuing.\n\n`));
+			return;
+		}
+
+		for (const toolCallId of state.pendingExpertToolCallIds) {
+			state.expertMessages.push({
+				role: 'tool',
+				tool_call_id: toolCallId,
+				content: state.pendingExpertToolResults.get(toolCallId) || '',
+			});
+		}
+		state.pendingExpertToolCallIds = [];
+		state.pendingExpertToolResults = new Map<string, string>();
+		if (state.pendingExpertUserFollowUps.length > 0) {
+			state.expertMessages.push({
+				role: 'user',
+				content: state.pendingExpertUserFollowUps.join('\n\n'),
+			});
+			state.pendingExpertUserFollowUps = [];
+		}
 		await this._runExpertTurn(state, expertContext, progress, token);
 	}
 
@@ -1119,6 +1159,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const state = this._expertRuns.get(runId);
 		if (!state) {
 			this._activeExpertRunId = undefined;
+			return;
+		}
+		if (state.pendingExpertToolCallIds.length > 0) {
+			const missingToolCallIds = state.pendingExpertToolCallIds.filter(toolCallId => !state.pendingExpertToolResults.has(toolCallId));
+			state.pendingExpertUserFollowUps.push(text);
+			progress.report(new vscode.LanguageModelTextPart(`\n\nLLSOAI expert is still waiting for ${missingToolCallIds.length} tool result(s). The user follow-up will be processed after the current expert tool calls finish.\n\n`));
 			return;
 		}
 		const expertContext = await this._getExpertContextFromState(state);
@@ -1197,12 +1243,13 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 	}
 
-	private _findExpertToolResult(messages: readonly vscode.LanguageModelChatRequestMessage[]): { runId: string; originCallId: string; prefixedCallId: string; text: string } | null {
+	private _findExpertToolResults(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<{ runId: string; originCallId: string; prefixedCallId: string; text: string }> {
 		const lastMessage = messages[messages.length - 1];
 		if (!lastMessage) {
-			return null;
+			return [];
 		}
 
+		const results: Array<{ runId: string; originCallId: string; prefixedCallId: string; text: string }> = [];
 		for (const part of lastMessage.content) {
 			if (!isToolResultPart(part)) {
 				continue;
@@ -1210,10 +1257,10 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const parsed = this._parseExpertCallId(part.callId);
 			const state = parsed ? this._expertRuns.get(parsed.runId) : undefined;
 			if (parsed && state && !state.consumedToolResultCallIds.has(part.callId)) {
-				return { ...parsed, prefixedCallId: part.callId, text: collectToolResultText(part) };
+				results.push({ ...parsed, prefixedCallId: part.callId, text: collectToolResultText(part) });
 			}
 		}
-		return null;
+		return results;
 	}
 
 	private _parseExpertCallId(callId: string): { runId: string; originCallId: string } | null {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.2
+
+### Fixed
+- Fixed Expert Mode continuation when the expert model emits multiple tool calls in one turn. The extension now waits for all corresponding tool results, preserves the original tool-result order, and queues user follow-up messages until pending tool results are complete.
+- Added the configured expert model name to the Expert Mode startup message so users can see which expert model is being used for the delegated run.
+
 ## 2.2.1
 
 ### Fixed
