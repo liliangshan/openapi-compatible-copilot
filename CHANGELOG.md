@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.3
+
+### Fixed
+- Fixed Expert Mode getting stuck when VS Code returns only part of a multi-tool-call result batch. Missing expert tool calls are now re-reported so VS Code continues executing the remaining tools instead of ending the turn with a waiting message.
+
 ## 2.2.2
 
 ### Fixed

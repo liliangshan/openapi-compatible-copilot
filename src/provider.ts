@@ -53,6 +53,7 @@ interface ExpertRunState {
 	expertMessages: any[];
 	consumedToolResultCallIds: Set<string>;
 	pendingExpertToolCallIds: string[];
+	pendingExpertToolCalls: CollectedToolCall[];
 	pendingExpertToolResults: Map<string, string>;
 	pendingExpertUserFollowUps: string[];
 	originalMainMessages: any[];
@@ -931,6 +932,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			expertMessages: this._buildExpertInitialMessages(toolCall.input, expertContext.modelId),
 			consumedToolResultCallIds: new Set<string>(),
 			pendingExpertToolCallIds: [],
+			pendingExpertToolCalls: [],
 			pendingExpertToolResults: new Map<string, string>(),
 			pendingExpertUserFollowUps: [],
 			originalMainMessages: mainMessages,
@@ -1069,6 +1071,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				assistantMessage.content = result.text;
 			}
 			state.pendingExpertToolCallIds = result.toolCalls.map(toolCall => toolCall.id);
+			state.pendingExpertToolCalls = result.toolCalls;
 			state.pendingExpertToolResults = new Map<string, string>();
 			for (const toolCall of result.toolCalls) {
 				assistantMessage.tool_calls.push({
@@ -1118,6 +1121,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const missingToolCallIds = state.pendingExpertToolCallIds.filter(toolCallId => !state.pendingExpertToolResults.has(toolCallId));
 		if (missingToolCallIds.length > 0) {
 			progress.report(new vscode.LanguageModelTextPart(`\n\nLLSOAI expert is waiting for ${missingToolCallIds.length} more tool result(s) before continuing.\n\n`));
+			this._reportPendingExpertToolCalls(state, missingToolCallIds, progress);
 			return;
 		}
 
@@ -1129,6 +1133,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			});
 		}
 		state.pendingExpertToolCallIds = [];
+		state.pendingExpertToolCalls = [];
 		state.pendingExpertToolResults = new Map<string, string>();
 		if (state.pendingExpertUserFollowUps.length > 0) {
 			state.expertMessages.push({
@@ -1155,12 +1160,31 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const missingToolCallIds = state.pendingExpertToolCallIds.filter(toolCallId => !state.pendingExpertToolResults.has(toolCallId));
 			state.pendingExpertUserFollowUps.push(text);
 			progress.report(new vscode.LanguageModelTextPart(`\n\nLLSOAI expert is still waiting for ${missingToolCallIds.length} tool result(s). The user follow-up will be processed after the current expert tool calls finish.\n\n`));
+			this._reportPendingExpertToolCalls(state, missingToolCallIds, progress);
 			return;
 		}
 		const expertContext = await this._getExpertContextFromState(state);
 		state.expertMessages.push({ role: 'user', content: text });
 		progress.report(new vscode.LanguageModelTextPart('\n\n### 🧠 User Follow-up Forwarded to LLSOAI Expert\n\n'));
 		await this._runExpertTurn(state, expertContext, progress, token);
+	}
+
+	private _reportPendingExpertToolCalls(
+		state: ExpertRunState,
+		toolCallIds: string[],
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+	): void {
+		const missingIds = new Set(toolCallIds);
+		for (const toolCall of state.pendingExpertToolCalls) {
+			if (!missingIds.has(toolCall.id)) {
+				continue;
+			}
+			progress.report(new vscode.LanguageModelToolCallPart(
+				`${EXPERT_TOOL_CALL_PREFIX}:${state.runId}:${toolCall.id}`,
+				toolCall.name,
+				toolCall.input,
+			));
+		}
 	}
 
 	private async _getExpertContextFromState(state: ExpertRunState): Promise<MainRequestContext> {
