@@ -56,11 +56,7 @@ Expert Mode is configured in the provider settings:
 
 - **Main Model Tool Name** — The tool name (e.g., `ask_llsoai`) that triggers the main model in Copilot Chat
 - **Expert Model Tool Name** — The tool name for the expert model (e.g., `ask_llsoai_expert`)
-- **Expert Call Threshold** — Controls when the expert model is invoked:
-  - `Never` — Expert model is never called automatically
-  - `On Error` — Expert model is called when the main model returns an error
-  - `Always` — Expert model is always called to review the main model's response
-  - `Threshold` — Expert model is called when the main model's response score falls below the threshold value (0–100)
+- **Expert Tool Invocation** — The main model is guided by a system prompt to call the expert tool (`ask_llsoai`) when it cannot confidently solve a task, needs independent verification, requires deeper investigation, or when you explicitly ask it to delegate to the expert. The expert model can use the same VS Code tools as the main model and returns its findings for the main model to incorporate into the final response.
 - **Expert Settings Hint** — A custom hint displayed in the Expert Mode settings panel to guide the expert model's behavior
 
 ### Benefits

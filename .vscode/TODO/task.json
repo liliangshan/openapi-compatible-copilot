@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-04-27T17:47:46.236Z",
+  "todoList": [
+    {
+      "id": 1,
+      "status": "completed",
+      "title": "确认 GitHub 操作意图"
+    },
+    {
+      "id": 2,
+      "status": "in-progress",
+      "title": "执行 git push 上传代码"
+    }
+  ]
+}

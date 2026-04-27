@@ -45,8 +45,10 @@ interface ModelRequestResult {
 
 interface ExpertRunState {
 	runId: string;
+	sessionId: string;
 	askLlsoaiCallId: string;
 	askLlsoaiArguments: any;
+	expertContextRecords: any[];
 	expertProviderId: string;
 	expertModelId: string;
 	expertRequestContext: MainRequestContext;
@@ -318,6 +320,53 @@ function collectToolResultText(pr: { content?: unknown[] }): string {
 	return text;
 }
 
+function getFallbackChatSessionId(messages: readonly vscode.LanguageModelChatRequestMessage[]): string {
+	for (const message of messages) {
+		const role = message.role === vscode.LanguageModelChatMessageRole.User
+			? 'user'
+			: message.role === vscode.LanguageModelChatMessageRole.Assistant
+				? 'assistant'
+				: 'system';
+		const text = message.content
+			.filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+			.map(part => part.value)
+			.join('\n');
+		if (text.trim()) {
+			return require('crypto')
+				.createHash('md5')
+				.update(`${role}:${text}`)
+				.digest('hex')
+				.substring(0, 12);
+		}
+	}
+	return 'unknown';
+}
+
+function getChatSessionId(
+	options: vscode.ProvideLanguageModelChatResponseOptions,
+	messages: readonly vscode.LanguageModelChatRequestMessage[]
+): string {
+	const rawOptions = options as any;
+	const sessionId = rawOptions?.sessionId;
+	if (typeof sessionId === 'string' && sessionId.trim()) {
+		return sessionId;
+	}
+	return getFallbackChatSessionId(messages);
+}
+
+function isCompressionRequest(messages: readonly vscode.LanguageModelChatRequestMessage[]): boolean {
+	const firstSystemText = messages
+		.find(message => message.role !== vscode.LanguageModelChatMessageRole.User && message.role !== vscode.LanguageModelChatMessageRole.Assistant)
+		?.content
+		.filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+		.map(part => part.value)
+		.join('\n')
+		.trim() || '';
+
+	return firstSystemText.startsWith('Your task is to create a comprehensive')
+		&& /summary|summar/i.test(firstSystemText);
+}
+
 /**
  * OpenAI-compatible Language Model Chat Provider
  */
@@ -464,7 +513,14 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			throw new Error('Model metadata not found');
 		}
 
-		const expertToolResults = this._findExpertToolResults(messages);
+		const currentSessionId = getChatSessionId(options, messages);
+		if (isCompressionRequest(messages) && this._getExpertRunForSession(currentSessionId)) {
+			const compressionText = this._buildExpertCompressionResponse(currentSessionId);
+			progress.report(new vscode.LanguageModelTextPart(compressionText));
+			return;
+		}
+
+		const expertToolResults = this._findExpertToolResults(messages, currentSessionId);
 		if (expertToolResults.length > 0) {
 			for (const expertToolResult of expertToolResults) {
 				await this._continueExpertFromToolResult(expertToolResult.runId, expertToolResult.originCallId, expertToolResult.prefixedCallId, expertToolResult.text, progress, token);
@@ -473,7 +529,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 
 		const latestUserText = this._getLatestUserText(messages);
-		if (this._activeExpertRunId && latestUserText) {
+		const activeExpertRun = this._activeExpertRunId ? this._expertRuns.get(this._activeExpertRunId) : undefined;
+		if (activeExpertRun && activeExpertRun.sessionId !== currentSessionId) {
+			this._activeExpertRunId = undefined;
+		}
+		if (this._activeExpertRunId && activeExpertRun?.sessionId === currentSessionId && latestUserText) {
 			await this._continueExpertFromUserMessage(this._activeExpertRunId, latestUserText, progress, token);
 			return;
 		}
@@ -580,7 +640,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			for (const toolCall of result.toolCalls) {
 				if (toolCall.name === ASK_LLSOAI_TOOL_NAME) {
 					if (expertModel) {
-						await this._startExpertRun(toolCall, expertModel, requestBody.messages, mainContext, options.tools ?? [], progress, token);
+						await this._startExpertRun(toolCall, expertModel, currentSessionId, requestBody.messages, mainContext, options.tools ?? [], progress, token);
 					} else {
 						await this._continueMainAfterUnavailableExpert(toolCall, requestBody.messages, mainContext, options.tools ?? [], progress, token);
 					}
@@ -885,12 +945,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	private _buildAskLlsoaiTool(): any {
 		return {
 			name: ASK_LLSOAI_TOOL_NAME,
-			description: 'Delegate a task to the configured LLS OAI expert model. This is not a pure analysis-only tool: the expert can independently analyze the problem and may use the same currently available VS Code tools as the main model, including file/search/error tools when available. Do not refuse delegation merely because the task may require tool or file access.',
+			description: 'Delegate a task to the configured LLS OAI expert model. The expert will NOT receive previous conversation history or the main model context, so the question must be self-contained and include the relevant user requirement, file paths, symbol names, error messages, attempted changes, and expected outcome needed to solve the task. This is not a pure analysis-only tool: the expert can independently analyze the problem and may use the same currently available VS Code tools as the main model, including file/search/error tools when available. Do not refuse delegation merely because the task may require tool or file access.',
 			inputSchema: {
 				type: 'object',
 				properties: {
-					question: { type: 'string', description: 'The concrete question or task for the expert model.' },
-					context: { type: 'string', description: 'Relevant context, constraints, attempted solutions, file names, errors, and expected output.' },
+					question: { type: 'string', description: 'The self-contained concrete question or task for the expert model. Include all relevant requirements, file paths, symbol names, error messages, constraints, and expected outcome because previous conversation context is not sent to the expert.' },
+					context: { type: 'string', description: 'Optional record-only context. This field is cached and shown to the user, but is not sent to the expert model. Put only non-essential previous conversation context here.' },
 				},
 				required: ['question'],
 			},
@@ -901,7 +961,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		if (!enabled) {
 			return messages;
 		}
-		const prompt = `Expert mode is enabled. If you cannot confidently solve the task, need independent verification, need deeper investigation, or want another model to perform a tool-assisted subtask, call the tool ${ASK_LLSOAI_TOOL_NAME}. This tool starts an expert model run; it is not limited to pure analysis. The expert model can use the same currently available VS Code tools as you, including file/search/error tools when available. Do not refuse to call ${ASK_LLSOAI_TOOL_NAME} merely because the task may require tool or file access. Provide a clear question and all relevant context. After the expert returns, continue as the main model and produce the final user-facing answer.`;
+		const prompt = `Expert mode is enabled. If you cannot confidently solve the task, need independent verification, need deeper investigation, or want another model to perform a tool-assisted subtask, call the tool ${ASK_LLSOAI_TOOL_NAME}. This tool starts an expert model run; it is not limited to pure analysis. The expert model can use the same currently available VS Code tools as you, including file/search/error tools when available. Do not refuse to call ${ASK_LLSOAI_TOOL_NAME} merely because the task may require tool or file access. The expert will NOT receive previous conversation history, your current message list, or the main model context. Therefore, the question you send to ${ASK_LLSOAI_TOOL_NAME} MUST be self-contained: include the user's concrete requirement, relevant file paths, active file/selection when useful, symbol/function names, constraints, errors, attempted changes, expected output, and any other information required for the expert to work independently. Do not pass long prior conversation history to the expert; instead summarize only the task-relevant facts inside question. If you need to preserve non-essential previous conversation context, put it in the optional context field as record-only context. The record-only context is not sent to the expert model. After the expert returns, continue as the main model and produce the final user-facing answer.`;
 		const next = [...messages];
 		const system = next.find(m => m.role === 'system');
 		if (system && typeof system.content === 'string') {
@@ -915,6 +975,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	private async _startExpertRun(
 		toolCall: CollectedToolCall,
 		expertContext: MainRequestContext & { providerName?: string; modelName?: string },
+		sessionId: string,
 		mainMessages: any[],
 		mainContext: MainRequestContext,
 		mainTools: readonly any[],
@@ -922,10 +983,13 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		token: vscode.CancellationToken
 	): Promise<void> {
 		const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+		const expertContextRecords: any[] = [];
 		const state: ExpertRunState = {
 			runId,
+			sessionId,
 			askLlsoaiCallId: toolCall.id,
 			askLlsoaiArguments: toolCall.input,
+			expertContextRecords,
 			expertProviderId: expertContext.providerId,
 			expertModelId: expertContext.modelId,
 			expertRequestContext: expertContext,
@@ -1013,17 +1077,68 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 
 	private _buildExpertInitialMessages(input: any, expertModelId: string): any[] {
 		const question = typeof input?.question === 'string' ? input.question : JSON.stringify(input ?? {});
-		const context = typeof input?.context === 'string' ? input.context : '';
 		return [
 			{
 				role: 'system',
-				content: `You are LLSOAI expert mode. Your expert model ID is "${expertModelId}". Independently handle the delegated task. You are not limited to analysis only: when tools are available, use them to inspect files, search text, check errors, gather evidence, or perform other tool-assisted investigation as needed. You may call the same currently available VS Code tools as the main model. Do not use TODO enforcement. Make intermediate reasoning and actions visible enough for the user to verify. When you have enough information, provide a clear final expert conclusion for the main model.`,
+				content: `You are LLSOAI expert mode. Your expert model ID is "${expertModelId}". Independently handle the delegated task from the question only. Previous conversation history and record-only context are intentionally not included in this expert request. You are not limited to analysis only: when tools are available, use them to inspect files, search text, check errors, gather evidence, or perform other tool-assisted investigation as needed. You may call the same currently available VS Code tools as the main model. Do not use TODO enforcement. Make intermediate reasoning and actions visible enough for the user to verify. When you have enough information, provide a clear final expert conclusion for the main model.`,
 			},
 			{
 				role: 'user',
-				content: `Question:\n${question}\n\nContext:\n${context}`,
+				content: `Question:\n${question}`,
 			},
 		];
+	}
+
+	private _buildExpertCompressionResponse(currentSessionId: string): string {
+		const state = this._getExpertRunForSession(currentSessionId);
+
+		if (!state) {
+			return 'No active LLSOAI expert run context is currently available for this session.';
+		}
+
+		return [
+			'LLSOAI expert mode context summary:',
+			'',
+			`runId: ${state.runId}`,
+			`sessionId: ${state.sessionId}`,
+			`expertModelId: ${state.expertModelId}`,
+			'',
+			'Original delegated request:',
+			JSON.stringify(state.askLlsoaiArguments ?? {}, null, 2),
+			'',
+			'Expert context records:',
+			JSON.stringify(state.expertContextRecords ?? [], null, 2),
+			'',
+			'Pending expert tool call ids:',
+			JSON.stringify(state.pendingExpertToolCallIds ?? [], null, 2),
+		].join('\n');
+	}
+
+	private _getExpertRunForSession(currentSessionId: string): ExpertRunState | undefined {
+		const activeState = this._activeExpertRunId ? this._expertRuns.get(this._activeExpertRunId) : undefined;
+		return activeState?.sessionId === currentSessionId
+			? activeState
+			: [...this._expertRuns.values()].find(run => run.sessionId === currentSessionId);
+	}
+
+	private _appendExpertContextRecord(state: ExpertRunState, record: any): void {
+		state.expertContextRecords.push({
+			...record,
+			timestamp: new Date().toISOString(),
+		});
+	}
+
+	private _buildExpertMessagesWithContext(state: ExpertRunState): any[] {
+		const messages = [...state.expertMessages];
+		if (state.expertContextRecords.length === 0) {
+			return messages;
+		}
+
+		messages.push({
+			role: 'user',
+			content: `Expert context records from previous expert turns. Use this as the continuing expert context for this run:\n${JSON.stringify(state.expertContextRecords, null, 2)}`,
+		});
+		return messages;
 	}
 
 	private _filterExpertTools(tools: readonly any[]): any[] {
@@ -1038,7 +1153,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	): Promise<void> {
 		const requestBody: any = {
 			model: expertContext.modelId,
-			messages: state.expertMessages,
+			messages: this._buildExpertMessagesWithContext(state),
 			stream: true,
 		};
 		this._applySamplingOptions(requestBody, expertContext);
@@ -1069,11 +1184,21 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const assistantMessage: any = { role: 'assistant', tool_calls: [] };
 			if (result.text) {
 				assistantMessage.content = result.text;
+				this._appendExpertContextRecord(state, {
+					type: 'expert_response',
+					content: result.text,
+				});
 			}
 			state.pendingExpertToolCallIds = result.toolCalls.map(toolCall => toolCall.id);
 			state.pendingExpertToolCalls = result.toolCalls;
 			state.pendingExpertToolResults = new Map<string, string>();
 			for (const toolCall of result.toolCalls) {
+				this._appendExpertContextRecord(state, {
+					type: 'tool_call',
+					callId: toolCall.id,
+					name: toolCall.name,
+					input: toolCall.input,
+				});
 				assistantMessage.tool_calls.push({
 					id: toolCall.id,
 					type: 'function',
@@ -1093,6 +1218,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 
 		state.expertMessages.push({ role: 'assistant', content: result.text || '' });
+		if (result.text) {
+			this._appendExpertContextRecord(state, {
+				type: 'expert_response',
+				content: result.text,
+			});
+		}
 		await this._finishExpertAndContinueMain(state, result.text || '', progress, token);
 	}
 
@@ -1111,6 +1242,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 		const expertContext = await this._getExpertContextFromState(state);
 		state.consumedToolResultCallIds.add(prefixedCallId);
+		this._appendExpertContextRecord(state, {
+			type: 'tool_result',
+			callId: originCallId,
+			prefixedCallId,
+			content: text,
+		});
 		if (state.pendingExpertToolCallIds.length === 0) {
 			state.expertMessages.push({ role: 'tool', tool_call_id: originCallId, content: text });
 			await this._runExpertTurn(state, expertContext, progress, token);
@@ -1165,6 +1302,10 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 		const expertContext = await this._getExpertContextFromState(state);
 		state.expertMessages.push({ role: 'user', content: text });
+		this._appendExpertContextRecord(state, {
+			type: 'user_follow_up',
+			content: text,
+		});
 		progress.report(new vscode.LanguageModelTextPart('\n\n### 🧠 User Follow-up Forwarded to LLSOAI Expert\n\n'));
 		await this._runExpertTurn(state, expertContext, progress, token);
 	}
@@ -1257,7 +1398,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 	}
 
-	private _findExpertToolResults(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<{ runId: string; originCallId: string; prefixedCallId: string; text: string }> {
+	private _findExpertToolResults(messages: readonly vscode.LanguageModelChatRequestMessage[], currentSessionId: string): Array<{ runId: string; originCallId: string; prefixedCallId: string; text: string }> {
 		const lastMessage = messages[messages.length - 1];
 		if (!lastMessage) {
 			return [];
@@ -1270,7 +1411,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			}
 			const parsed = this._parseExpertCallId(part.callId);
 			const state = parsed ? this._expertRuns.get(parsed.runId) : undefined;
-			if (parsed && state && !state.consumedToolResultCallIds.has(part.callId)) {
+			if (parsed && state && state.sessionId === currentSessionId && !state.consumedToolResultCallIds.has(part.callId)) {
 				results.push({ ...parsed, prefixedCallId: part.callId, text: collectToolResultText(part) });
 			}
 		}

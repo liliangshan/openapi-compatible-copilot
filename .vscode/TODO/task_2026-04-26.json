@@ -1,0 +1,1182 @@
+[
+  {
+    "timestamp": "2026-04-26T12:23:38.614Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "查看会话记录结构"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "检查请求处理代码"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "判断同轮会话逻辑"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "给出确认结论"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T12:27:53.436Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "查看会话记录结构"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "检查请求处理代码"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "判断同轮会话逻辑"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "给出确认结论"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T12:31:37.235Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "分析轮次标识方案"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "比较可行实现路径"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "给出推荐方案"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T12:39:30.070Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "探索项目上下文"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "询问关键约束"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "提出方案对比"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "确认专家模式设计"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T12:47:27.412Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "分析上下文注入可行性"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "说明 VSCode 限制"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "给出推荐实现方案"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T12:59:02.827Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "确认可见专家流程"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "区分工具调用来源"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "重写专家模式方案"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "检查文档错误"
+      },
+      {
+        "id": 5,
+        "status": "completed",
+        "title": "说明设计结果"
+      },
+      {
+        "id": 6,
+        "status": "completed",
+        "title": "提出文档修改建议"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T13:01:23.781Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "分析上下文与工具注入"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "说明用户消息附加方案"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "给出推荐设计结论"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T13:11:53.927Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "评估前缀工具方案"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "分析 VSCode 工具回流"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "给出推荐架构"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T14:08:27.800Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "检查配置相关代码"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "添加专家配置类型"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "实现配置读写保存"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "更新全局设置界面"
+      },
+      {
+        "id": 5,
+        "status": "completed",
+        "title": "检查错误并修复"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T14:15:54.180Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "确认 md 扩展必要性"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "说明可替代文件形式"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "给出推荐处理方式"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T14:17:35.953Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "解释 Markdown 调试提示"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "说明正确运行方式"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "给出配置建议"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T14:38:05.168Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "确认用户要添加内容"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "创建调试配置"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "检查配置文件错误"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "定位专家设置缺失"
+      },
+      {
+        "id": 5,
+        "status": "completed",
+        "title": "修复全局设置显示"
+      },
+      {
+        "id": 6,
+        "status": "completed",
+        "title": "验证修改无错误"
+      },
+      {
+        "id": 7,
+        "status": "completed",
+        "title": "确认面板显示逻辑"
+      },
+      {
+        "id": 8,
+        "status": "completed",
+        "title": "编译更新面板代码"
+      },
+      {
+        "id": 9,
+        "status": "completed",
+        "title": "检查面板修改错误"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T14:40:42.789Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "定位全局设置布局代码"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "调整四块为两列布局"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "检查并编译验证"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T15:42:53.407Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "梳理专家转发方案"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "说明关键实现点"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "确认是否开始编码"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "编写专家实现计划"
+      },
+      {
+        "id": 5,
+        "status": "completed",
+        "title": "更新专家工具名称"
+      },
+      {
+        "id": 6,
+        "status": "completed",
+        "title": "实现专家模式闭环"
+      },
+      {
+        "id": 7,
+        "status": "completed",
+        "title": "实现专家工具前缀"
+      },
+      {
+        "id": 8,
+        "status": "completed",
+        "title": "编译检查修复错误"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T15:46:10.807Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "调整专家取消逻辑"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "更新实现计划说明"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "检查编译错误"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T15:53:14.320Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "修改专家提示词"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "检查编译错误"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T15:55:21.341Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "移除专家TODO工具"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "检查编译错误"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:01:49.375Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "修复过期专家结果"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "过滤专家历史结果"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "验证编译通过"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:09:34.902Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "过滤专家工具调用"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "过滤专家工具回复"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "验证编译通过"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:11:44.385Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "检查专家回流流程"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "补充已消费记录"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "修正回流判断"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "验证编译通过"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:15:12.062Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "分析重复专家原因"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "修复专家重入问题"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "验证编译通过"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:19:16.803Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "添加专家回传提示"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "验证编译通过"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:23:22.978Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "定位调试文件写入"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "添加请求文件记录"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "移除旧debug写入"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "验证编译通过"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:29:27.305Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "读取请求文件内容"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "分析二次报错原因"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "提出修复方案"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:31:30.371Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "读取请求文件内容"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "分析二次报错原因"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "提出修复方案"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "修正工具归属判断"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:35:15.373Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "分析空消息影响"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "定位请求异常模式"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "给出修复建议"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:36:20.116Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "定位空消息转换逻辑"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "修改过滤空用户消息"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "检查错误并编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:41:06.192Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "确认专家启动机制"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "解释重复启动原因"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:47:51.188Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "定位专家结果判断逻辑"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "改为只看最后消息"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "验证编译无错误"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:52:21.148Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "定位专家提示文本来源"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "确认是否语言包"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:53:51.463Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "检查语言包结构"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "定位中文专家提示"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "替换为英文提示"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "验证编译无错"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T16:57:11.376Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "梳理专家配置现状"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "新增项目专家配置"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "更新设置界面保存"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "验证错误和编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:01:47.605Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "确认项目专家启用逻辑"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "改为三态单选配置"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "更新界面保存逻辑"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "检查错误并编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:03:03.031Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "检查请求时专家配置读取"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "补强项目级配置判断"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "验证错误和编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:07:05.906Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "定位专家系统提示构建"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "注入专家模型ID"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "检查错误并编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:10:50.472Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "定位项目模型下拉问题"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "修复模型联动逻辑"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "优化项目专家设置样式"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "检查错误并编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:15:36.798Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "定位专家下拉数据来源和过滤点"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "过滤启用厂商和激活模型"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "同步全局项目界面占位提示"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "检查错误并编译验证"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:16:41.425Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "查找模型激活字段定义"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "修正专家模型过滤条件"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "验证错误和编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:29:04.070Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "检查专家禁用处理流程"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "确认禁用专家续请求逻辑"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "调整工具结果提示内容"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "检查错误并编译"
+      },
+      {
+        "id": 5,
+        "status": "completed",
+        "title": "改为工具结果续请求"
+      },
+      {
+        "id": 6,
+        "status": "completed",
+        "title": "检查错误并编译验证"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:29:46.136Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "确认伪造回复位置"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "移除专家禁用可见回复"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "检查错误并编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:41:09.507Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "定位专家设置硬编码文案"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "补充语言包键值"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "替换模板为语言键"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "检查错误并编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:43:50.129Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "定位各语言settingsHint"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "补充专家功能提示"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "检查错误并编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:46:13.892Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "检查专家翻译现状"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "补齐缺失专家翻译"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "验证错误和编译"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:48:49.989Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "读取当前版本号和文件内容"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "更新版本号（package.json）"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "编写 README.md 英文专家模式说明"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "编写 CHANGELOG.md 英文专家模式说明"
+      },
+      {
+        "id": 5,
+        "status": "completed",
+        "title": "编译验证"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:50:24.005Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "在 Features 列表中添加 Expert Mode 条目"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:50:51.635Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "重新打包插件"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:52:50.263Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "检查 git 状态和远程仓库"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "提交本地修改"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "推送到 GitHub"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T17:58:30.356Z",
+    "todoList": [
+      {
+        "id": 1,
+        "title": "读取 PROMO.md 了解风格格式",
+        "status": "completed"
+      },
+      {
+        "id": 2,
+        "title": "创建专家模式推广方案文件",
+        "status": "completed"
+      },
+      {
+        "id": 3,
+        "title": "检查文件格式和错误",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T18:03:59.926Z",
+    "todoList": [
+      {
+        "id": 1,
+        "title": "更新 EXPERT_MODE_PROMO.md 中的高阶模型名称（两处）",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T18:06:13.454Z",
+    "todoList": [
+      {
+        "id": 1,
+        "title": "确认专家模式实际实现的触发策略",
+        "status": "completed"
+      },
+      {
+        "id": 2,
+        "title": "修正 EXPERT_MODE_PROMO.md 中的触发策略描述",
+        "status": "completed"
+      },
+      {
+        "id": 3,
+        "title": "修正 README.md 中的触发策略描述",
+        "status": "completed"
+      },
+      {
+        "id": 4,
+        "title": "修正 CHANGELOG.md 中的触发策略描述",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T18:08:04.594Z",
+    "todoList": [
+      {
+        "id": 1,
+        "title": "读取 EXPERT_MODE_PROMO.md 当前内容",
+        "status": "completed"
+      },
+      {
+        "id": 2,
+        "title": "在文件底部追加英文翻译版本",
+        "status": "completed"
+      },
+      {
+        "id": 3,
+        "title": "验证修改后无错误",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T18:12:58.262Z",
+    "todoList": [
+      {
+        "id": 1,
+        "title": "设计并替换中文标题（含 LLS OAI、Copilot Chat、专家模式，80字左右）",
+        "status": "completed"
+      },
+      {
+        "id": 2,
+        "title": "设计并替换英文标题（含 LLS OAI、Copilot Chat、Expert Mode，80字左右）",
+        "status": "completed"
+      },
+      {
+        "id": 3,
+        "title": "验证修改后无错误",
+        "status": "completed"
+      },
+      {
+        "id": 4,
+        "title": "更新引言中的模型引用",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-26T18:13:59.506Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "确认文件当前状态和结尾位置"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "在文件底部追加完整英文翻译"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "验证修改后无错误"
+      }
+    ]
+  }
+]
