@@ -686,16 +686,6 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const finalBody = isAnthropic
 				? convertOpenAIRequestToAnthropic(requestBody)
 				: requestBody;
-			writeDebugFile(`request_${Date.now()}_${requestLabel}.json`, {
-				providerId,
-				modelId,
-				apiType,
-				url,
-				isAnthropic,
-				requestBody,
-				finalBody,
-				timestamp: new Date().toISOString(),
-			});
 
 			const response = await fetch(url, {
 				method: 'POST',
