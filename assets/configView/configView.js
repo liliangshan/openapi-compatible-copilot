@@ -13,6 +13,7 @@
 	const loadingProviders = new Set(); // Track providers that are fetching models
 	let isInitialLoad = true; // Track whether this is the first providersLoaded
 	let expertModeSettings = { enabled: false, providerId: '', modelId: '' };
+	let expertSelectableProviders = [];
 	let configuredLanguage = 'auto';
 	function resolveLanguage(language) {
 		const normalized = (language || '').toLowerCase();
@@ -781,7 +782,7 @@
 				if (message.data) {
 					expertModeSettings = message.data.settings || { enabled: false, providerId: '', modelId: '' };
 					if (message.data.providers) {
-						providers = message.data.providers;
+						expertSelectableProviders = message.data.providers;
 					}
 					updateExpertModeControls();
 				}
@@ -1312,7 +1313,10 @@
 	}
 
 	function getExpertSelectableProviders() {
-		return providers.filter(provider => provider?.enabled && getProviderModels(provider.id).length > 0);
+		if (providers.length > 0) {
+			return providers.filter(provider => provider?.enabled && getProviderModels(provider.id).length > 0);
+		}
+		return expertSelectableProviders;
 	}
 
 	function populateExpertModeProviders(providerSelect, selectedProviderId) {
