@@ -1,0 +1,117 @@
+[
+  {
+    "timestamp": "2026-04-29T01:41:35.470Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "确认 Responses API 工具格式是否包含 function 包装"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "修复 Responses 请求 tools 格式转换"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "重新编译验证当前最新代码"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-29T01:46:20.304Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "确认 Responses API implemented 字段要求"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "给出是否保留 implemented 的建议"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-29T02:23:01.536Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "删除 getDebugDir 和 ensureDebugDir 函数"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "删除 writeDebugFile 和 writeDebugTextFile 函数"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "删除 rawResponseStream 变量及其累加代码"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "删除所有 writeDebugFile 和 writeDebugTextFile 调用"
+      },
+      {
+        "id": 5,
+        "status": "completed",
+        "title": "编译验证代码正确性"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-29T02:29:08.726Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "删除 provider.ts 中所有调试文件写入代码"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "修改 TODO 函数添加 sessionId 参数"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "修改 task.json 路径为 task_{sessionId}.json"
+      },
+      {
+        "id": 4,
+        "status": "completed",
+        "title": "更新 _convertMessages 方法传递 sessionId"
+      },
+      {
+        "id": 5,
+        "status": "completed",
+        "title": "编译验证"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-29T02:34:28.803Z",
+    "todoList": [
+      {
+        "id": 1,
+        "status": "completed",
+        "title": "修改 package.json 中的版本号"
+      },
+      {
+        "id": 2,
+        "status": "completed",
+        "title": "运行 vsce package 打包编译"
+      },
+      {
+        "id": 3,
+        "status": "completed",
+        "title": "重新打包编译"
+      }
+    ]
+  }
+]

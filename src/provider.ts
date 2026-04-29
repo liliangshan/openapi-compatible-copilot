@@ -1,14 +1,19 @@
 import * as vscode from 'vscode';
-import { ConfigManager } from './configManager';
+import { ConfigManager } from './configManager.js';
 import { updateContextStatusBar, resetStatusBar } from './statusBar';
 import {
 	convertOpenAIRequestToAnthropic,
 	convertAnthropicEventToOpenAIChunks,
-	convertAnthropicResponseToOpenAI,
 	createAnthropicStreamState,
 	type AnthropicStreamState,
-	type OpenAIChunk,
-} from './anthropicConverter';
+} from './utils/anthropicConverter';
+import { type OpenAIChunk } from './utils/openaiChunk';
+import {
+	convertChatCompletionsToResponsesAPI,
+	createV1ResponseStreamState,
+	convertV1ResponseEventToOpenAIChunks,
+	type V1ResponseStreamState,
+} from './utils/v1ResponseConverter';
 
 const EXTENSION_LABEL = 'LLS OAI';
 const DEFAULT_CONTEXT_LENGTH = 128000;
@@ -16,6 +21,16 @@ const DEFAULT_MAX_TOKENS = 16000;
 const ASK_LLSOAI_TOOL_NAME = 'ask_llsoai';
 const EXPERT_TOOL_CALL_PREFIX = 'llsoai';
 const TODO_TOOL_NAME = 'manage_todo_list';
+
+/**
+ * Mask an API key for display, showing first 4 and last 4 characters
+ */
+function maskApiKey(key: string): string {
+	if (!key || key.length <= 8) {
+		return '****';
+	}
+	return `${key.slice(0, 4)}...${key.slice(-4)}`;
+}
 
 interface CollectedToolCall {
 	id: string;
@@ -76,41 +91,11 @@ interface MainRequestContext {
 	transformThink: boolean;
 }
 
-/**
- * Get the debug directory path (cross-platform compatible).
- */
-function getDebugDir(): string {
-	return require('path').join(require('os').homedir(), '.LLSOAI');
-}
-
-/**
- * Ensure the debug directory exists (cross-platform compatible).
- */
-function ensureDebugDir(): void {
-	const dir = getDebugDir();
-	if (!require('fs').existsSync(dir)) {
-		require('fs').mkdirSync(dir, { recursive: true });
-	}
-}
-
-/**
- * Write JSON data to a debug file in the .LLSOAI directory.
- */
-function writeDebugFile(filename: string, data: any): void {
-	try {
-		ensureDebugDir();
-		const filePath = require('path').join(getDebugDir(), filename);
-		require('fs').writeFileSync(filePath, JSON.stringify(data, null, 2));
-	} catch {
-		// Ignore errors when saving debug files
-	}
-}
-
 const FORCE_TODO_PROMPT = 'If there is no todo list, create one before making changes. If a todo list already exists, continue using the existing todo list, execute todo items in order, and update the todo status after completing each item.';
 const TODO_STATUS_UPDATE_PROMPT = 'If an existing todo item is solved during this conversation, update the todo status when it is completed.';
 const MANDATORY_TODO_PROMPT = 'You MUST use the TODO tool before taking any action. All TODO items must be clear, specific, and detailed with actionable steps. Do not execute any task without first creating or updating a TODO item. All work must be tracked through the TODO tool.';
 
-function getCurrentTodoTaskContent(): string | null {
+function getCurrentTodoTaskContent(sessionId: string): string | null {
 	try {
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		if (!workspaceFolder) {
@@ -119,17 +104,13 @@ function getCurrentTodoTaskContent(): string | null {
 
 		const fs = require('fs');
 		const path = require('path');
-		const currentTaskPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO', 'task.json');
+		const currentTaskPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO', `task_${sessionId}.json`);
 		if (!fs.existsSync(currentTaskPath)) {
 			return null;
 		}
 
 		return fs.readFileSync(currentTaskPath, 'utf8');
-	} catch (error) {
-		writeDebugFile(`todo_current_task_read_error_${Date.now()}.json`, {
-			error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
-			timestamp: new Date().toISOString(),
-		});
+	} catch {
 		return null;
 	}
 }
@@ -138,7 +119,7 @@ function getCurrentTodoTaskContent(): string | null {
  * Save manage_todo_list tool arguments into the active workspace .vscode/TODO folder.
  * Only saves when forceTodoEnabled is true.
  */
-function saveTodoToolState(todoData: any, forceTodoEnabled: boolean): void {
+function saveTodoToolState(todoData: any, forceTodoEnabled: boolean, sessionId: string): void {
 	if (!forceTodoEnabled) {
 		return;
 	}
@@ -155,7 +136,7 @@ function saveTodoToolState(todoData: any, forceTodoEnabled: boolean): void {
 
 		const todoList = Array.isArray(todoData?.todoList) ? todoData.todoList : [];
 		const allCompleted = todoList.length > 0 && todoList.every((item: any) => item?.status === 'completed');
-		const currentTaskPath = path.join(todoDir, 'task.json');
+		const currentTaskPath = path.join(todoDir, `task_${sessionId}.json`);
 
 		if (allCompleted) {
 			// Append completed tasks to a daily archive file: task_YYYY-MM-DD.json
@@ -190,31 +171,19 @@ function saveTodoToolState(todoData: any, forceTodoEnabled: boolean): void {
 				todoList,
 			}, null, 2));
 		}
-	} catch (error) {
-		writeDebugFile(`todo_save_error_${Date.now()}.json`, {
-			error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
-			todoData,
-			timestamp: new Date().toISOString(),
-		});
+	} catch {
+		// Ignore errors when saving todo state
 	}
 }
 
-/**
- * Read the existing unfinished task.json content so it can be sent to the model
- * before tool calling starts. This keeps VS Code tool-call animations working.
- */
-function getExistingTodoTaskPrompt(): string | null {
+function getExistingTodoTaskPrompt(sessionId: string): string | null {
 	try {
-		const existingTaskContent = getCurrentTodoTaskContent();
+		const existingTaskContent = getCurrentTodoTaskContent(sessionId);
 		if (!existingTaskContent) {
 			return null;
 		}
 		return 'TODO-LOCK: Active TODOs must finish first. Only after ALL active TODOs are completed may you process the user message below. Treat it as a queued next request, not as part of the active TODO. Do not create/merge/rename/reorder/replace TODOs until all active items are completed.';
-	} catch (error) {
-		writeDebugFile(`todo_existing_task_read_error_${Date.now()}.json`, {
-			error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
-			timestamp: new Date().toISOString(),
-		});
+	} catch {
 		return null;
 	}
 }
@@ -223,7 +192,7 @@ function getExistingTodoTaskPrompt(): string | null {
  * Return merged manage_todo_list input when the model tries to create a different
  * todo task while an unfinished task.json already exists.
  */
-function getMergedTodoInputForConflict(todoData: any): any | null {
+function getMergedTodoInputForConflict(todoData: any, sessionId: string): any | null {
 	try {
 		const todoList = Array.isArray(todoData?.todoList) ? todoData.todoList : [];
 		const incomingFirstItem = todoList[0];
@@ -239,7 +208,7 @@ function getMergedTodoInputForConflict(todoData: any): any | null {
 
 		const fs = require('fs');
 		const path = require('path');
-		const currentTaskPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO', 'task.json');
+		const currentTaskPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO', `task_${sessionId}.json`);
 		if (!fs.existsSync(currentTaskPath)) {
 			return null;
 		}
@@ -271,15 +240,8 @@ function getMergedTodoInputForConflict(todoData: any): any | null {
 			timestamp: new Date().toISOString(),
 			todoList: mergedTodoList,
 		};
-		writeDebugFile('mergedTodoList.test.json', mergedTodoInput);
-
 		return mergedTodoInput;
-	} catch (error) {
-		writeDebugFile(`todo_conflict_tool_result_error_${Date.now()}.json`, {
-			error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
-			todoData,
-			timestamp: new Date().toISOString(),
-		});
+	} catch {
 		return null;
 	}
 }
@@ -372,7 +334,7 @@ function isCompressionRequest(messages: readonly vscode.LanguageModelChatRequest
  */
 export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvider {
 	private _statusBarItem: vscode.StatusBarItem;
-	private _abortControllers: Map<string, AbortController> = new Map();
+	private _abortControllers: Map<string, Set<AbortController>> = new Map();
 	private _onDidChangeModels: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
 	private _expertRuns: Map<string, ExpertRunState> = new Map();
 	private _activeExpertRunId?: string;
@@ -574,27 +536,17 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			options.tools,
 			model,
 			this._statusBarItem,
-			async (text) => this._estimateTokens(text)
+			async (text: string | vscode.LanguageModelChatRequestMessage) => this._estimateTokens(text)
 		);
 
 		// Build request body
 		const requestBody: any = {
 			model: modelId,
-			messages: this._withExpertPrompt(this._convertMessages(messages, model), expertEnabled),
+			messages: this._withExpertPrompt(this._convertMessages(messages, model, currentSessionId), expertEnabled),
 			stream: true,
 		};
 
-		// Debug: Write system message content to system.txt for verification
-		try {
-			const systemMessages = requestBody.messages.filter((m: any) => m.role === 'system');
-			writeDebugFile('system.txt', {
-				count: systemMessages.length,
-				messages: systemMessages,
-				timestamp: new Date().toISOString()
-			});
-		} catch (e) {
-			console.error('[DEBUG] Failed to write system debug file:', e);
-		}
+		
 
 		// Only pass temperature/top_p based on samplingMode
 		// Some models (e.g. Claude) don't support both simultaneously
@@ -648,9 +600,9 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				}
 				let finalArgs = toolCall.input;
 				if (toolCall.name === TODO_TOOL_NAME) {
-					const mergedTodoInput = getMergedTodoInputForConflict(toolCall.input);
+					const mergedTodoInput = getMergedTodoInputForConflict(toolCall.input, currentSessionId);
 					finalArgs = mergedTodoInput ?? toolCall.input;
-					saveTodoToolState(finalArgs, forceTodoEnabled);
+					saveTodoToolState(finalArgs, forceTodoEnabled, currentSessionId);
 				}
 				progress.report(new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, finalArgs));
 			}
@@ -724,7 +676,9 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			reportText = true,
 		} = params;
 		const abortController = new AbortController();
-		this._abortControllers.set(providerId, abortController);
+		const providerAbortControllers = this._abortControllers.get(providerId) || new Set<AbortController>();
+		providerAbortControllers.add(abortController);
+		this._abortControllers.set(providerId, providerAbortControllers);
 		let assistantResponse = '';
 		const collectedToolCalls: CollectedToolCall[] = [];
 		token.onCancellationRequested(() => {
@@ -733,8 +687,15 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 
 		try {
 			const isAnthropic = apiType === 'anthropic';
+			const isV1Response = apiType === 'v1-response';
 			const normalizedBase = baseUrl.replace(/\/+$/, '');
-			const url = isAnthropic ? `${normalizedBase}/messages` : `${normalizedBase}/chat/completions`;
+			let endpoint = '/chat/completions';
+			if (isAnthropic) {
+				endpoint = '/messages';
+			} else if (isV1Response) {
+				endpoint = '/responses';
+			}
+			const url = `${normalizedBase}${endpoint}`;
 			const headers: Record<string, string> = {
 				'Content-Type': 'application/json',
 			};
@@ -744,20 +705,67 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			} else {
 				headers['Authorization'] = `Bearer ${apiKey}`;
 			}
+			// Request body: v1-response needs conversion from chat completions format to Responses API format.
+			// Note: Anthropic's /v1/responses API expects "input" and "instructions" instead of "messages" and "system".
 			const finalBody = isAnthropic
 				? convertOpenAIRequestToAnthropic(requestBody)
-				: requestBody;
+				: isV1Response
+					? convertChatCompletionsToResponsesAPI(requestBody)
+					: requestBody;
 
-			const response = await fetch(url, {
-				method: 'POST',
-				headers,
-				body: JSON.stringify(finalBody),
-				signal: abortController.signal,
-			});
+			// 创建带有掩码密钥头的格式化 headers
+			const formatHeadersForError = (hdrs: Record<string, string>): string => {
+				const formatted: string[] = [];
+				for (const [key, value] of Object.entries(hdrs)) {
+					if (key.toLowerCase() === 'authorization') {
+						// Authorization: Bearer sk-xxx...xxxx
+						const parts = value.split(' ');
+						if (parts.length >= 2) {
+							formatted.push(`${key}: ${parts[0]} ${maskApiKey(parts[1])}`);
+						} else {
+							formatted.push(`${key}: ${maskApiKey(value)}`);
+						}
+					} else if (key.toLowerCase() === 'x-api-key') {
+						formatted.push(`${key}: ${maskApiKey(value)}`);
+					} else {
+						formatted.push(`${key}: ${value}`);
+					}
+				}
+				return formatted.join('\n');
+			};
+
+			let response: Response;
+			try {
+				response = await fetch(url, {
+					method: 'POST',
+					headers,
+					body: JSON.stringify(finalBody),
+					signal: abortController.signal,
+				});
+			} catch (fetchError) {
+				// fetch 失败时的详细错误信息
+				const errorDetails = [
+					`请求地址: ${url}`,
+					`请求头:`,
+					formatHeadersForError(headers),
+					'',
+					`错误: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`
+				].join('\n');
+
+				throw new Error(`API 请求失败 (fetch failed)\n\n${errorDetails}`);
+			}
 
 			if (!response.ok) {
 				const errorText = await response.text();
-				throw new Error(`API request failed: ${response.status} ${response.statusText}\n${errorText}`);
+				const errorDetails = [
+					`请求地址: ${url}`,
+					`请求头:`,
+					formatHeadersForError(headers),
+					'',
+					`HTTP 状态: ${response.status} ${response.statusText}`,
+					`响应内容: ${errorText}`
+				].join('\n');
+				throw new Error(`API 请求失败\n\n${errorDetails}`);
 			}
 
 			if (!response.body) {
@@ -772,7 +780,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const anthState: AnthropicStreamState | null = isAnthropic
 				? createAnthropicStreamState(modelId, true)
 				: null;
+			const v1ResponseState: V1ResponseStreamState | null = isV1Response
+				? createV1ResponseStreamState(modelId)
+				: null;
 			let currentEventName = '';
+			let currentEventDataLines: string[] = [];
 			let streamDone = false;
 
 			const handleOpenAIDelta = (delta: any) => {
@@ -804,104 +816,195 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				}
 			};
 
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done || streamDone) {
-					if (reportText && progress && transformThink && thinkState.thinkBuffer.length > 0) {
-						progress.report(new vscode.LanguageModelTextPart(`${thinkState.thinkBuffer}\n\n`));
-						thinkState.thinkBuffer = '';
-					}
-					for (const [index, tc] of pendingToolCalls) {
-						if (!tc.name) {
-							continue;
-						}
-						try {
-							const argsStr = tc.arguments.trim();
-							const parsedArgs = argsStr === '' ? {} : JSON.parse(argsStr);
-							collectedToolCalls.push({
-								id: tc.id || `call_${index}`,
-								name: tc.name,
-								arguments: argsStr,
-								input: parsedArgs,
-							});
-						} catch {
-							// Invalid JSON, skip
+			const processSseData = (data: string, eventName: string) => {
+				const trimmedData = data.trim();
+				if (!trimmedData) {
+					return;
+				}
+				if (trimmedData.includes('}data:')) {
+					for (const dataPart of trimmedData.split(/(?<=})data:\s*/g)) {
+						processSseData(dataPart, eventName);
+						if (streamDone) {
+							return;
 						}
 					}
-					break;
+					return;
+				}
+				if (trimmedData === '[DONE]') {
+					streamDone = true;
+					return;
 				}
 
-				buffer += decoder.decode(value, { stream: true });
+				try {
+					const parsed = JSON.parse(trimmedData);
+
+					if (isAnthropic && anthState) {
+						const eventType = eventName || (typeof parsed.type === 'string' ? parsed.type : '');
+						const chunks: OpenAIChunk[] = convertAnthropicEventToOpenAIChunks(eventType, parsed, anthState);
+						for (const chunk of chunks) {
+							if (chunk.done) {
+								streamDone = true;
+								break;
+							}
+							if (chunk.delta) {
+								handleOpenAIDelta(chunk.delta);
+							}
+						}
+					} else if (isV1Response && v1ResponseState) {
+						const eventType = eventName || (typeof parsed.type === 'string' ? parsed.type : '');
+						const chunks: OpenAIChunk[] = convertV1ResponseEventToOpenAIChunks(eventType, parsed, v1ResponseState);
+						for (const chunk of chunks) {
+							if (chunk.done) {
+								streamDone = true;
+								break;
+							}
+							if (chunk.delta) {
+								handleOpenAIDelta(chunk.delta);
+							}
+						}
+					} else {
+						const delta = parsed.choices?.[0]?.delta;
+						handleOpenAIDelta(delta);
+					}
+				} catch (e) {
+					if (trimmedData.includes('\n')) {
+						for (const dataLine of trimmedData.split('\n')) {
+							processSseData(dataLine, eventName);
+							if (streamDone) {
+								return;
+							}
+						}
+						return;
+					}
+				}
+			};
+
+			const flushSseEvent = () => {
+				if (currentEventDataLines.length === 0) {
+					currentEventName = '';
+					return;
+				}
+				const data = currentEventDataLines.join('\n');
+				const eventName = currentEventName;
+				currentEventName = '';
+				currentEventDataLines = [];
+				processSseData(data, eventName);
+			};
+
+			const collectPendingToolCalls = () => {
+				for (const [index, tc] of pendingToolCalls) {
+					if (!tc.name) {
+						continue;
+					}
+					try {
+						const argsStr = tc.arguments.trim();
+						const parsedArgs = argsStr === '' ? {} : JSON.parse(argsStr);
+						collectedToolCalls.push({
+							id: tc.id || `call_${index}`,
+							name: tc.name,
+							arguments: argsStr,
+							input: parsedArgs,
+						});
+					} catch {
+						// ignore JSON parse errors
+					}
+				}
+			};
+
+			const processBuffer = () => {
 				const lines = buffer.split('\n');
 				buffer = lines.pop() || '';
 
 				for (const line of lines) {
 					const trimmedLine = line.trim();
 					if (!trimmedLine) {
-						currentEventName = '';
+						flushSseEvent();
 						continue;
 					}
 
-					if (isAnthropic && trimmedLine.startsWith('event:')) {
+					if (trimmedLine.startsWith('event:')) {
+						if (currentEventDataLines.length > 0) {
+							flushSseEvent();
+							if (streamDone) return;
+						}
 						currentEventName = trimmedLine.slice(6).trim();
 						continue;
 					}
 
-					if (trimmedLine === 'data: [DONE]') {
-						continue;
-					}
-
-					if (trimmedLine.startsWith('data: ')) {
-						try {
-							const json = trimmedLine.slice(6);
-							const parsed = JSON.parse(json);
-
-							if (isAnthropic && anthState) {
-								const eventType = currentEventName || (typeof parsed.type === 'string' ? parsed.type : '');
-								const chunks: OpenAIChunk[] = convertAnthropicEventToOpenAIChunks(eventType, parsed, anthState);
-								for (const chunk of chunks) {
-									if (chunk.done) {
-										streamDone = true;
-										break;
-									}
-									if (chunk.delta) {
-										handleOpenAIDelta(chunk.delta);
-									}
-								}
-								if (streamDone) break;
-							} else {
-								const delta = parsed.choices?.[0]?.delta;
-								handleOpenAIDelta(delta);
-							}
-						} catch (e) {
-							writeDebugFile(`sse_error_${Date.now()}.json`, {
-								error: e instanceof Error ? { message: e.message, stack: e.stack } : String(e),
-								line: trimmedLine,
-								eventName: currentEventName,
-								modelId,
-								timestamp: new Date().toISOString()
-							});
+					if (trimmedLine.startsWith('data:')) {
+						if (!isAnthropic && !isV1Response && currentEventDataLines.length > 0) {
+							flushSseEvent();
+						}
+						currentEventDataLines.push(trimmedLine.slice(5).trimStart());
+						if (currentEventDataLines.length === 1 && currentEventDataLines[0] === '[DONE]') {
+							flushSseEvent();
 						}
 					}
+					if (streamDone) return;
+				}
+			};
+
+			try {
+				while (!streamDone) {
+					const { done, value } = await reader.read();
+					if (done) {
+						break;
+					}
+
+					const decodedChunk = decoder.decode(value, { stream: true });
+					buffer += decodedChunk;
+					processBuffer();
+				}
+			} finally {
+				try {
+					await reader.cancel();
+				} catch {
+					// ignore
 				}
 			}
+
+			// Final decoder flush & buffer processing
+			const finalDecodedChunk = decoder.decode();
+			buffer += finalDecodedChunk;
+			if (buffer.trim()) {
+				const tailLines = buffer.split('\n');
+				for (const tailLine of tailLines) {
+					const trimmedLine = tailLine.trim();
+					if (!trimmedLine) {
+						flushSseEvent();
+						continue;
+					}
+					if (trimmedLine.startsWith('event:')) {
+						currentEventName = trimmedLine.slice(6).trim();
+						continue;
+					}
+					if (trimmedLine.startsWith('data:')) {
+						currentEventDataLines.push(trimmedLine.slice(5).trimStart());
+					}
+				}
+				buffer = '';
+			}
+			flushSseEvent();
+
+			if (reportText && progress && transformThink && thinkState.thinkBuffer.length > 0) {
+				progress.report(new vscode.LanguageModelTextPart(`${thinkState.thinkBuffer}\n\n`));
+				thinkState.thinkBuffer = '';
+			}
+			collectPendingToolCalls();
 			return { text: assistantResponse, toolCalls: collectedToolCalls };
 		} catch (error) {
 			if (error instanceof Error && error.name === 'AbortError') {
 				return { text: assistantResponse, toolCalls: collectedToolCalls };
 			}
-			writeDebugFile(`error_${Date.now()}.json`, {
-				error: error instanceof Error ? { message: error.message, stack: error.stack, name: error.name } : String(error),
-				modelId,
-				providerId,
-				apiType,
-				baseUrl,
-				requestBody,
-				timestamp: new Date().toISOString()
-			});
 			throw error;
 		} finally {
-			this._abortControllers.delete(providerId);
+			const providerAbortControllers = this._abortControllers.get(providerId);
+			if (providerAbortControllers) {
+				providerAbortControllers.delete(abortController);
+				if (providerAbortControllers.size === 0) {
+					this._abortControllers.delete(providerId);
+				}
+			}
 		}
 	}
 
@@ -922,8 +1025,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			return null;
 		}
 		const providers = await this._configManager.getProvidersWithSecrets();
-		const provider = providers.find(p => p.id === config.providerId && p.enabled);
-		const expertModel = provider?.models.find(m => m.modelId === config.modelId);
+		const provider = providers.find((p) => p.id === config.providerId && p.enabled);
+		const expertModel = provider?.models.find((m) => m.modelId === config.modelId);
 		if (!provider || !expertModel || !provider.apiKey) {
 			return null;
 		}
@@ -1472,7 +1575,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	/**
 	 * Convert VS Code chat messages to OpenAI format
 	 */
-	private _convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], model: vscode.LanguageModelChatInformation): Array<any> {
+	private _convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], model: vscode.LanguageModelChatInformation, sessionId: string): Array<any> {
 		const result: Array<any> = [];
 		const lastSourceMessage = messages[messages.length - 1];
 		const isLastSourceMessageUser = lastSourceMessage?.role === vscode.LanguageModelChatMessageRole.User;
@@ -1501,7 +1604,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 
 		// 2.1 Force TODO prompt switch: check global first, then workspace/project
 		const forceTodoEnabled = this._configManager.getGlobalForceTodoEnabled() || this._configManager.getWorkspaceForceTodoEnabled();
-		const hasCurrentTodoTask = getCurrentTodoTaskContent() !== null;
+		const hasCurrentTodoTask = getCurrentTodoTaskContent(sessionId) !== null;
 
 		// 3. VS Code system messages (filtered)
 		for (const message of messages) {
@@ -1590,14 +1693,14 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				const promptAppendix: string[] = [];
 				if (hasCurrentTodoTask) {
 					if (isLastSourceMessageUser && !lastUserContainsTodoListTag) {
-						promptAppendix.push(`TODO-LOCK: The user message below lacks <todoList>. It is a queued NEXT request, not a TODO item. Before any other action, call manage_todo_list with the exact active todoList below, finish ALL active unfinished TODOs in order, and update status after each item. Only after ALL active TODOs are completed may you process the user message below. Do not create/merge/rename/reorder/replace TODOs.\n\n${getCurrentTodoTaskContent() || ''}`);
+						promptAppendix.push(`TODO-LOCK: The user message below lacks <todoList>. It is a queued NEXT request, not a TODO item. Before any other action, call manage_todo_list with the exact active todoList below, finish ALL active unfinished TODOs in order, and update status after each item. Only after ALL active TODOs are completed may you process the user message below. Do not create/merge/rename/reorder/replace TODOs.\n\n${getCurrentTodoTaskContent(sessionId) || ''}`);
 					} else {
 						promptAppendix.push('TODO-LOCK: <todoList> is present. Do NOT recreate or modify TODO structure. Finish ALL active unfinished TODOs strictly in order and call manage_todo_list after each item. Only after ALL active TODOs are completed may you process the user message below.');
 					}
 					promptAppendix.push(TODO_STATUS_UPDATE_PROMPT);
 				}
 				if (forceTodoEnabled) {
-					const existingTodoTaskPrompt = getExistingTodoTaskPrompt();
+					const existingTodoTaskPrompt = getExistingTodoTaskPrompt(sessionId);
 					if (existingTodoTaskPrompt) {
 						promptAppendix.push(existingTodoTaskPrompt);
 					} else {

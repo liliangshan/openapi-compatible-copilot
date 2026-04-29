@@ -10,6 +10,8 @@
  * convertToolChoiceToAnthropic / convertAnthropicEventToOpenAI / convertAnthropicToOpenAI).
  */
 
+import type { OpenAIChunk } from './openaiChunk';
+
 type AnyObj = Record<string, any>;
 
 /**
@@ -49,24 +51,43 @@ export function convertOpenAIRequestToAnthropic(req: AnyObj): AnyObj {
 		body.tools = convertToolsToAnthropic(req.tools);
 	}
 	if (req.tool_choice !== undefined && req.tool_choice !== null) {
-		body.tool_choice = convertToolChoiceToAnthropic(req.tool_choice);
+		const toolChoice = convertToolChoiceToAnthropic(req.tool_choice);
+		if (toolChoice !== undefined) {
+			body.tool_choice = toolChoice;
+		}
 	}
 
 	return body;
 }
 
 /**
+ * Convert an OpenAI-style request body to an Anthropic Responses API request body.
+ *
+ * Input shape (chat completions format, built by provider.ts):
+ *   {
+ *     model, messages, stream, temperature?, top_p?, max_tokens?
+ *   }
+ *
+ * Output shape (Anthropic /v1/responses):
+ *   {
+ *     model, input, instructions?, stream, max_tokens?, temperature?, top_p?
+ *   }
+ *
+ * Note: The Responses API uses "input" instead of "messages" and "instructions"
+ * instead of "system". This function handles the conversion.
+ */
+/**
  * Convert OpenAI messages array to Anthropic messages + system prompt.
  */
-function convertMessagesToAnthropic(messages: AnyObj[]): { messages: AnyObj[]; systemPrompt: string } {
+export function convertMessagesToAnthropic(messages: AnyObj[]): { messages: AnyObj[]; systemPrompt: string } {
 	let systemPrompt = '';
 	const anthropic: AnyObj[] = [];
 
 	for (const msg of messages) {
 		const role: string = msg.role;
 
-		// system messages are extracted into a top-level "system" field
-		if (role === 'system') {
+		// system/developer messages are extracted into a top-level "system" field
+		if (role === 'system' || role === 'developer') {
 			const text = stringifyContent(msg.content);
 			if (text) {
 				if (systemPrompt) systemPrompt += '\n';
@@ -84,20 +105,26 @@ function convertMessagesToAnthropic(messages: AnyObj[]): { messages: AnyObj[]; s
 			continue;
 		}
 
+		if (role !== 'user' && role !== 'assistant') {
+			continue;
+		}
+
 		// user / assistant
 		let contentBlocks = convertContentBlocks(msg.content);
+		let hasToolUse = false;
+
+		// Filter out empty text blocks for all messages (Anthropic / Bedrock disallow them)
+		contentBlocks = contentBlocks.filter((b: AnyObj) => {
+			if (!b || typeof b !== 'object') return false;
+			if (b.type === 'text') return typeof b.text === 'string' && b.text.length > 0;
+			return true;
+		});
 
 		const out: AnyObj = { role, content: contentBlocks };
 
 		// assistant tool_calls -> tool_use blocks appended to content
 		if (role === 'assistant' && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
-			// Filter out empty text blocks (Anthropic / Bedrock disallow them)
-			const filtered: AnyObj[] = [];
-			for (const b of contentBlocks) {
-				if (b.type === 'text' && (!b.text || b.text === '')) continue;
-				filtered.push(b);
-			}
-			contentBlocks = filtered;
+			hasToolUse = true;
 
 			const toolUses: AnyObj[] = [];
 			for (const tc of msg.tool_calls) {
@@ -121,6 +148,10 @@ function convertMessagesToAnthropic(messages: AnyObj[]): { messages: AnyObj[]; s
 				toolUses.push(toolUse);
 			}
 			out.content = [...contentBlocks, ...toolUses];
+		}
+
+		if ((!Array.isArray(out.content) || out.content.length === 0) && !hasToolUse) {
+			continue;
 		}
 
 		anthropic.push(out);
@@ -208,7 +239,7 @@ function mergeConsecutiveRoles(messages: AnyObj[]): AnyObj[] {
  * Note: Anthropic API (non-Bedrock) does NOT use a "type" field on tool definitions.
  * The "type: 'custom'" is Bedrock-specific and should be omitted for direct Anthropic API calls.
  */
-function convertToolsToAnthropic(tools: AnyObj[]): AnyObj[] {
+export function convertToolsToAnthropic(tools: AnyObj[]): AnyObj[] {
 	const out: AnyObj[] = [];
 	for (const tool of tools) {
 		if (!tool || typeof tool !== 'object') continue;
@@ -240,13 +271,23 @@ function convertToolsToAnthropic(tools: AnyObj[]): AnyObj[] {
 
 /**
  * Convert OpenAI tool_choice to Anthropic format.
- *   "auto" / "none" -> same
- *   "required"      -> "any"
+ *   "auto"     -> { type: 'auto' }
+ *   "required" -> { type: 'any' }
+ *   "none"     -> undefined (omit; Anthropic has no direct none equivalent)
  *   { type:'function', function:{name} } -> { type:'tool', name }
  */
-function convertToolChoiceToAnthropic(toolChoice: any): any {
+export function convertToolChoiceToAnthropic(toolChoice: any): any {
 	if (typeof toolChoice === 'string') {
-		return toolChoice === 'required' ? 'any' : toolChoice;
+		if (toolChoice === 'auto') {
+			return { type: 'auto' };
+		}
+		if (toolChoice === 'required') {
+			return { type: 'any' };
+		}
+		if (toolChoice === 'none') {
+			return undefined;
+		}
+		return toolChoice;
 	}
 	if (toolChoice && typeof toolChoice === 'object') {
 		if (toolChoice.type === 'function' && toolChoice.function?.name) {
@@ -290,26 +331,7 @@ function generateChunkId(): string {
 	return `chatcmpl-${ts}${rand}`;
 }
 
-/**
- * Represents an OpenAI-style streaming delta produced from an Anthropic event.
- */
-export interface OpenAIDelta {
-	role?: string;
-	content?: string | null;
-	reasoning_content?: string;
-	tool_calls?: Array<{
-		index: number;
-		id?: string;
-		type?: 'function';
-		function?: { name?: string; arguments?: string };
-	}>;
-}
 
-export interface OpenAIChunk {
-	delta?: OpenAIDelta;
-	finish_reason?: string | null;
-	done?: boolean; // signals [DONE]
-}
 
 /**
  * Convert one parsed Anthropic SSE event into zero or more OpenAI-style chunks.
@@ -447,6 +469,13 @@ export function convertAnthropicEventToOpenAIChunks(
 	return [];
 }
 
+/* ------------------------------------------------------------------ */
+/* v1-response: Responses API SSE events -> OpenAI-style chunks          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * State object for tracking v1-response streaming.
+ */
 /* ------------------------------------------------------------------ */
 /* Non-streaming: Anthropic JSON response -> OpenAI-style response     */
 /* ------------------------------------------------------------------ */

@@ -937,7 +937,7 @@
 				<div class="provider-details">
 					<div class="provider-detail-item">
 						<span class="provider-detail-label">${t('apiType')}</span>
-						<span>${provider.apiType === 'anthropic' ? 'Anthropic' : 'OpenAI-Compatible'}</span>
+						<span>${provider.apiType === 'anthropic' ? 'Anthropic' : provider.apiType === 'v1-response' ? 'v1 Response' : 'OpenAI-Compatible'}</span>
 					</div>
 					<div class="provider-detail-item">
 						<span class="provider-detail-label">${t('baseUrl')}</span>

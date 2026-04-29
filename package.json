@@ -1,10 +1,11 @@
 {
 	"name": "openapi-compatible-copilot",
+
 	"publisher": "liliangshan",
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.2.4",
+	"version": "2.2.5",
 	"engines": {
 		"vscode": "^1.104.0"
 	},

@@ -1,15 +1,40 @@
 {
-  "timestamp": "2026-04-27T17:47:46.236Z",
+  "timestamp": "2026-04-29T02:42:41.302Z",
   "todoList": [
     {
       "id": 1,
-      "status": "completed",
-      "title": "确认 GitHub 操作意图"
+      "status": "in-progress",
+      "title": "检查 Git 状态和当前分支"
     },
     {
       "id": 2,
       "status": "in-progress",
-      "title": "执行 git push 上传代码"
+      "title": "检查 Git 状态"
+    },
+    {
+      "id": 3,
+      "status": "not-started",
+      "title": "提交更改"
+    },
+    {
+      "id": 4,
+      "status": "not-started",
+      "title": "推送到远程仓库"
+    },
+    {
+      "id": 5,
+      "status": "pending",
+      "title": "添加所有更改到 Git 暂存区"
+    },
+    {
+      "id": 6,
+      "status": "pending",
+      "title": "提交更改（附 commit message）"
+    },
+    {
+      "id": 7,
+      "status": "pending",
+      "title": "推送到远程仓库"
     }
   ]
 }

@@ -879,6 +879,7 @@ After completing the operations, please reply with the following message in both
 								<select id="providerApiType">
 									<option value="openai-compatible">OpenAI-Compatible</option>
 									<option value="anthropic">Anthropic</option>
+									<option value="v1-response">v1 Response</option>
 								</select>
 								<div class="help-text" data-i18n="apiTypeHelp">The API protocol used by this provider</div>
 							</div>

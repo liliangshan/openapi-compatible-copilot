@@ -12,8 +12,8 @@ export interface ProviderConfig {
 	baseUrl: string;
 	/** API key for authentication */
 	apiKey: string;
-	/** API type: 'openai-compatible' | 'anthropic' */
-	apiType: 'openai-compatible' | 'anthropic';
+	/** API type: 'openai-compatible' | 'anthropic' | 'v1-response' */
+	apiType: 'openai-compatible' | 'anthropic' | 'v1-response';
 	/** List of models configured for this provider */
 	models: ModelConfig[];
 	/** Whether this provider is enabled */
