@@ -9,7 +9,8 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 🎨 **Beautiful Configuration UI** - Easy-to-use webview interface for managing providers
 - 🔌 **Copilot Integration** - Seamlessly integrates with GitHub Copilot Chat
 - 📤 **Import/Export Config** - Backup and restore your provider configurations
-- 💾 **Auto Save Chat History** - Automatically save chat conversations to local files
+- 💾 **Auto Save Chat History** - Automatically save chat conversations to local files with **dual-path support** (global + project-level)
+- 🔄 **Expert Mode Chat History** - Automatically saves Expert Mode conversations including tool calls and multi-turn expert interactions
 - 🔄 **Copilot Records Migration** - Import and export Copilot chat records between machines
 - 🌐 **Multi-language UI** - Supports English, Simplified Chinese, Traditional Chinese, Korean, Japanese, French, and German. Auto mode follows the VS Code display language and falls back to English for unsupported languages
 - 🖥️ **Global & Project System Prompt Settings** - Dual system prompt inputs (global + workspace-scoped) appended to user messages for better model adherence
@@ -66,6 +67,32 @@ Expert Mode is configured in the provider settings:
 - 🧠 **Quality Assurance** — Expert model reviews catch issues that smaller models might miss
 - 🔧 **Flexible** — Choose how often the expert model is involved based on your needs
 - 🔗 **Seamless** — Expert model output is automatically integrated into the Copilot Chat conversation
+- 💾 **Chat History** — Expert Mode conversations are automatically saved to chat history, including tool calls and multi-turn interactions
+
+## 💾 Chat History
+
+### Dual-Path Saving
+
+Chat history can be saved to two locations simultaneously:
+
+| Location | Default Path | Description |
+|----------|-------------|-------------|
+| **Global** | `~/.LLSOAI/chat_*.json` | Centralized storage for all conversations |
+| **Project** | `<project>/.LLSOAI/YYYY-MM-DD/` | Date-organized per-project storage |
+
+Each save location can be independently enabled or disabled:
+
+- **Global** — Always overwrites the latest session, keeping a single up-to-date record
+- **Project** — Organized by date, creating a new file each day for historical tracking
+
+### Expert Mode Chat History
+
+Expert Mode conversations are automatically saved when the expert model completes streaming:
+
+- ✅ Saves after each expert response (text or tool calls)
+- ✅ Includes user's question, expert responses, and tool interactions
+- ✅ Both global and project-level saves apply to Expert Mode
+- ✅ Saves the complete expert context for review and continuity
 
 ## Supported APIs
 

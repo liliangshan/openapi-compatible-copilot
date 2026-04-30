@@ -478,6 +478,42 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				}
 				break;
 
+			case 'getProjectChatHistorySettings':
+				try {
+					const settings = await this._configManager.getProjectChatHistorySettings();
+					this._getWebview()?.postMessage({
+						command: 'projectChatHistorySettingsLoaded',
+						data: settings
+					});
+				} catch (error: unknown) {
+					this._getWebview()?.postMessage({
+						command: 'projectChatHistorySettingsLoaded',
+						data: { enabled: false, savePath: '' }
+					});
+				}
+				break;
+
+			case 'updateProjectChatHistorySettings':
+				try {
+					const { enabled, savePath } = message.data as { enabled: boolean; savePath: string };
+					const updatedSettings = await this._configManager.updateProjectChatHistorySettings({ enabled, savePath });
+					this._getWebview()?.postMessage({
+						command: 'projectChatHistorySettingsLoaded',
+						data: updatedSettings,
+						success: true
+					});
+					vscode.window.showInformationMessage('Project chat history settings updated.');
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to update project chat history settings: ${errorMessage}`);
+					this._getWebview()?.postMessage({
+						command: 'projectChatHistorySettingsLoaded',
+						success: false,
+						error: errorMessage
+					});
+				}
+				break;
+
 			case 'getSystemPrompt':
 				try {
 					const globalPrompt = this._configManager.getGlobalSystemPrompt();
@@ -1171,6 +1207,21 @@ After completing the operations, please reply with the following message in both
 		return `${home}/.LLSOAI`;
 	}
 
+	/**
+	 * Get default project chat history save path (project's .LLSOAI directory)
+	 */
+	private _getDefaultProjectSavePath(): string {
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		if (workspaceFolders && workspaceFolders.length > 0) {
+			// Use the first workspace folder's path
+			const projectPath = workspaceFolders[0].uri.fsPath;
+			const separator = process.platform === 'win32' ? '\\' : '/';
+			return `${projectPath}${separator}.LLSOAI`;
+		}
+		// Fallback to global default if no workspace is open
+		return this._getDefaultSavePath();
+	}
+
 	private _getNonce(): string {
 		let text = '';
 		const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -1277,6 +1328,7 @@ export class ConfigViewPanel {
 		}
 
 		const chatHistorySettings = await this._configManager.getChatHistorySettings();
+		const projectChatHistorySettings = await this._configManager.getProjectChatHistorySettings();
 		const expertModeSettings = this._configManager.getExpertModeConfig();
 		const projectExpertModeSettings = this._configManager.getWorkspaceExpertModeConfig();
 		const effectiveExpertModeSettings = this._configManager.getEffectiveExpertModeConfig();
@@ -1290,6 +1342,8 @@ export class ConfigViewPanel {
 		return {
 			chatHistoryEnabled: chatHistorySettings.enabled,
 			chatHistorySavePath: chatHistorySettings.savePath || this._getDefaultSavePath(),
+			projectChatHistoryEnabled: projectChatHistorySettings.enabled,
+			projectChatHistorySavePath: projectChatHistorySettings.savePath || this._getDefaultProjectSavePath(),
 			expertModeSettings,
 			projectExpertModeSettings,
 			effectiveExpertModeSettings,
@@ -1465,6 +1519,23 @@ export class ConfigViewPanel {
 				</div>
 			</section>
 
+			<!-- Project Chat History Section -->
+			<section class="config-section">
+				<h2 data-i18n="chatHistory">Chat History</h2>
+				<div class="form-group">
+					<label class="checkbox-label">
+						<input type="checkbox" id="panelProjectChatHistoryEnabled" ${settings.projectChatHistoryEnabled ? 'checked' : ''} />
+						<span data-i18n="saveChatHistory">Save Chat History</span>
+					</label>
+					<div class="help-text" data-i18n="chatHistoryHelp">If enabled, chat history will be saved to the project directory.</div>
+				</div>
+				<div class="form-group">
+					<label for="panelProjectChatHistorySavePath" data-i18n="chatHistorySavePath">Save Path</label>
+					<input type="text" id="panelProjectChatHistorySavePath" value="${settings.projectChatHistorySavePath || this._getDefaultProjectSavePath()}" />
+					<div class="help-text" data-i18n="chatHistorySavePathHelp">Directory to save chat history. Defaults to project's .LLSOAI folder.</div>
+				</div>
+			</section>
+
 			<!-- Project Expert Mode Section -->
 			<section class="config-section expert-settings-card">
 				<div class="expert-settings-header">
@@ -1597,6 +1668,10 @@ export class ConfigViewPanel {
 			case 'saveProjectSettings':
 				await this._configManager.updateWorkspaceSystemPrompt(data.projectSystemPrompt);
 				await this._configManager.updateWorkspaceForceTodoEnabled(!!data.forceTodoEnabled);
+				await this._configManager.updateProjectChatHistorySettings({
+					enabled: !!data.projectChatHistoryEnabled,
+					savePath: data.projectChatHistorySavePath || ''
+				});
 				await this._configManager.updateWorkspaceExpertModeConfig({
 					enabledState: data.expertModeEnabledState || 'global',
 					providerId: data.expertModeProviderId || '',
@@ -1707,6 +1782,18 @@ Please perform the following operations:
 			return appData ? `${appData}/LLSOAI` : `${home}/AppData/Roaming/LLSOAI`;
 		}
 		return `${home}/.LLSOAI`;
+	}
+
+	private static _getDefaultProjectSavePath(): string {
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		if (workspaceFolders && workspaceFolders.length > 0) {
+			// Use the first workspace folder's path
+			const projectPath = workspaceFolders[0].uri.fsPath;
+			const separator = process.platform === 'win32' ? '\\' : '/';
+			return `${projectPath}${separator}.LLSOAI`;
+		}
+		// Fallback to global default if no workspace is open
+		return this._getDefaultSavePath();
 	}
 
 	private static _getNonce(): string {

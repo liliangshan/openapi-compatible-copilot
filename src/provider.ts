@@ -1248,6 +1248,92 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		return tools.filter((tool: any) => tool?.name !== TODO_TOOL_NAME);
 	}
 
+	/**
+	 * Build chat messages array for expert mode chat history
+	 * Converts expert messages to the format expected by saveChatHistory
+	 */
+	private _buildExpertChatMessages(
+		state: ExpertRunState,
+		currentResponse?: string
+	): Array<{ role: string; content: string; name?: string }> {
+		const result: Array<{ role: string; content: string; name?: string }> = [];
+
+		// Add system message indicating expert mode
+		result.push({
+			role: 'system',
+			content: `LLSOAI expert mode. Expert model ID: ${state.expertModelId}`,
+		});
+
+		// Add user's question
+		const question = typeof state.askLlsoaiArguments?.question === 'string'
+			? state.askLlsoaiArguments.question
+			: JSON.stringify(state.askLlsoaiArguments ?? {}, null, 2);
+		result.push({
+			role: 'user',
+			content: question,
+		});
+
+		// Add all expert messages from state
+		for (const msg of state.expertMessages) {
+			if (msg.role === 'assistant') {
+				let content = '';
+				if (msg.content) {
+					content += msg.content;
+				}
+				if ((msg as any).tool_calls && (msg as any).tool_calls.length > 0) {
+					if (content) {
+						content += '\n\n';
+					}
+					content += 'Tool calls made:\n';
+					for (const tc of (msg as any).tool_calls) {
+						const func = tc.function || tc;
+						content += `- ${func.name}: ${func.arguments || JSON.stringify(tc.input || {})}\n`;
+					}
+				}
+				if (content) {
+					result.push({ role: 'assistant', content });
+				}
+			} else if (msg.role === 'tool') {
+				const toolMsg = msg as any;
+				const content = `[Tool result for ${toolMsg.tool_call_id}]: ${toolMsg.content || ''}`;
+				result.push({ role: 'user', content });
+			} else if (msg.role === 'user') {
+				const userContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+				if (userContent) {
+					result.push({ role: 'user', content: userContent });
+				}
+			}
+		}
+
+		// Add current response if provided (for the response that just completed)
+		if (currentResponse) {
+			result.push({ role: 'assistant', content: currentResponse });
+		}
+
+		return result;
+	}
+
+	/**
+	 * Save expert mode chat history
+	 * Called after each expert response (tool call or text)
+	 */
+	private async _saveExpertChatHistory(
+		state: ExpertRunState,
+		currentResponse?: string
+	): Promise<void> {
+		try {
+			const chatMessages = this._buildExpertChatMessages(state, currentResponse);
+			const expertTools = this._filterExpertTools(state.mainTools);
+			await this._configManager.saveChatHistory(
+				chatMessages,
+				state.expertModelId,
+				expertTools.length > 0 ? expertTools : undefined
+			);
+		} catch (error) {
+			console.error('Failed to save expert chat history:', error);
+		}
+	}
+
 	private async _runExpertTurn(
 		state: ExpertRunState,
 		expertContext: MainRequestContext,
@@ -1317,6 +1403,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				));
 			}
 			state.expertMessages.push(assistantMessage);
+			// 流式处理完成后保存（消息已加入 state.expertMessages）
+			await this._saveExpertChatHistory(state);
 			return;
 		}
 
@@ -1327,6 +1415,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				content: result.text,
 			});
 		}
+		// 流式处理完成后保存（消息已加入 state.expertMessages）
+		await this._saveExpertChatHistory(state);
 		await this._finishExpertAndContinueMain(state, result.text || '', progress, token);
 	}
 

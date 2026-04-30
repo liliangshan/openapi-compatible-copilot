@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.0
+
+### Added
+- **Project-level Session Saving** — Dual-save mechanism that saves chat history to both global path (`~/.LLSOAI/`) and project path (`.LLSOAI/` organized by date). Each save location can be independently enabled or disabled, giving you flexible control over where your conversation history is stored.
+- **Expert Mode Chat History Saving** — Automatically saves Expert Mode conversations to chat history. When the expert model completes streaming (whether it returns text or makes tool calls), the complete expert conversation context is preserved, including the user's question, expert responses, and tool interactions.
+
 ## 2.2.3
 
 ### Fixed

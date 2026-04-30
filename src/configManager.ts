@@ -42,12 +42,26 @@ export function getDefaultChatHistorySavePath(): string {
 }
 
 /**
+ * Get default project chat history save path (project's .LLSOAI directory)
+ */
+export function getDefaultProjectChatHistorySavePath(): string {
+	const workspaceFolders = vscode.workspace.workspaceFolders;
+	if (workspaceFolders && workspaceFolders.length > 0) {
+		// Use the first workspace folder's path
+		return path.join(workspaceFolders[0].uri.fsPath, '.LLSOAI');
+	}
+	// Fallback to global default if no workspace is open
+	return getDefaultChatHistorySavePath();
+}
+
+/**
  * Manages provider configurations including persistence and secrets
  */
 export class ConfigManager {
 	private static readonly PROVIDERS_KEY = 'openapicopilot.providers';
 	private static readonly SECRET_PREFIX = 'openapicopilot.apiKey.';
 	private static readonly CHAT_HISTORY_KEY = 'openapicopilot.chatHistorySettings';
+	private static readonly PROJECT_CHAT_HISTORY_KEY = 'openapicopilot.projectChatHistorySettings';
 	private static readonly EXPERT_MODE_CONFIG_KEY = 'openapicopilot.expertModeConfig';
 	private static readonly EXPERT_MODE_ENABLED_CONFIG_KEY = 'expertMode.enabled';
 	private static readonly EXPERT_MODE_PROVIDER_CONFIG_KEY = 'expertMode.providerId';
@@ -56,6 +70,7 @@ export class ConfigManager {
 	private static readonly GLOBAL_FORCE_TODO_KEY = 'openapicopilot.globalForceTodoEnabled';
 	private static readonly WORKSPACE_FORCE_TODO_KEY = 'openapicopilot.workspaceForceTodoEnabled';
 	private static readonly LANGUAGE_CONFIG_KEY = 'language';
+	private projectChatHistorySaveQueue = Promise.resolve();
 
 	constructor(
 		private readonly context: vscode.ExtensionContext,
@@ -220,6 +235,31 @@ export class ConfigManager {
 		const current = await this.getChatHistorySettings();
 		const updated = { ...current, ...settings };
 		await this.context.globalState.update(ConfigManager.CHAT_HISTORY_KEY, updated);
+		return updated;
+	}
+
+	/**
+	 * Get project-level chat history auto-save settings
+	 */
+	async getProjectChatHistorySettings(): Promise<ChatHistorySettings> {
+		const stored = this.context.workspaceState.get<ChatHistorySettings>(ConfigManager.PROJECT_CHAT_HISTORY_KEY);
+		if (stored) {
+			return stored;
+		}
+		// Return default settings
+		return {
+			enabled: false,
+			savePath: getDefaultProjectChatHistorySavePath(),
+		};
+	}
+
+	/**
+	 * Update project-level chat history auto-save settings
+	 */
+	async updateProjectChatHistorySettings(settings: Partial<ChatHistorySettings>): Promise<ChatHistorySettings> {
+		const current = await this.getProjectChatHistorySettings();
+		const updated = { ...current, ...settings };
+		await this.context.workspaceState.update(ConfigManager.PROJECT_CHAT_HISTORY_KEY, updated);
 		return updated;
 	}
 
@@ -407,6 +447,11 @@ export class ConfigManager {
 	 * Save chat history to file
 	 * Normal save: overwrites the file for the same session (chat_<sessionId>.json)
 	 * When conversation-summary is detected (compression): also saves an archive file (chat-session-<timestamp>.json)
+	 * 
+	 * Behavior:
+	 * 1. Always saves to global settings path if global is enabled
+	 * 2. Additionally saves to project path (organized by date) if project-level is also enabled
+	 * 
 	 * @param messages The complete conversation history
 	 * @param modelId The model used for this conversation
 	 * @param tools The tools available for this conversation
@@ -416,13 +461,71 @@ export class ConfigManager {
 		modelId?: string,
 		tools?: any[]
 	): Promise<void> {
-		const settings = await this.getChatHistorySettings();
-		if (!settings.enabled || messages.length === 0) {
+		if (messages.length === 0) {
 			return;
 		}
 
+		// Check both global and project-level settings
+		const globalSettings = await this.getChatHistorySettings();
+		const projectSettings = await this.getProjectChatHistorySettings();
+
+		// Both disabled - nothing to save
+		if (!globalSettings.enabled && !projectSettings.enabled) {
+			return;
+		}
+
+		// Helper function to normalize save path (fallback to default if empty)
+		const normalizePath = (savePath: string | undefined, defaultPath: string): string => {
+			const trimmed = savePath?.trim();
+			return trimmed || defaultPath;
+		};
+
+		// Check if this is a compression event (system prompt contains "create a comprehensive")
+		const isCompression = messages.some(m => m.role === 'system' && m.content.includes('create a comprehensive'));
+		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+		const startTime = new Date().toISOString();
+
+		// Build the chat history object
+		const chatData: any = {
+			sessionId: this._generateSessionId(messages.find(m => m.role === 'user')?.content || 'unknown'),
+			modelId,
+			startTime,
+			messageCount: messages.length,
+			messages: messages.map(m => ({
+				role: m.role,
+				name: m.name ?? undefined,
+				content: m.content,
+			})),
+		};
+
+		// Add tools if available
+		if (tools && tools.length > 0) {
+			chatData.tools = tools;
+		}
+
+		// Serialize to JSON with error handling
+		let content: string;
 		try {
-			const saveUri = vscode.Uri.file(settings.savePath);
+			content = JSON.stringify(chatData, null, 2);
+		} catch (error) {
+			console.error('Failed to serialize chat history:', error);
+			return;
+		}
+
+		// Helper function to save chat history
+		const saveToPath = async (savePath: string, useDateFolder: boolean = false): Promise<void> => {
+			let finalPath = savePath;
+			
+			// If using date folder, append date folder structure
+			if (useDateFolder) {
+				const now = new Date();
+				const year = now.getFullYear().toString();
+				const month = (now.getMonth() + 1).toString().padStart(2, '0');
+				const day = now.getDate().toString().padStart(2, '0');
+				finalPath = vscode.Uri.joinPath(vscode.Uri.file(savePath), year, month, day).fsPath;
+			}
+			
+			const saveUri = vscode.Uri.file(finalPath);
 			
 			// Ensure directory exists
 			try {
@@ -431,38 +534,8 @@ export class ConfigManager {
 				await vscode.workspace.fs.createDirectory(saveUri);
 			}
 
-			// Generate session ID from first user message
-			const firstUserMsg = messages.find(m => m.role === 'user');
-			const firstMessageContent = firstUserMsg?.content || 'unknown';
-			const sessionId = this._generateSessionId(firstMessageContent);
-
-			// Check if this is a compression event (system prompt contains "create a comprehensive")
-			const isCompression = messages.some(m => m.role === 'system' && m.content.includes('create a comprehensive'));
-			const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-			const startTime = new Date().toISOString();
-
-			// Build the chat history object
-			const chatData: any = {
-				sessionId,
-				modelId,
-				startTime,
-				messageCount: messages.length,
-				messages: messages.map(m => ({
-					role: m.role,
-					name: m.name || undefined,
-					content: m.content,
-				})),
-			};
-
-			// Add tools if available
-			if (tools && tools.length > 0) {
-				chatData.tools = tools;
-			}
-
-			const content = JSON.stringify(chatData, null, 2);
-
 			// Normal save: overwrite session file
-			const sessionFilename = `chat_${sessionId}.json`;
+			const sessionFilename = `chat_${chatData.sessionId}.json`;
 			const sessionFileUri = vscode.Uri.joinPath(saveUri, sessionFilename);
 			await vscode.workspace.fs.writeFile(sessionFileUri, Buffer.from(content, 'utf8'));
 
@@ -472,8 +545,192 @@ export class ConfigManager {
 				const archiveFileUri = vscode.Uri.joinPath(saveUri, archiveFilename);
 				await vscode.workspace.fs.writeFile(archiveFileUri, Buffer.from(content, 'utf8'));
 			}
-		} catch (error) {
-			console.error('Failed to save chat history:', error);
+		};
+
+		// Helper function to save project-level chat history (daily cumulative save)
+		const saveProjectChatHistory = async (savePath: string): Promise<void> => {
+			// Serialize save operation to prevent concurrent writes from corrupting data
+			// Use .catch(() => undefined) to prevent a single failure from killing the entire queue
+			const runSave = async (): Promise<void> => {
+				// Filter messages to only include user and assistant
+				// Handle content that might be an array or a string
+				const filteredMessages: Array<{ role: string; content: string; name?: string }> = [];
+				for (const m of messages) {
+					if (m.role !== 'user' && m.role !== 'assistant') {
+						continue;
+					}
+
+					// Handle content: if it's an array, iterate through it; if it's a string, use it directly
+					if (Array.isArray(m.content)) {
+						// If content is an array, iterate through each item
+						for (const item of m.content) {
+							if (typeof item === 'string' && item.trim()) {
+								filteredMessages.push({
+									role: m.role,
+									content: item,
+									name: m.name ?? undefined,
+								});
+							} else if (typeof item === 'object' && item !== null) {
+								// Handle object with text property (e.g., { type: "text", text: "..." })
+								const text = (item as { text?: unknown }).text;
+								if (typeof text === 'string' && text.trim()) {
+									filteredMessages.push({
+										role: m.role,
+										content: text,
+										name: m.name ?? undefined,
+									});
+								}
+							}
+						}
+					} else if (typeof m.content === 'string' && m.content.trim()) {
+						// If content is a string, use it directly
+						filteredMessages.push({
+							role: m.role,
+							content: m.content,
+							name: m.name ?? undefined,
+						});
+					}
+				}
+
+				if (filteredMessages.length === 0) {
+					return;
+				}
+
+				// Create date-based filename: YYYY-MM-DD.json
+				const now = new Date();
+				const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+				const dailyFilename = `${dateStr}.json`;
+
+				const dailyFileUri = vscode.Uri.joinPath(vscode.Uri.file(savePath), dailyFilename);
+
+				// Check if file exists using stat first, then read
+				let existingRecords: Array<{ role: string; content: string; name?: string }> = [];
+				let fileExists = false;
+				try {
+					await vscode.workspace.fs.stat(dailyFileUri);
+					fileExists = true;
+				} catch {
+					// File doesn't exist, continue with empty records
+				}
+
+				if (fileExists) {
+					try {
+						const existingContent = await vscode.workspace.fs.readFile(dailyFileUri);
+						const existingText = Buffer.from(existingContent).toString('utf8');
+						const existingData = JSON.parse(existingText);
+
+						// Validate top-level structure - if invalid, skip save to avoid corrupting file
+						if (
+							!existingData ||
+							typeof existingData !== 'object' ||
+							!Array.isArray((existingData as any).records)
+						) {
+							console.error(
+								'Invalid project chat history file structure, skipping save to avoid corruption:',
+								dailyFileUri.fsPath
+							);
+							return;
+						}
+
+						// Validate and filter existing records
+						existingRecords = (existingData as any).records.filter((r: any) =>
+							(r.role === 'user' || r.role === 'assistant') &&
+							typeof r.content === 'string' &&
+							(r.name === undefined || r.name === null || typeof r.name === 'string')
+						);
+					} catch (error) {
+						// File existed but failed to read/parse - don't overwrite with empty data
+						console.error(
+							'Failed to read or parse existing project chat history file, skipping save:',
+							error
+						);
+						return;
+					}
+				}
+
+				// Ensure directory exists
+				const saveUri = vscode.Uri.file(savePath);
+				try {
+					await vscode.workspace.fs.stat(saveUri);
+				} catch {
+					await vscode.workspace.fs.createDirectory(saveUri);
+				}
+
+				// Helper function to create a unique signature for deduplication
+				// Using JSON.stringify on a tuple avoids key collision from colon characters
+				const makeSignature = (r: { role: string; content: string; name?: string }): string =>
+					JSON.stringify([r.role, r.content, r.name ?? null]);
+
+				// Build set of existing signatures for O(1) lookup
+				// Using Map to preserve the actual record (in case of collisions)
+				const existingSignatureMap = new Map<string, { role: string; content: string; name?: string }>();
+				for (const r of existingRecords) {
+					existingSignatureMap.set(makeSignature(r), r);
+				}
+
+				// Filter and deduplicate: check against existing AND newly added records
+				// This ensures both file-level and batch-level deduplication
+				const newRecords: Array<{ role: string; content: string; name?: string }> = [];
+				for (const record of filteredMessages) {
+					const signature = makeSignature(record);
+					if (!existingSignatureMap.has(signature)) {
+						existingSignatureMap.set(signature, record);
+						newRecords.push(record);
+					}
+				}
+
+				// If no new records to add, skip saving
+				if (newRecords.length === 0) {
+					return;
+				}
+
+				// Append new records to existing ones
+				const dailyData = {
+					date: dateStr,
+					lastUpdated: new Date().toISOString(),
+					records: [...existingRecords, ...newRecords],
+				};
+
+				const dailyContent = JSON.stringify(dailyData, null, 2);
+				await vscode.workspace.fs.writeFile(dailyFileUri, Buffer.from(dailyContent, 'utf8'));
+			};
+
+			// Chain saves: swallow previous errors to keep queue alive
+			const savePromise = this.projectChatHistorySaveQueue
+				.catch(() => undefined)
+				.then(runSave);
+
+			// Update queue reference, swallowing this run's error so chain continues
+			this.projectChatHistorySaveQueue = savePromise.catch(() => undefined);
+
+			// Await the save promise so caller can handle errors
+			await savePromise;
+		};
+
+		// 1. Always save to global path if global is enabled
+		if (globalSettings.enabled) {
+			const globalPath = normalizePath(
+				globalSettings.savePath,
+				await getDefaultChatHistorySavePath()
+			);
+			try {
+				await saveToPath(globalPath, false);
+			} catch (error) {
+				console.error('Failed to save chat history to global path:', error);
+			}
+		}
+
+		// 2. Additionally save to project path (daily cumulative) if project-level is also enabled
+		if (projectSettings.enabled) {
+			const projectPath = normalizePath(
+				projectSettings.savePath,
+				await getDefaultProjectChatHistorySavePath()
+			);
+			try {
+				await saveProjectChatHistory(projectPath);
+			} catch (error) {
+				console.error('Failed to save chat history to project path:', error);
+			}
 		}
 	}
 }
