@@ -55,6 +55,7 @@ interface ModelRequestParams {
 	apiType: string;
 	apiKey: string;
 	requestBody: any;
+	sessionId?: string;
 	requestLabel?: string;
 	transformThink?: boolean;
 	progress?: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>;
@@ -64,6 +65,7 @@ interface ModelRequestParams {
 
 interface ModelRequestResult {
 	text: string;
+	reasoningContent: string;
 	toolCalls: CollectedToolCall[];
 }
 
@@ -322,6 +324,80 @@ function collectToolResultText(pr: { content?: unknown[] }): string {
 		}
 	}
 	return text;
+}
+
+function getReasoningCacheFilePath(sessionId: string): string {
+	const os = require('os');
+	const path = require('path');
+	const safeSessionId = String(sessionId || 'unknown').replace(/[^a-zA-Z0-9._-]/g, '_') || 'unknown';
+	return path.join(os.homedir(), '.LLSOAI', 'reasoning', `${safeSessionId}.json`);
+}
+
+function readReasoningCache(sessionId: string): Record<string, any> {
+	try {
+		const fs = require('fs');
+		const filePath = getReasoningCacheFilePath(sessionId);
+		if (!fs.existsSync(filePath)) {
+			return {};
+		}
+		const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+		return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+	} catch {
+		return {};
+	}
+}
+
+function writeReasoningCache(sessionId: string, cache: Record<string, any>): void {
+	try {
+		const fs = require('fs');
+		const path = require('path');
+		const filePath = getReasoningCacheFilePath(sessionId);
+		fs.mkdirSync(path.dirname(filePath), { recursive: true });
+		fs.writeFileSync(filePath, JSON.stringify(cache, null, 2), 'utf8');
+	} catch {
+		// Ignore reasoning cache write errors.
+	}
+}
+
+function saveReasoningContentForToolCalls(sessionId: string | undefined, toolCalls: CollectedToolCall[], reasoningContent: string): void {
+	if (!sessionId || toolCalls.length === 0 || !reasoningContent) {
+		return;
+	}
+	const cache = readReasoningCache(sessionId);
+	for (const toolCall of toolCalls) {
+		cache[toolCall.id] = {
+			reasoning_content: reasoningContent,
+			updatedAt: new Date().toISOString(),
+		};
+	}
+	writeReasoningCache(sessionId, cache);
+}
+
+function getReasoningContentForToolCall(sessionId: string, toolCallId: string): string | undefined {
+	const cache = readReasoningCache(sessionId);
+	const entry = cache[toolCallId];
+	if (typeof entry === 'string') {
+		return entry;
+	}
+	if (entry && typeof entry.reasoning_content === 'string') {
+		return entry.reasoning_content;
+	}
+	return undefined;
+}
+
+function withReasoningContentForToolCall(sessionId: string, assistantMessage: any, toolCallId: string): any {
+	const reasoningContent = getReasoningContentForToolCall(sessionId, toolCallId);
+	if (!reasoningContent || assistantMessage?.role !== 'assistant' || !Array.isArray(assistantMessage.tool_calls)) {
+		return assistantMessage;
+	}
+	const hasToolCall = assistantMessage.tool_calls.some((toolCall: any) => toolCall?.id === toolCallId);
+	if (!hasToolCall) {
+		return assistantMessage;
+	}
+	return {
+		...assistantMessage,
+		reasoning_content: reasoningContent,
+	};
 }
 
 function getFallbackChatSessionId(messages: readonly vscode.LanguageModelChatRequestMessage[]): string {
@@ -668,6 +744,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const result = await this._requestModelWithTimelineTools({
 			...mainContext,
 			requestBody,
+			sessionId: currentSessionId,
 			requestLabel: 'main',
 			progress,
 			token,
@@ -678,7 +755,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const internalToolCalls = result.toolCalls.filter(toolCall => toolCall.name === ASK_LLSOAI_TOOL_NAME || toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME);
 			const ordinaryToolCalls = result.toolCalls.filter(toolCall => toolCall.name !== ASK_LLSOAI_TOOL_NAME && toolCall.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME);
 			if (internalToolCalls.length > 1 || (internalToolCalls.length > 0 && ordinaryToolCalls.length > 0)) {
-				await this._continueMainAfterInvalidInternalToolCalls(internalToolCalls, ordinaryToolCalls, requestBody.messages, mainContext, apiTools, progress, token);
+				await this._continueMainAfterInvalidInternalToolCalls(internalToolCalls, ordinaryToolCalls, requestBody.messages, mainContext, apiTools, currentSessionId, progress, token);
 				return;
 			}
 			for (const toolCall of result.toolCalls) {
@@ -686,7 +763,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					if (expertModel) {
 						await this._startExpertRun(toolCall, expertModel, currentSessionId, requestBody.messages, mainContext, apiTools, progress, token);
 					} else {
-						await this._continueMainAfterUnavailableExpert(toolCall, requestBody.messages, mainContext, apiTools, progress, token);
+						await this._continueMainAfterUnavailableExpert(toolCall, requestBody.messages, mainContext, apiTools, currentSessionId, progress, token);
 					}
 					continue;
 				}
@@ -694,7 +771,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					if (solutionModel) {
 						await this._startSolutionRun(toolCall, solutionModel, expertModel, currentSessionId, requestBody.messages, mainContext, apiTools, progress, token);
 					} else {
-						await this._continueMainAfterUnavailableSolutionProvider(toolCall, requestBody.messages, mainContext, apiTools, progress, token);
+						await this._continueMainAfterUnavailableSolutionProvider(toolCall, requestBody.messages, mainContext, apiTools, currentSessionId, progress, token);
 					}
 					continue;
 				}
@@ -748,6 +825,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		mainMessages: any[],
 		mainContext: MainRequestContext,
 		mainTools: readonly any[],
+		sessionId: string,
 		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
 		token: vscode.CancellationToken
 	): Promise<void> {
@@ -760,10 +838,10 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			model: mainContext.modelId,
 			messages: [
 				...mainMessages,
-				{
+				withReasoningContentForToolCall(sessionId, {
 					role: 'assistant',
 					tool_calls: internalToolCalls.map(toolCall => this._toOpenAIToolCall(toolCall)),
-				},
+				}, internalToolCalls[0]?.id ?? ''),
 				...internalToolCalls.map((internalToolCall) => ({
 					role: 'tool',
 					tool_call_id: internalToolCall.id,
@@ -1118,6 +1196,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			if (round === MAX_TIMELINE_TOOL_ROUNDS) {
 				return {
 					text: `${result.text}\n${JSON.stringify({ ok: false, error: { code: 'TOO_MANY_INTERNAL_TOOL_ROUNDS', message: 'Timeline tool call loop exceeded the maximum number of rounds.', retryable: false } })}`,
+					reasoningContent: result.reasoningContent,
 					toolCalls: result.toolCalls.filter(call => !this._isTimelineTool(call.name)),
 				};
 			}
@@ -1139,7 +1218,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			}
 			requestBody = { ...requestBody, messages: nextMessages };
 		}
-		return { text: '', toolCalls: [] };
+		return { text: '', reasoningContent: '', toolCalls: [] };
 	}
 
 	private async _requestModel(params: ModelRequestParams): Promise<ModelRequestResult> {
@@ -1161,6 +1240,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		providerAbortControllers.add(abortController);
 		this._abortControllers.set(providerId, providerAbortControllers);
 		let assistantResponse = '';
+		let assistantReasoningContent = '';
 		const collectedToolCalls: CollectedToolCall[] = [];
 		token.onCancellationRequested(() => {
 			abortController.abort();
@@ -1270,6 +1350,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 
 			const handleOpenAIDelta = (delta: any) => {
 				if (!delta) return;
+				if ('reasoning_content' in delta) {
+					if (typeof delta.reasoning_content === 'string') {
+						assistantReasoningContent += delta.reasoning_content;
+					}
+				}
 				const content: string | undefined = delta.content ?? undefined;
 				if (typeof content === 'string' && content.length > 0) {
 					assistantResponse += content;
@@ -1472,10 +1557,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				thinkState.thinkBuffer = '';
 			}
 			collectPendingToolCalls();
-			return { text: assistantResponse, toolCalls: collectedToolCalls };
+			saveReasoningContentForToolCalls(params.sessionId, collectedToolCalls, assistantReasoningContent);
+			return { text: assistantResponse, reasoningContent: assistantReasoningContent, toolCalls: collectedToolCalls };
 		} catch (error) {
 			if (error instanceof Error && error.name === 'AbortError') {
-				return { text: assistantResponse, toolCalls: collectedToolCalls };
+				saveReasoningContentForToolCalls(params.sessionId, collectedToolCalls, assistantReasoningContent);
+				return { text: assistantResponse, reasoningContent: assistantReasoningContent, toolCalls: collectedToolCalls };
 			}
 			throw error;
 		} finally {
@@ -1676,6 +1763,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		mainMessages: any[],
 		mainContext: MainRequestContext,
 		mainTools: readonly any[],
+		sessionId: string,
 		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
 		token: vscode.CancellationToken
 	): Promise<void> {
@@ -1685,7 +1773,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			model: mainContext.modelId,
 			messages: [
 				...mainMessages,
-				{
+				withReasoningContentForToolCall(sessionId, {
 					role: 'assistant',
 					tool_calls: [{
 						id: toolCall.id,
@@ -1695,7 +1783,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 							arguments: JSON.stringify(toolCall.input ?? {}),
 						},
 					}],
-				},
+				}, toolCall.id),
 				{
 					role: 'tool',
 					tool_call_id: toolCall.id,
@@ -2158,7 +2246,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		progress.report(new vscode.LanguageModelTextPart('\n\n### 🧠 LLSOAI Expert Result Returned to Main Model\n\n'));
 		const mainMessages = [
 			...state.originalMainMessages,
-			{
+			withReasoningContentForToolCall(state.sessionId, {
 				role: 'assistant',
 				tool_calls: [{
 					id: state.askLlsoaiCallId,
@@ -2168,7 +2256,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 						arguments: JSON.stringify(state.askLlsoaiArguments ?? {}),
 					},
 				}],
-			},
+			}, state.askLlsoaiCallId),
 			{
 				role: 'tool',
 				tool_call_id: state.askLlsoaiCallId,
@@ -2730,6 +2818,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		mainMessages: any[],
 		mainContext: MainRequestContext,
 		mainTools: readonly any[],
+		sessionId: string,
 		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
 		token: vscode.CancellationToken
 	): Promise<void> {
@@ -2738,7 +2827,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			model: mainContext.modelId,
 			messages: [
 				...mainMessages,
-				{ role: 'assistant', tool_calls: [{ id: toolCall.id, type: 'function', function: { name: ASK_SOLUTION_PROVIDER_TOOL_NAME, arguments: JSON.stringify(toolCall.input ?? {}) } }] },
+				withReasoningContentForToolCall(sessionId, { role: 'assistant', tool_calls: [{ id: toolCall.id, type: 'function', function: { name: ASK_SOLUTION_PROVIDER_TOOL_NAME, arguments: JSON.stringify(toolCall.input ?? {}) } }] }, toolCall.id),
 				{ role: 'tool', tool_call_id: toolCall.id, content: unavailableMessage },
 			],
 			stream: true,
@@ -2795,7 +2884,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		].filter(Boolean).join('\n');
 		const mainMessages = [
 			...state.originalMainMessages,
-			{ role: 'assistant', tool_calls: [{ id: state.askSolutionCallId, type: 'function', function: { name: ASK_SOLUTION_PROVIDER_TOOL_NAME, arguments: JSON.stringify(state.askSolutionArguments ?? {}) } }] },
+			withReasoningContentForToolCall(state.sessionId, { role: 'assistant', tool_calls: [{ id: state.askSolutionCallId, type: 'function', function: { name: ASK_SOLUTION_PROVIDER_TOOL_NAME, arguments: JSON.stringify(state.askSolutionArguments ?? {}) } }] }, state.askSolutionCallId),
 			{ role: 'tool', tool_call_id: state.askSolutionCallId, content: finalSolutionToolResult },
 		];
 		const requestBody: any = { model: state.mainRequestContext.modelId, messages: mainMessages, stream: true };
@@ -3029,6 +3118,17 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				
 				// If there are tool results, emit them as separate "tool" role messages FIRST
 				for (const tr of toolResults) {
+					const reasoningContent = getReasoningContentForToolCall(sessionId, tr.tool_call_id);
+					if (reasoningContent) {
+						const assistantMsg = [...result]
+							.reverse()
+							.find(msg => msg?.role === 'assistant'
+								&& Array.isArray(msg.tool_calls)
+								&& msg.tool_calls.some((toolCall: any) => toolCall?.id === tr.tool_call_id));
+						if (assistantMsg) {
+							assistantMsg.reasoning_content = reasoningContent;
+						}
+					}
 					result.push({
 						role: 'tool',
 						tool_call_id: tr.tool_call_id,

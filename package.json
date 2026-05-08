@@ -5,7 +5,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.5.3",
+	"version": "2.5.4",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -95,7 +95,7 @@
 					"type": "string",
 					"default": "",
 					"description": "Custom system prompt to prepend to system messages",
-					"scope": "resource"
+					"scope": "machine-overridable"
 				},
 				"openapicopilot.language": {
 					"type": "string",
@@ -134,13 +134,13 @@
 					"type": "string",
 					"default": "",
 					"description": "Provider ID used by expert mode.",
-					"scope": "resource"
+					"scope": "machine-overridable"
 				},
 				"openapicopilot.expertMode.modelId": {
 					"type": "string",
 					"default": "",
 					"description": "Model ID used by expert mode.",
-					"scope": "resource"
+					"scope": "machine-overridable"
 				},
 				"openapicopilot.solutionProvider.enabled": {
 					"type": "boolean",
@@ -163,13 +163,13 @@
 					"type": "string",
 					"default": "",
 					"description": "Provider ID used by solution provider.",
-					"scope": "resource"
+					"scope": "machine-overridable"
 				},
 				"openapicopilot.solutionProvider.modelId": {
 					"type": "string",
 					"default": "",
 					"description": "Model ID used by solution provider.",
-					"scope": "resource"
+					"scope": "machine-overridable"
 				},
 				"openapicopilot.solutionProvider.reviewWithExpert": {
 					"type": "boolean",

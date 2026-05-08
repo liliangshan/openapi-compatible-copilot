@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.5.4
+
+### Added
+
+- **Strict Reasoning Content Compatibility** — Added preservation and replay of `reasoning_content` for tool-call turns in OpenAI-compatible chat completions. This improves compatibility with DeepSeek Reasoner and other strict providers that require assistant reasoning content to be passed back when continuing after tool results.
+
+### Changed
+
+- **Reasoning Cache** — Tool-call reasoning content is maintained in a local per-session cache under `~/.LLSOAI/reasoning/`, keyed by tool call ID, and is restored only to the matching assistant tool-call message.
+- **Debug Output Cleanup** — Removed temporary `.LLSOAI/test.txt` request/response debug logging.
+
 ## 2.5.3
 
 ### Added

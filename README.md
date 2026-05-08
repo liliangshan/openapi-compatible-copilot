@@ -19,6 +19,19 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 🎯 **Expert Mode** - Use mid/low-tier models for development tasks and high-tier models as expert reviewers for supplementation and quality assurance
 - 🧭 **Solution Provider** - Delegate solution design, implementation planning, and architecture proposals to a dedicated solution model, with optional expert review before finalizing
 - 🖼️ **Vision/Multimodal Input Support** - Supports image input forwarding across OpenAI-compatible Chat Completions, Responses API, and Anthropic Messages API providers
+- 🧠 **Strict Reasoning Compatibility** - Preserves and replays `reasoning_content` for tool-call turns, improving compatibility with DeepSeek Reasoner and other strict OpenAI-compatible providers
+
+## 🧠 Strict Reasoning Content Compatibility
+
+Some OpenAI-compatible reasoning models, such as DeepSeek Reasoner, require the original assistant `reasoning_content` to be included again when a conversation continues after tool results. LLS OAI preserves this content for tool-call turns and restores it to the matching assistant tool-call message by tool call ID.
+
+Reasoning cache files are stored locally per chat session:
+
+```text
+~/.LLSOAI/reasoning/<session-id>.json
+```
+
+This compatibility layer helps avoid strict-provider errors when using tools, Expert Mode, or Solution Provider flows with models that validate reasoning-content continuity.
 
 ## 🦙 Local LLMs Without API Keys
 
