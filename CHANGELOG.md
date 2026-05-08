@@ -3,7 +3,19 @@
 ## 2.4.0
 
 ### Added
-- **Timeline Snapshot for read_file** — Automatically creates file snapshots before `read_file` tool calls are executed. When Copilot reads a file, the extension captures a timestamped backup, enabling easy comparison with subsequent modifications and providing a safety net for reviewing changes. Supports OpenAI-Compatible format (parameters in `arguments` JSON string) and standard response format.
+
+- **Timeline Snapshot System** — A comprehensive file history management system with the following features:
+
+  - **Auto Snapshot on Save**: Automatically creates timestamped snapshots when files are saved. Stores raw content to `~/.LLSOAI/History/<file-path>/snapshots/` with metadata tracking SHA-256, line count, and timestamps. Smart trimming keeps max 20 snapshots per file. Automatically excludes `.git`, `node_modules`, build directories, and secret files.
+
+  - **Git Integration**: Intelligent git-aware cleanup that monitors `.git/HEAD`, `packed-refs`, and `refs/heads/**` for commit changes. Detects when files are removed by `git clean` and cleans corresponding snapshots. Supports Git worktree scenarios. Cleans snapshots of modified files while preserving metadata for tracking.
+
+  - **Provider Built-in Timeline Tools**: Three built-in tools available in every provider:
+    - `timeline_list_by_file`: Lists all snapshots for a file path with timestamps and SHA-256
+    - `timeline_restore_snapshot`: Restores a file to a previous snapshot with safety checks (validates against metadata, refuses git-protected files, creates beforeRestore backup)
+    - `timeline_read_snapshot_lines`: Reads partial content from snapshots with 1-based line numbers, max 200 lines per request
+
+  - **Internal Tool Continuation**: Timeline tools support seamless multi-turn interactions with max 3 continuation rounds per conversation turn. Tool results are automatically appended to the conversation for exploring file history without leaving Copilot Chat.
 
 ## 2.3.0
 

@@ -96,35 +96,78 @@ Expert Mode conversations are automatically saved when the expert model complete
 
 ## 📸 Timeline Snapshot
 
-When Copilot executes `read_file` tool calls, the extension automatically creates timestamped file backups:
+Timeline is an intelligent file history management system that automatically tracks file changes and provides powerful restoration capabilities:
+
+### Auto Snapshot on Save
+
+When you save any file, the extension automatically creates a timestamped snapshot:
 
 | Feature | Description |
 |---------|-------------|
-| **Automatic Backup** | Files are snapshotted before `read_file` tool calls |
-| **Timestamped** | Each snapshot includes date/time for easy comparison |
-| **OpenAI-Compatible** | Supports parameters from `arguments` JSON string or `input` object |
-| **Non-blocking** | Snapshot failures don't interfere with tool execution |
+| **Automatic Backup** | Files are snapshotted on every save |
+| **Location** | `~/.LLSOAI/History/<mapped-file-path>/` |
+| **Metadata** | `metadata.json` tracks all snapshots with SHA-256, line count, timestamps |
+| **Smart Trimming** | Keeps max 20 snapshots per file to save space |
+| **Exclusion** | Automatically excludes `.git`, `node_modules`, build dirs, and secret files |
 
-### How It Works
+### Git Integration
 
-When Copilot reads a file:
-1. The extension intercepts the `read_file` tool call
-2. A timestamped backup is created in the same directory (`.LLSOAI/timeline/`)
-3. Copilot continues with the file read operation
-4. You can compare the current file with the snapshot to see changes
+Timeline intelligently integrates with Git to keep snapshots clean:
+
+| Feature | Description |
+|---------|-------------|
+| **Git Clean Detection** | When a file is removed by `git clean`, its snapshots are automatically cleaned |
+| **Commit Change Tracking** | Watches `.git/HEAD`, `packed-refs`, `refs/heads/**` for commit changes |
+| **Worktree Support** | Handles Git worktree scenarios correctly |
+| **Safe Cleanup** | On git operations, snapshots of modified files are cleaned while preserving metadata |
+
+### Provider Built-in Timeline Tools
+
+Three built-in tools are available in every provider for file history exploration:
+
+#### `timeline_list_by_file`
+Lists all snapshots for a given file path:
+- Returns snapshot records with timestamps, SHA-256, line counts
+- Shows which snapshots have been git-cleaned
+
+#### `timeline_restore_snapshot`
+Restores a file to a previous snapshot state:
+- Validates snapshot ID against metadata
+- Refuses to restore files protected by Git HEAD
+- Creates automatic `beforeRestore` backup before restoration
+- Safety checks ensure you can always recover
+
+#### `timeline_read_snapshot_lines`
+Reads partial content from any snapshot:
+- Supports 1-based line numbers
+- Maximum 200 lines per request
+- Returns `totalLines` for pagination
+- Handles out-of-range requests gracefully
+
+### Internal Tool Continuation
+
+Timeline tools support seamless multi-turn interactions:
+- When you call a timeline tool, the model can continue making timeline calls
+- Maximum 3 continuation rounds per conversation turn
+- Tool results are automatically appended to the conversation
+- Perfect for exploring file history without leaving Copilot Chat
 
 ### Snapshot Format
 
 ```
-.<project>/.LLSOAI/timeline/<original_filename>_<YYYYMMDDHHMMSS>.bak
+~/.LLSOAI/History/<file-absolute-path>/
+├── metadata.json          # Snapshot index and metadata
+└── snapshots/
+    └── <snapshot-id>      # Raw file content (no JSON wrapper)
 ```
 
 ### Benefits
 
-- 🛡️ **Safety Net** — Always have a backup before Copilot reads a file
-- 🔍 **Easy Comparison** — Quickly compare current file state with snapshot
-- 📋 **Change Tracking** — Track what Copilot might modify based on file state
-- 🔧 **Debugging** — Understand Copilot's context by reviewing historical snapshots
+- 🛡️ **Safety Net** — Every save creates a recoverable backup
+- 🔍 **Easy Exploration** — List and read historical versions without leaving Copilot
+- ♻️ **Smart Restoration** — Restore any snapshot with automatic safety backups
+- 🧹 **Git-Aware** — Automatically cleans stale snapshots on git operations
+- 🔧 **Non-blocking** — Snapshot failures don't interfere with file operations
 
 ## Supported APIs
 
