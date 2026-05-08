@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.5.1
+
+### Added
+
+- **Vision Input Forwarding** — Added more reliable image input forwarding across OpenAI-compatible Chat Completions, OpenAI Responses API, and Anthropic Messages API. Images from Copilot Chat are forwarded as OpenAI-style `image_url`, converted to Responses API `input_image`, or converted to Anthropic image content blocks depending on the configured API type.
+
+### Changed
+
+- **Model Vision Sync Preserves Local Settings** — When syncing models from an API, existing local model vision settings now take precedence. API-provided vision capability is only used for newly discovered models or older local model configs without a valid boolean vision field.
+
+### Fixed
+
+- **Multimodal User Message Merging** — Fixed an issue where consecutive user messages with mixed text-only and multimodal content could silently drop text or images during OpenAI request construction.
+- **Responses API Image Conversion** — Fixed invalid `input_image` parts caused by empty or missing image URLs. The converter now supports string `image_url`, object `image_url.url`, and URL aliases while skipping invalid empty values.
+- **Anthropic Image Conversion** — Improved Anthropic image conversion with support for string `image_url`, URL aliases, base64 data URLs, and common image MIME types (`image/jpeg`, `image/png`, `image/gif`, `image/webp`). Unsupported data-image media types are reported as text instead of being silently dropped.
+
 ## 2.5.0
 
 ### Added

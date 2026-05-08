@@ -7,6 +7,7 @@
  */
 
 import type { OpenAIChunk } from './openaiChunk';
+import { getImageUrlFromPart } from './visionContent';
 
 type AnyObj = Record<string, any>;
 
@@ -251,10 +252,12 @@ function convertMessageContentForResponses(content: any, role: string): AnyObj[]
 		if (part.type === 'text') {
 			parts.push({ type: textType, text: String(part.text ?? '') });
 		} else if (part.type === 'image_url') {
-			parts.push({
-				type: 'input_image',
-				image_url: typeof part.image_url === 'string' ? part.image_url : part.image_url?.url,
-			});
+			// Use shared utility for consistent URL extraction
+			const imageUrl = getImageUrlFromPart(part);
+			if (imageUrl) {
+				parts.push({ type: 'input_image', image_url: imageUrl });
+			}
+			// Skip if no valid URL found (avoid generating invalid structure)
 		} else if (part.type === 'input_text' || part.type === 'output_text' || part.type === 'input_image' || part.type === 'input_file') {
 			parts.push(part);
 		} else {

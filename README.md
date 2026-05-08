@@ -17,6 +17,7 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - ✅ **Enhanced TODO Settings** - When enabled, the model is strongly instructed to create, track, and update all tasks through the TODO tool before taking any action
 - 🎯 **Expert Mode** - Use mid/low-tier models for development tasks and high-tier models as expert reviewers for supplementation and quality assurance
 - 🧭 **Solution Provider** - Delegate solution design, implementation planning, and architecture proposals to a dedicated solution model, with optional expert review before finalizing
+- 🖼️ **Vision/Multimodal Input Support** - Supports image input forwarding across OpenAI-compatible Chat Completions, Responses API, and Anthropic Messages API providers
 
 ## 🎯 Expert Mode
 

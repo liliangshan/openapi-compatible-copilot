@@ -800,7 +800,7 @@ After completing the operations, please reply with the following message in both
 	/**
 	 * Fetch models from OpenAI-compatible API
 	 * Merges API models with existing local models, preserving local customizations.
-	 * If a model exists in both, local settings (temperature/topP etc.) take precedence.
+	 * If a model exists in both, local settings (vision/temperature/topP etc.) take precedence.
 	 * If a model is only in API, it gets added with defaults.
 	 * If a model is only local (not in API list), it gets removed to stay in sync with API.
 	 */
@@ -853,18 +853,18 @@ After completing the operations, please reply with the following message in both
 		// Merge: start with API models, override with local customizations
 		const merged: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }> = [];
 		
-		// Add API models (use API data for all fields that API provides)
+		// Add API models (use API data for fields that should stay synced, but preserve local customizations)
 		for (const apiModel of apiModels) {
 			const localModel = existingMap.get(apiModel.modelId);
 			if (localModel) {
 				// Use API data for fields that API provides, keep local values for missing fields
-				// Preserve local temperature/topP/samplingMode/isUserSelectable/transformThink
+				// Preserve local vision/temperature/topP/samplingMode/isUserSelectable/transformThink
 				merged.push({
 					modelId: apiModel.modelId,
 					displayName: apiModel.displayName,
 					contextLength: apiModel.contextLength !== null ? apiModel.contextLength : localModel.contextLength,
 					maxTokens: apiModel.maxTokens !== null ? apiModel.maxTokens : localModel.maxTokens,
-					vision: apiModel.vision,
+					vision: typeof localModel.vision === 'boolean' ? localModel.vision : apiModel.vision,
 					toolCalling: apiModel.toolCalling,
 					temperature: localModel.temperature ?? 0.7,
 					topP: localModel.topP ?? 1.0,

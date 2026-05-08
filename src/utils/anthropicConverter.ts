@@ -11,6 +11,7 @@
  */
 
 import type { OpenAIChunk } from './openaiChunk';
+import { getImageUrlFromPart, parseDataImageUrl, isSupportedImageType } from './visionContent';
 
 type AnyObj = Record<string, any>;
 
@@ -176,13 +177,25 @@ function convertContentBlocks(content: any): AnyObj[] {
 			if (!part || typeof part !== 'object') continue;
 			if (part.type === 'text' && typeof part.text === 'string') {
 				blocks.push({ type: 'text', text: part.text });
-			} else if (part.type === 'image_url' && part.image_url?.url) {
-				const url: string = part.image_url.url;
-				const m = url.match(/^data:([^;]+);base64,(.*)$/);
-				if (m) {
+			} else if (part.type === 'image_url') {
+				// Use shared utility for consistent URL extraction
+				const url = getImageUrlFromPart(part);
+				if (!url) continue;
+
+				const dataImage = parseDataImageUrl(url);
+				if (dataImage) {
+					// Validate MIME type before converting to base64 image
+					if (!isSupportedImageType(dataImage.mediaType)) {
+						// Skip unsupported image types (e.g., text/html, application/pdf)
+						continue;
+					}
 					blocks.push({
 						type: 'image',
-						source: { type: 'base64', media_type: m[1], data: m[2] },
+						source: {
+							type: 'base64',
+							media_type: dataImage.mediaType,
+							data: dataImage.data,
+						},
 					});
 				} else {
 					blocks.push({ type: 'image', source: { type: 'url', url } });
