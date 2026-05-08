@@ -5,7 +5,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.4.0",
+	"version": "2.5.0",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -140,6 +140,52 @@
 					"type": "string",
 					"default": "",
 					"description": "Model ID used by expert mode.",
+					"scope": "resource"
+				},
+				"openapicopilot.solutionProvider.enabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable solution provider. When enabled, the main model can delegate planning and solution design tasks to a selected solution model.",
+					"scope": "application"
+				},
+				"openapicopilot.solutionProvider.enabledState": {
+					"type": "string",
+					"enum": [
+						"global",
+						"enabled",
+						"disabled"
+					],
+					"default": "global",
+					"description": "Workspace solution provider enabled state. Use global, force enabled, or force disabled for this workspace.",
+					"scope": "resource"
+				},
+				"openapicopilot.solutionProvider.providerId": {
+					"type": "string",
+					"default": "",
+					"description": "Provider ID used by solution provider.",
+					"scope": "resource"
+				},
+				"openapicopilot.solutionProvider.modelId": {
+					"type": "string",
+					"default": "",
+					"description": "Model ID used by solution provider.",
+					"scope": "resource"
+				},
+				"openapicopilot.solutionProvider.reviewWithExpert": {
+					"type": "boolean",
+					"default": false,
+					"description": "When enabled and expert mode is available, the solution provider model must call ask_llsoai at least once to review the proposed solution before finalizing. This is a global setting.",
+					"scope": "application"
+				},
+				"openapicopilot.solutionProvider.reviewWithExpertState": {
+					"type": "string",
+					"enum": [
+						"global",
+						"enabled",
+						"disabled"
+					],
+					"default": "global",
+					"description": "Workspace solution provider expert review state. Use global, force enabled, or force disabled for this workspace.",
 					"scope": "resource"
 				}
 			}

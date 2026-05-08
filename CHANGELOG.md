@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.5.0
+
+### Added
+
+- **Solution Provider** — A new dual-model workflow that delegates solution design, implementation planning, architecture proposal, risk analysis, and step-by-step plan generation to a dedicated solution model. Configure globally or per-workspace with full provider/model override support.
+
+  - **Solution Model Delegation** — The main model can call `ask_solution_provider` to delegate structured solution tasks. The solution model generates actionable plans with goals, constraints, phased steps, risks, validation plans, and rollback strategies.
+  - **Expert Review for Solutions** — Optional checkbox to require the solution model to call `ask_llsoai` for expert review before finalizing. Expert review results are consumed by the solution model first, then the revised final solution is returned to the main model.
+  - **Three-State Workspace Control** — Per-workspace enabled state (`global` / `enabled` / `disabled`) and expert review state (`global` / `enabled` / `disabled`) for fine-grained control over solution provider behavior in different projects.
+  - **Solution Draft Persistence** — Auto-generated workspace-relative draft paths (` .LLSOAI/Solution/drafts/`) that the solution model can optionally persist as Markdown for traceability and expert review quality.
+  - **Structured Solution Results** — Solution models return structured output with `writeStatus`, `solutionSummary`, `solutionFile`/`fullSolutionInline`, and optional error/reason fields for reliable downstream processing.
+  - **Safety Guards** — Recursive delegation prevention (solution model never sees `ask_solution_provider`), expert review count limits, forced review reminder limits with graceful degradation, and tool call prefix isolation (`llsoai_solution:` vs `llsoai:`).
+
 ## 2.4.0
 
 ### Added

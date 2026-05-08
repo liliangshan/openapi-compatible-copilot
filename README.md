@@ -16,6 +16,7 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 🖥️ **Global & Project System Prompt Settings** - Dual system prompt inputs (global + workspace-scoped) appended to user messages for better model adherence
 - ✅ **Enhanced TODO Settings** - When enabled, the model is strongly instructed to create, track, and update all tasks through the TODO tool before taking any action
 - 🎯 **Expert Mode** - Use mid/low-tier models for development tasks and high-tier models as expert reviewers for supplementation and quality assurance
+- 🧭 **Solution Provider** - Delegate solution design, implementation planning, and architecture proposals to a dedicated solution model, with optional expert review before finalizing
 
 ## 🎯 Expert Mode
 
@@ -68,6 +69,49 @@ Expert Mode is configured in the provider settings:
 - 🔧 **Flexible** — Choose how often the expert model is involved based on your needs
 - 🔗 **Seamless** — Expert model output is automatically integrated into the Copilot Chat conversation
 - 💾 **Chat History** — Expert Mode conversations are automatically saved to chat history, including tool calls and multi-turn interactions
+
+## 🧭 Solution Provider
+
+> Delegate solution design, implementation planning, and architecture proposals to a dedicated solution model — with optional expert review before finalizing.
+
+Solution Provider enables a **three-layer collaboration workflow** that maximizes planning quality:
+
+```
+[User Request]
+       ↓
+[Main Model]
+  Decides whether to delegate solution design
+       ↓
+[Solution Provider Model]
+  Generates structured solution: goals, constraints, phased steps, risks, validation plan
+       ↓
+[Expert Model — Optional Review]
+  Independent review of the proposed solution
+       ↓
+[Solution Model Absorbs Review → Final Solution → Main Model]
+  Enhanced Response → Copilot Chat
+```
+
+### How It Works
+
+- **Main Model** — Your primary model that decides whether a task requires structured solution design. If so, it calls `ask_solution_provider` with a self-contained task description.
+- **Solution Model** — A dedicated model configured for solution design, implementation planning, architecture proposals, risk analysis, and phased roadmaps. It uses VS Code tools to inspect the workspace and ground the plan in the actual project.
+- **Expert Model (Optional)** — When "expert review" is enabled, the solution model must call `ask_llsoai` at least once before finalizing. The expert independently reviews the proposed solution, and the solution model absorbs the review feedback before returning the final result.
+
+### Configuration
+
+Solution Provider is configured in the provider settings:
+
+- **Global Settings** — Enable/disable, select solution provider, select solution model, and toggle expert review.
+- **Workspace Settings** — Override global with `Use global` / `Force enabled` / `Force disabled` for both solution provider and expert review independently.
+- **Project Provider/Model Override** — Leave blank to use global solution model, or set workspace-specific provider/model.
+
+### Key Features
+
+- 📋 **Structured Output** — Solution models return structured results with `writeStatus`, `solutionSummary`, `solutionFile`/`fullSolutionInline`, and error/reason fields.
+- 📝 **Auto Draft Persistence** — Solution models can optionally persist solutions as Markdown in `.LLSOAI/Solution/drafts/` for traceability and better expert review quality.
+- 🔒 **Safety Guards** — Recursive delegation prevention (solution model never sees `ask_solution_provider`), expert review count limits, forced review reminder limits with graceful degradation.
+- 🔀 **Tool Call Prefix Isolation** — Solution model tools use `llsoai_solution:` prefix, expert model tools use `llsoai:` prefix — no interference when both run concurrently.
 
 ## 💾 Chat History
 

@@ -1112,10 +1112,12 @@ body {
 	color: var(--vscode-descriptionForeground);
 }
 
-.expert-state-options {
+.expert-state-options,
+.expert-review-options {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 10px;
+	margin-top: 12px;
 	margin-bottom: 16px;
 }
 
@@ -1176,6 +1178,7 @@ body {
 	}
 
 	.expert-state-options,
+	.expert-review-options,
 	.expert-model-grid {
 		grid-template-columns: 1fr;
 	}

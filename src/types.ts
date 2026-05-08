@@ -48,7 +48,7 @@ export interface ModelConfig {
 	samplingMode: 'temperature' | 'top_p' | 'both' | 'none';
 	/** Whether the model shows up in the chat model selector */
 	isUserSelectable?: boolean;
-	/** Whether to transform <think> tags in model responses */
+	/** Whether to transform 认 tags in model responses */
 	transformThink?: boolean;
 }
 
@@ -81,6 +81,34 @@ export type WorkspaceExpertModeEnabledState = 'global' | 'enabled' | 'disabled';
 export interface WorkspaceExpertModeConfig extends ExpertModeConfig {
 	/** Whether the workspace uses global enabled state, forces enabled, or forces disabled */
 	enabledState: WorkspaceExpertModeEnabledState;
+}
+
+/**
+ * Solution provider global settings
+ */
+export interface SolutionProviderConfig {
+	/** Whether solution provider is enabled */
+	enabled: boolean;
+	/** Provider used by solution provider */
+	providerId: string;
+	/** Model used by solution provider */
+	modelId: string;
+	/** Whether solution provider must request expert review before finalizing */
+	reviewWithExpert: boolean;
+}
+
+export type WorkspaceSolutionProviderEnabledState = 'global' | 'enabled' | 'disabled';
+
+export type WorkspaceSolutionProviderReviewWithExpertState = 'global' | 'enabled' | 'disabled';
+
+/**
+ * Solution provider workspace settings
+ */
+export interface WorkspaceSolutionProviderConfig extends SolutionProviderConfig {
+	/** Whether the workspace uses global enabled state, forces enabled, or forces disabled */
+	enabledState: WorkspaceSolutionProviderEnabledState;
+	/** Whether the workspace uses global review-with-expert state, forces enabled, or forces disabled */
+	reviewWithExpertState: WorkspaceSolutionProviderReviewWithExpertState;
 }
 
 /**

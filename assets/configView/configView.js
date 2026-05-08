@@ -14,6 +14,8 @@
 	let isInitialLoad = true; // Track whether this is the first providersLoaded
 	let expertModeSettings = { enabled: false, providerId: '', modelId: '' };
 	let expertSelectableProviders = [];
+	let solutionProviderSettings = { enabled: false, providerId: '', modelId: '', reviewWithExpert: false };
+	let solutionSelectableProviders = [];
 	let configuredLanguage = 'auto';
 	function resolveLanguage(language) {
 		const normalized = (language || '').toLowerCase();
@@ -133,6 +135,27 @@
 			expertUseGlobalProvider: 'Use global expert provider ({value})',
 			expertUseGlobalModel: 'Use global expert model ({value})',
 			expertModelOverrideHelp: 'Select both provider and model to override the global expert model. Leave either empty to keep using the global expert model.',
+			solutionProvider: 'Solution Provider',
+			enableSolutionProvider: 'Enable Solution Provider',
+			solutionProviderHelp: 'When enabled, the main model can delegate solution design and implementation planning tasks to a selected solution model.',
+			solutionProviderProvider: 'Solution Provider',
+			solutionProviderModel: 'Solution Model',
+			solutionSelectProvider: 'Select provider',
+			solutionSelectModel: 'Select model',
+			solutionReviewWithExpert: 'Request expert review before finalizing',
+			solutionReviewWithExpertHelp: 'If expert mode is available, the solution model must call ask_llsoai at least once before finalizing. In project settings, choose Use global, Enabled, or Disabled.',
+		solutionReviewUseGlobal: 'Use global',
+		solutionFollowGlobalReviewState: 'Follow global: {state}',
+		solutionReviewForceEnabledDesc: 'Force expert review on for this project.',
+		solutionReviewForceDisabledDesc: 'Force expert review off for this project.',
+			solutionProjectDescription: 'Configure how this project uses the LLSOAI solution provider model.',
+			solutionGlobalStatus: 'Global {state}',
+			solutionFollowGlobalState: 'Follow global state: {state}',
+			solutionForceEnabledDesc: 'Force solution provider on for this project.',
+			solutionForceDisabledDesc: 'Force solution provider off for this project.',
+			solutionUseGlobalProvider: 'Use global solution provider ({value})',
+			solutionUseGlobalModel: 'Use global solution model ({value})',
+			solutionModelOverrideHelp: 'Select both provider and model to override the global solution model. Leave either empty to keep using the global solution model.',
 			enhancedTodo: 'Enhanced TODO',
 			enableEnhancedTodo: 'Enable Enhanced TODO',
 			enhancedTodoHelp: 'If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.',
@@ -255,6 +278,27 @@
 			expertUseGlobalProvider: '使用全局专家提供商（{value}）',
 			expertUseGlobalModel: '使用全局专家模型（{value}）',
 			expertModelOverrideHelp: '同时选择提供商和模型即可覆盖全局专家模型；任意一项留空则继续使用全局专家模型。',
+			solutionProvider: '方案提供商',
+			enableSolutionProvider: '启用方案提供商',
+			solutionProviderHelp: '启用后，主模型可以将方案设计和实施计划任务委托给所选方案模型。',
+			solutionProviderProvider: '方案提供商',
+			solutionProviderModel: '方案模型',
+			solutionSelectProvider: '选择提供商',
+			solutionSelectModel: '选择模型',
+			solutionReviewWithExpert: '最终输出前请求专家审查',
+			solutionReviewWithExpertHelp: '如果专家模式可用，方案模型在最终输出前必须至少调用一次 ask_llsoai。在项目设置中，可选择使用全局配置、开启或禁用。',
+		solutionReviewUseGlobal: '使用全局配置',
+		solutionFollowGlobalReviewState: '跟随全局专家审查设置：{state}',
+		solutionReviewForceEnabledDesc: '在此项目中强制开启专家审查。',
+		solutionReviewForceDisabledDesc: '在此项目中强制关闭专家审查。',
+			solutionProjectDescription: '配置当前项目如何使用 LLSOAI 方案模型。',
+			solutionGlobalStatus: '全局{state}',
+			solutionFollowGlobalState: '跟随全局状态：{state}',
+			solutionForceEnabledDesc: '强制当前项目开启方案提供商。',
+			solutionForceDisabledDesc: '强制当前项目关闭方案提供商。',
+			solutionUseGlobalProvider: '使用全局方案提供商（{value}）',
+			solutionUseGlobalModel: '使用全局方案模型（{value}）',
+			solutionModelOverrideHelp: '同时选择提供商和模型即可覆盖全局方案模型；任意一项留空则继续使用全局方案模型。',
 			enhancedTodo: '增强 TODO',
 			enableEnhancedTodo: '启用增强 TODO',
 			enhancedTodoHelp: '启用后会自动将 TODO 保存到项目目录；创建新 TODO 时会检查是否存在未完成 TODO。',
@@ -295,6 +339,126 @@
 		...translations.en,
 		importConfiguration: 'Konfiguration importieren', exportConfiguration: 'Konfiguration exportieren', import: 'Importieren', export: 'Exportieren', subtitle: 'OpenAPI-kompatibler Copilot', languageLabel: 'Sprache', languageAuto: 'Automatisch (VS Code folgen)', globalSettings: 'Globale Einstellungen', projectSettings: 'Projekteinstellungen', settingsHint: 'System-Prompt, Chatverlauf, Expertenmodus, Copilot-Datensätze importieren/exportieren, erweiterte TODO-Einstellungen', providers: 'Anbieter', noProviders: 'Noch keine Anbieter konfiguriert', addFirstProvider: 'Ersten Anbieter hinzufügen', enabled: 'Aktiviert', disabled: 'Deaktiviert', apiType: 'API-Typ', configured: '**** Konfiguriert', notSet: '⚠️ Nicht festgelegt', autoFetchModels: 'Modelle automatisch abrufen', autoFetchModelsTitle: 'Modelle beim Öffnen der Einstellungen automatisch von der API abrufen', models: 'Modelle', fetchingModels: 'Modelle werden abgerufen...', noModels: '⚠️ Keine Modelle (API Key prüfen)', edit: 'Bearbeiten', delete: 'Löschen', fetchModels: 'Modelle abrufen', loading: 'Wird geladen...', addModel: '+ Modell hinzufügen', showInChatSelector: 'Im Chat-Auswahlmenü anzeigen', addProvider: 'Anbieter hinzufügen', editProvider: 'Anbieter bearbeiten', providerName: 'Anbietername', providerNameHelp: 'Eindeutiger Name zur Identifizierung dieses Anbieters in Copilot', apiTypeHelp: 'Von diesem Anbieter verwendetes API-Protokoll', baseUrlHelp: 'API-Endpunkt', apiKeyHelp: 'Beim Bearbeiten leer lassen, um den vorhandenen Schlüssel beizubehalten', cancel: 'Abbrechen', save: 'Speichern', saveProvider: 'Anbieter speichern', editModel: 'Modell bearbeiten', modelId: 'Modell-ID', displayName: 'Anzeigename', contextLength: 'Kontextlänge', maxTokens: 'Max. Tokens', visionSupport: 'Vision-Unterstützung', toolCalling: 'Tool-Aufrufe', transformThinkTags: 'Think-Tags umwandeln (<|im_start|>/♩)', samplingMode: 'Sampling-Modus', samplingBoth: 'Beide (temperature + top_p)', samplingTemperature: 'Nur Temperature', samplingTopP: 'Nur Top P', samplingNone: 'Keine', samplingHelp: 'Einige Modelle (z. B. Claude) akzeptieren jeweils nur einen Sampling-Parameter', saveModel: 'Modell speichern', chatHistorySettings: 'Chatverlauf-Einstellungen', autoSaveChatHistory: 'Chatverlauf automatisch speichern', chatHistoryHelp: 'Chatunterhaltungen automatisch in lokalen Dateien speichern', savePath: 'Speicherpfad', savePathPlaceholder: 'Pfad zum Speichern des Chatverlaufs', defaultSavePathHelp: 'Standard: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI', saveChatHistory: 'Chatverlauf speichern', chatHistorySavePath: 'Speicherpfad', chatHistorySavePathHelp: 'Verzeichnis zum Speichern des Chatverlaufs. Standardmäßig der .LLSOAI-Ordner des Projekts.', editSystemPrompt: 'System-Prompt bearbeiten', globalSystemPrompt: 'Globaler System-Prompt', globalSystemPromptPlaceholder: 'Globalen System-Prompt hier eingeben...', globalSystemPromptHelp: 'Gilt für alle Arbeitsbereiche und wird in globalen Einstellungen gespeichert.', projectSystemPrompt: 'Projekt-System-Prompt', projectWorkspaceSystemPrompt: 'Projekt-/Arbeitsbereich-System-Prompt', projectSystemPromptPlaceholder: 'Projektspezifischen System-Prompt hier eingeben...', projectSystemPromptHelp: 'Gilt nur für den aktuellen Arbeitsbereich und wird in Arbeitsbereichseinstellungen gespeichert.', chatHistory: 'Chatverlauf', expertMode: 'Expertenmodus', enableExpertMode: 'Expertenmodus aktivieren', expertModeHelp: 'Wenn aktiviert, kann das Hauptmodell schwierige Aufgaben an das ausgewählte Expertenmodell delegieren.', expertProvider: 'Expertenanbieter', expertModel: 'Expertenmodell', expertSelectProvider: 'Anbieter auswählen', expertSelectModel: 'Modell auswählen', expertProjectDescription: 'Konfigurieren Sie, wie dieses Projekt das LLSOAI-Expertenmodell verwendet.', expertGlobalStatus: 'Global {state}', expertUseGlobal: 'Globale Einstellungen verwenden', expertFollowGlobalState: 'Globalem Status folgen: {state}', expertForceEnabledDesc: 'Expertenmodus für dieses Projekt erzwingen.', expertForceDisabledDesc: 'Expertenmodus für dieses Projekt deaktivieren erzwingen.', expertUseGlobalProvider: 'Globalen Expertenanbieter verwenden ({value})', expertUseGlobalModel: 'Globales Expertenmodell verwenden ({value})', expertModelOverrideHelp: 'Wählen Sie sowohl Anbieter als auch Modell aus, um das globale Expertenmodell zu überschreiben. Lassen Sie eines davon leer, um weiterhin das globale Expertenmodell zu verwenden.', enhancedTodo: 'Erweitertes TODO', enableEnhancedTodo: 'Erweitertes TODO aktivieren', enhancedTodoHelp: 'Wenn aktiviert, werden TODOs automatisch im Projektverzeichnis gespeichert; beim Erstellen neuer TODOs wird auf unvollständige TODOs geprüft.', copilotRecords: 'Copilot-Datensätze', copilotRecordsHelp: 'Chatdatensätze aus VS Code Copilot importieren/exportieren', importRecords: 'Datensätze importieren', exportRecords: 'Datensätze exportieren', saveAll: 'Alle speichern', errorExtensionNotInitialized: 'Fehler: Erweiterung nicht initialisiert', modelIdRequired: 'Modell-ID ist erforderlich', enterProviderName: 'Bitte Anbietername eingeben', enterBaseUrl: 'Bitte Base URL eingeben', enterApiKey: 'Bitte API Key für neue Anbieter eingeben', chatHistoryEnabled: 'Aktiviert', chatHistoryDisabled: 'Deaktiviert', adLabel: 'Anzeige'
 	};
+
+	Object.assign(translations['zh-tw'], {
+		solutionProvider: '方案提供商',
+		enableSolutionProvider: '啟用方案提供商',
+		solutionProviderHelp: '啟用後，主模型可以將方案設計和實作計畫任務委派給所選方案模型。',
+		solutionProviderProvider: '方案提供商',
+		solutionProviderModel: '方案模型',
+		solutionSelectProvider: '選擇提供商',
+		solutionSelectModel: '選擇模型',
+		solutionReviewWithExpert: '最終輸出前請求專家審查',
+		solutionReviewWithExpertHelp: '如果專家模式可用，方案模型在最終輸出前必須至少呼叫一次 ask_llsoai。在專案設定中，可選擇使用全域設定、啟用或停用。',
+		solutionReviewUseGlobal: '使用全域設定',
+		solutionFollowGlobalReviewState: '跟隨全域專家審查設定：{state}',
+		solutionReviewForceEnabledDesc: '在此專案中強制開啟專家審查。',
+		solutionReviewForceDisabledDesc: '在此專案中強制關閉專家審查。',
+		solutionProjectDescription: '設定目前專案如何使用 LLSOAI 方案模型。',
+		solutionGlobalStatus: '全域{state}',
+		solutionFollowGlobalState: '跟隨全域狀態：{state}',
+		solutionForceEnabledDesc: '強制目前專案開啟方案提供商。',
+		solutionForceDisabledDesc: '強制目前專案關閉方案提供商。',
+		solutionUseGlobalProvider: '使用全域方案提供商（{value}）',
+		solutionUseGlobalModel: '使用全域方案模型（{value}）',
+		solutionModelOverrideHelp: '同時選擇提供商和模型即可覆蓋全域方案模型；任一項留空則繼續使用全域方案模型。',
+	});
+
+	Object.assign(translations.ko, {
+		solutionProvider: '솔루션 공급자',
+		enableSolutionProvider: '솔루션 공급자 활성화',
+		solutionProviderHelp: '활성화하면 기본 모델이 솔루션 설계 및 구현 계획 작업을 선택한 솔루션 모델에 위임할 수 있습니다.',
+		solutionProviderProvider: '솔루션 공급자',
+		solutionProviderModel: '솔루션 모델',
+		solutionSelectProvider: '공급자 선택',
+		solutionSelectModel: '모델 선택',
+		solutionReviewWithExpert: '최종 출력 전에 전문가 검토 요청',
+		solutionReviewWithExpertHelp: '전문가 모드를 사용할 수 있으면 솔루션 모델은 최종 출력 전에 ask_llsoai를 최소 한 번 호출해야 합니다. 프로젝트 설정에서는 전역 사용, 활성화 또는 비활성화를 선택하십시오.',
+		solutionReviewUseGlobal: '전역 설정 사용',
+		solutionFollowGlobalReviewState: '전역 전문가 검토 설정 따르기: {state}',
+		solutionReviewForceEnabledDesc: '이 프로젝트에서 전문가 검토를 강제로 활성화합니다.',
+		solutionReviewForceDisabledDesc: '이 프로젝트에서 전문가 검토를 강제로 비활성화합니다.',
+		solutionProjectDescription: '이 프로젝트에서 LLSOAI 솔루션 모델을 사용하는 방식을 구성합니다.',
+		solutionGlobalStatus: '전역 {state}',
+		solutionFollowGlobalState: '전역 상태 따르기: {state}',
+		solutionForceEnabledDesc: '이 프로젝트에서 솔루션 공급자를 강제로 켭니다.',
+		solutionForceDisabledDesc: '이 프로젝트에서 솔루션 공급자를 강제로 끕니다.',
+		solutionUseGlobalProvider: '전역 솔루션 공급자 사용({value})',
+		solutionUseGlobalModel: '전역 솔루션 모델 사용({value})',
+		solutionModelOverrideHelp: '공급자와 모델을 모두 선택하면 전역 솔루션 모델을 재정의합니다. 둘 중 하나를 비워 두면 전역 솔루션 모델을 계속 사용합니다.',
+	});
+
+	Object.assign(translations.ja, {
+		solutionProvider: 'ソリューションプロバイダー',
+		enableSolutionProvider: 'ソリューションプロバイダーを有効化',
+		solutionProviderHelp: '有効にすると、メインモデルはソリューション設計や実装計画タスクを選択したソリューションモデルに委任できます。',
+		solutionProviderProvider: 'ソリューションプロバイダー',
+		solutionProviderModel: 'ソリューションモデル',
+		solutionSelectProvider: 'プロバイダーを選択',
+		solutionSelectModel: 'モデルを選択',
+		solutionReviewWithExpert: '最終出力前にエキスパートレビューを要求',
+		solutionReviewWithExpertHelp: 'エキスパートモードが利用可能な場合、ソリューションモデルは最終出力前に少なくとも 1 回 ask_llsoai を呼び出す必要があります。プロジェクト設定では、グローバル使用、有効、または無効を選択してください。',
+		solutionReviewUseGlobal: 'グローバル設定を使用',
+		solutionFollowGlobalReviewState: 'グローバルエキスパートレビュー設定に従う：{state}',
+		solutionReviewForceEnabledDesc: 'このプロジェクトでエキスパートレビューを強制的に有効化します。',
+		solutionReviewForceDisabledDesc: 'このプロジェクトでエキスパートレビューを強制的に無効化します。',
+		solutionProjectDescription: 'このプロジェクトで LLSOAI ソリューションモデルを使用する方法を設定します。',
+		solutionGlobalStatus: 'グローバル {state}',
+		solutionFollowGlobalState: 'グローバル状態に従う: {state}',
+		solutionForceEnabledDesc: 'このプロジェクトでソリューションプロバイダーを強制的にオンにします。',
+		solutionForceDisabledDesc: 'このプロジェクトでソリューションプロバイダーを強制的にオフにします。',
+		solutionUseGlobalProvider: 'グローバルソリューションプロバイダーを使用（{value}）',
+		solutionUseGlobalModel: 'グローバルソリューションモデルを使用（{value}）',
+		solutionModelOverrideHelp: 'プロバイダーとモデルの両方を選択すると、グローバルソリューションモデルを上書きします。どちらかを空にすると、グローバルソリューションモデルを引き続き使用します。',
+	});
+
+	Object.assign(translations.fr, {
+		solutionProvider: 'Fournisseur de solution',
+		enableSolutionProvider: 'Activer le fournisseur de solution',
+		solutionProviderHelp: 'Une fois activé, le modèle principal peut déléguer les tâches de conception de solution et de planification de mise en œuvre au modèle de solution sélectionné.',
+		solutionProviderProvider: 'Fournisseur de solution',
+		solutionProviderModel: 'Modèle de solution',
+		solutionSelectProvider: 'Sélectionner un fournisseur',
+		solutionSelectModel: 'Sélectionner un modèle',
+		solutionReviewWithExpert: 'Demander une revue expert avant la finalisation',
+		solutionReviewWithExpertHelp: 'Si le mode expert est disponible, le modèle de solution doit appeler ask_llsoai au moins une fois avant la finalisation. Dans les paramètres du projet, choisissez Utilisation globale, Activé ou Désactivé.',
+		solutionReviewUseGlobal: 'Utiliser la configuration globale',
+		solutionFollowGlobalReviewState: 'Suivre le paramètre global d\'exécution expert : {state}',
+		solutionReviewForceEnabledDesc: 'Forcer l\'exécution expert pour ce projet.',
+		solutionReviewForceDisabledDesc: 'Désactiver l\'exécution expert pour ce projet.',
+		solutionProjectDescription: 'Configurez la façon dont ce projet utilise le modèle de solution LLSOAI.',
+		solutionGlobalStatus: 'Global {state}',
+		solutionFollowGlobalState: 'Suivre l’état global : {state}',
+		solutionForceEnabledDesc: 'Forcer l’activation du fournisseur de solution pour ce projet.',
+		solutionForceDisabledDesc: 'Forcer la désactivation du fournisseur de solution pour ce projet.',
+		solutionUseGlobalProvider: 'Utiliser le fournisseur de solution global ({value})',
+		solutionUseGlobalModel: 'Utiliser le modèle de solution global ({value})',
+		solutionModelOverrideHelp: 'Sélectionnez à la fois un fournisseur et un modèle pour remplacer le modèle de solution global. Laissez l’un des deux vide pour continuer à utiliser le modèle de solution global.',
+	});
+
+	Object.assign(translations.de, {
+		solutionProvider: 'Lösungsanbieter',
+		enableSolutionProvider: 'Lösungsanbieter aktivieren',
+		solutionProviderHelp: 'Wenn aktiviert, kann das Hauptmodell Aufgaben zur Lösungsentwicklung und Implementierungsplanung an das ausgewählte Lösungsmodell delegieren.',
+		solutionProviderProvider: 'Lösungsanbieter',
+		solutionProviderModel: 'Lösungsmodell',
+		solutionSelectProvider: 'Anbieter auswählen',
+		solutionSelectModel: 'Modell auswählen',
+		solutionReviewWithExpert: 'Expertenprüfung vor Abschluss anfordern',
+		solutionReviewWithExpertHelp: 'Wenn der Expertenmodus verfügbar ist, muss das Lösungsmodell vor dem Abschluss mindestens einmal ask_llsoai aufrufen. In den Projekteinstellungen wählen Sie Globale Nutzung, Aktiviert oder Deaktiviert.',
+		solutionReviewUseGlobal: 'Globale Konfiguration verwenden',
+		solutionFollowGlobalReviewState: 'Globale Expertenprüfung folgen: {state}',
+		solutionReviewForceEnabledDesc: 'Expertenprüfung für dieses Projekt erzwingen.',
+		solutionReviewForceDisabledDesc: 'Expertenprüfung für dieses Projekt deaktivieren.',
+		solutionProjectDescription: 'Konfigurieren Sie, wie dieses Projekt das LLSOAI-Lösungsmodell verwendet.',
+		solutionGlobalStatus: 'Global {state}',
+		solutionFollowGlobalState: 'Globalem Status folgen: {state}',
+		solutionForceEnabledDesc: 'Lösungsanbieter für dieses Projekt erzwingen.',
+		solutionForceDisabledDesc: 'Lösungsanbieter für dieses Projekt deaktivieren erzwingen.',
+		solutionUseGlobalProvider: 'Globalen Lösungsanbieter verwenden ({value})',
+		solutionUseGlobalModel: 'Globales Lösungsmodell verwenden ({value})',
+		solutionModelOverrideHelp: 'Wählen Sie sowohl Anbieter als auch Modell aus, um das globale Lösungsmodell zu überschreiben. Lassen Sie eines davon leer, um weiterhin das globale Lösungsmodell zu verwenden.',
+	});
 
 	function t(key) {
 		return translations[currentLanguage]?.[key] || translations.en[key] || key;
@@ -391,6 +555,10 @@
 	const modalExpertModeEnabled = document.getElementById('modalExpertModeEnabled');
 	const modalExpertModeProvider = document.getElementById('modalExpertModeProvider');
 	const modalExpertModeModel = document.getElementById('modalExpertModeModel');
+	const modalSolutionProviderEnabled = document.getElementById('modalSolutionProviderEnabled');
+	const modalSolutionProviderProvider = document.getElementById('modalSolutionProviderProvider');
+	const modalSolutionProviderModel = document.getElementById('modalSolutionProviderModel');
+	const modalSolutionProviderReviewWithExpert = document.getElementById('modalSolutionProviderReviewWithExpert');
 	const modalImportRecordsBtn = document.getElementById('modalImportRecordsBtn');
 	const modalExportRecordsBtn = document.getElementById('modalExportRecordsBtn');
 	
@@ -418,6 +586,7 @@
 		if (window.settingsMode === 'global') {
 			vscode.postMessage({ command: 'getChatHistorySettings' });
 			vscode.postMessage({ command: 'getExpertModeSettings' });
+			vscode.postMessage({ command: 'getSolutionProviderSettings' });
 			vscode.postMessage({ command: 'getSystemPrompt' });
 		} else if (window.settingsMode === 'project') {
 			vscode.postMessage({ command: 'getProjectChatHistorySettings' });
@@ -427,6 +596,7 @@
 		vscode.postMessage({ command: 'getProviders' });
 		vscode.postMessage({ command: 'getChatHistorySettings' });
 		vscode.postMessage({ command: 'getExpertModeSettings' });
+		vscode.postMessage({ command: 'getSolutionProviderSettings' });
 		vscode.postMessage({ command: 'getSystemPrompt' });
 	}
 	setupEventListeners();
@@ -495,6 +665,11 @@
 			expertModeSettings.providerId = modalExpertModeProvider.value || '';
 			expertModeSettings.modelId = '';
 			populateExpertModeModels(modalExpertModeProvider, modalExpertModeModel, expertModeSettings.modelId);
+		});
+		modalSolutionProviderProvider?.addEventListener('change', () => {
+			solutionProviderSettings.providerId = modalSolutionProviderProvider.value || '';
+			solutionProviderSettings.modelId = '';
+			populateSolutionProviderModels(modalSolutionProviderProvider, modalSolutionProviderModel, solutionProviderSettings.modelId);
 		});
 		
 		// Settings buttons - Project Settings (open in editor tab)
@@ -634,71 +809,6 @@
 			});
 		});
 		
-		// Panel mode button handlers (Editor Tab)
-		const panelCancelBtn = document.getElementById('panelCancelBtn');
-		const panelSaveBtn = document.getElementById('panelSaveBtn');
-		const panelImportRecordsBtn = document.getElementById('panelImportRecordsBtn');
-		const panelExportRecordsBtn = document.getElementById('panelExportRecordsBtn');
-		const panelExpertModeProvider = document.getElementById('panelExpertModeProvider');
-		const panelExpertModeModel = document.getElementById('panelExpertModeModel');
-
-		if (window.panelProviders) {
-			providers = window.panelProviders;
-			expertModeSettings = window.panelExpertModeSettings || expertModeSettings;
-			populateExpertModeProviders(panelExpertModeProvider, expertModeSettings.providerId);
-			populateExpertModeModels(panelExpertModeProvider, panelExpertModeModel, expertModeSettings.modelId);
-		}
-		
-		if (panelCancelBtn) {
-			panelCancelBtn.addEventListener('click', () => {
-				vscode.postMessage({ command: 'cancelPanel' });
-			});
-		}
-		
-		if (panelSaveBtn) {
-			panelSaveBtn.addEventListener('click', () => {
-				const mode = window.settingsMode;
-				if (mode === 'global') {
-					const globalSystemPrompt = document.getElementById('panelGlobalSystemPrompt')?.value || '';
-					const chatHistoryEnabled = document.getElementById('panelChatHistoryEnabled')?.checked || false;
-					const chatHistorySavePath = document.getElementById('panelChatHistorySavePath')?.value || '';
-					vscode.postMessage({
-						command: 'saveGlobalSettings',
-						data: {
-							globalSystemPrompt,
-							chatHistoryEnabled,
-							chatHistorySavePath
-						}
-					});
-				} else if (mode === 'project') {
-					const projectSystemPrompt = document.getElementById('panelProjectSystemPrompt')?.value || '';
-					const expertModeEnabledState = document.querySelector('input[name="panelExpertModeEnabledState"]:checked')?.value || 'global';
-					const expertModeProviderId = document.getElementById('panelExpertModeProvider')?.value || '';
-					const expertModeModelId = document.getElementById('panelExpertModeModel')?.value || '';
-					vscode.postMessage({
-						command: 'saveProjectSettings',
-						data: {
-							projectSystemPrompt,
-							expertModeEnabledState,
-							expertModeProviderId,
-							expertModeModelId
-						}
-					});
-				}
-			});
-		}
-		
-		if (panelImportRecordsBtn) {
-			panelImportRecordsBtn.addEventListener('click', () => {
-				vscode.postMessage({ command: 'importRecords' });
-			});
-		}
-		
-		if (panelExportRecordsBtn) {
-			panelExportRecordsBtn.addEventListener('click', () => {
-				vscode.postMessage({ command: 'exportRecords' });
-			});
-		}
 	}
 
 	function setupPanelEventListeners() {
@@ -708,14 +818,21 @@
 		const panelExportRecordsBtn = document.getElementById('panelExportRecordsBtn');
 		const panelExpertModeProvider = document.getElementById('panelExpertModeProvider');
 		const panelExpertModeModel = document.getElementById('panelExpertModeModel');
+		const panelSolutionProviderProvider = document.getElementById('panelSolutionProviderProvider');
+		const panelSolutionProviderModel = document.getElementById('panelSolutionProviderModel');
 
 		if (window.panelProviders) {
 			providers = window.panelProviders;
 			if (window.panelExpertModeSettings) {
 				expertModeSettings = window.panelExpertModeSettings;
 			}
+			if (window.panelSolutionProviderSettings) {
+				solutionProviderSettings = window.panelSolutionProviderSettings;
+			}
 			populateExpertModeProviders(panelExpertModeProvider, expertModeSettings.providerId || '');
 			populateExpertModeModels(panelExpertModeProvider, panelExpertModeModel, expertModeSettings.modelId || '');
+			populateSolutionProviderProviders(panelSolutionProviderProvider, solutionProviderSettings.providerId || '');
+			populateSolutionProviderModels(panelSolutionProviderProvider, panelSolutionProviderModel, solutionProviderSettings.modelId || '');
 		}
 
 		panelCancelBtn?.addEventListener('click', () => {
@@ -732,6 +849,10 @@
 				const expertModeEnabled = document.getElementById('panelExpertModeEnabled')?.checked || false;
 				const expertModeProviderId = document.getElementById('panelExpertModeProvider')?.value || '';
 				const expertModeModelId = document.getElementById('panelExpertModeModel')?.value || '';
+				const solutionProviderEnabled = document.getElementById('panelSolutionProviderEnabled')?.checked || false;
+				const solutionProviderProviderId = document.getElementById('panelSolutionProviderProvider')?.value || '';
+				const solutionProviderModelId = document.getElementById('panelSolutionProviderModel')?.value || '';
+				const solutionProviderReviewWithExpert = document.getElementById('panelSolutionProviderReviewWithExpert')?.checked || false;
 				vscode.postMessage({
 					command: 'saveGlobalSettings',
 					data: {
@@ -741,6 +862,10 @@
 						expertModeEnabled,
 						expertModeProviderId,
 						expertModeModelId,
+						solutionProviderEnabled,
+						solutionProviderProviderId,
+						solutionProviderModelId,
+						solutionProviderReviewWithExpert,
 						forceTodoEnabled
 					}
 				});
@@ -752,9 +877,13 @@
 				const expertModeEnabledState = document.querySelector('input[name="panelExpertModeEnabledState"]:checked')?.value || 'global';
 				const expertModeProviderId = document.getElementById('panelExpertModeProvider')?.value || '';
 				const expertModeModelId = document.getElementById('panelExpertModeModel')?.value || '';
+				const solutionProviderEnabledState = document.querySelector('input[name="panelSolutionProviderEnabledState"]:checked')?.value || 'global';
+				const solutionProviderProviderId = document.getElementById('panelSolutionProviderProvider')?.value || '';
+				const solutionProviderModelId = document.getElementById('panelSolutionProviderModel')?.value || '';
+				const solutionProviderReviewWithExpertState = document.querySelector('input[name="panelSolutionProviderReviewWithExpertState"]:checked')?.value || 'global';
 				vscode.postMessage({
 					command: 'saveProjectSettings',
-					data: { projectSystemPrompt, projectChatHistoryEnabled, projectChatHistorySavePath, forceTodoEnabled, expertModeEnabledState, expertModeProviderId, expertModeModelId }
+					data: { projectSystemPrompt, projectChatHistoryEnabled, projectChatHistorySavePath, forceTodoEnabled, expertModeEnabledState, expertModeProviderId, expertModeModelId, solutionProviderEnabledState, solutionProviderProviderId, solutionProviderModelId, solutionProviderReviewWithExpertState }
 				});
 			}
 		});
@@ -769,6 +898,9 @@
 
 		panelExpertModeProvider?.addEventListener('change', () => {
 			populateExpertModeModels(panelExpertModeProvider, panelExpertModeModel, '');
+		});
+		panelSolutionProviderProvider?.addEventListener('change', () => {
+			populateSolutionProviderModels(panelSolutionProviderProvider, panelSolutionProviderModel, '');
 		});
 	}
 
@@ -794,6 +926,16 @@
 						expertSelectableProviders = message.data.providers;
 					}
 					updateExpertModeControls();
+				}
+				break;
+
+			case 'solutionProviderSettingsLoaded':
+				if (message.data) {
+					solutionProviderSettings = message.data.settings || { enabled: false, providerId: '', modelId: '', reviewWithExpert: false };
+					if (message.data.providers) {
+						solutionSelectableProviders = message.data.providers;
+					}
+					updateSolutionProviderControls();
 				}
 				break;
 
@@ -1347,10 +1489,18 @@
 		const placeholder = providerSelect.dataset.placeholderKey
 			? formatTranslation(t(providerSelect.dataset.placeholderKey), { value: providerSelect.dataset.placeholderValue || '' })
 			: (providerSelect.dataset.placeholder || t('expertProvider'));
+		const placeholderAttrs = providerSelect.dataset.placeholderKey
+			? ` data-i18n-template="${escapeHtml(providerSelect.dataset.placeholderKey)}" data-i18n-value-value="${escapeHtml(providerSelect.dataset.placeholderValue || '')}"`
+			: '';
 		const expertProviders = getExpertSelectableProviders();
 		providerSelect.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` + expertProviders.map(provider => `
 			<option value="${escapeHtml(provider.id)}" ${provider.id === selectedProviderId ? 'selected' : ''}>${escapeHtml(provider.name)}</option>
 		`).join('');
+		const placeholderOption = providerSelect.querySelector('option[value=""]');
+		if (placeholderOption && placeholderAttrs) {
+			placeholderOption.setAttribute('data-i18n-template', providerSelect.dataset.placeholderKey);
+			placeholderOption.setAttribute('data-i18n-value-value', providerSelect.dataset.placeholderValue || '');
+		}
 		applyI18n();
 	}
 
@@ -1364,6 +1514,48 @@
 		modelSelect.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` + models.map(model => `
 			<option value="${escapeHtml(model.modelId)}" ${model.modelId === selectedModelId ? 'selected' : ''}>${escapeHtml(model.displayName || model.modelId)}</option>
 		`).join('');
+		const placeholderOption = modelSelect.querySelector('option[value=""]');
+		if (placeholderOption && modelSelect.dataset.placeholderKey) {
+			placeholderOption.setAttribute('data-i18n-template', modelSelect.dataset.placeholderKey);
+			placeholderOption.setAttribute('data-i18n-value-value', modelSelect.dataset.placeholderValue || '');
+		}
+		applyI18n();
+	}
+
+	function populateSolutionProviderProviders(providerSelect, selectedProviderId) {
+		if (!providerSelect) return;
+		const placeholder = providerSelect.dataset.placeholderKey
+			? formatTranslation(t(providerSelect.dataset.placeholderKey), { value: providerSelect.dataset.placeholderValue || '' })
+			: (providerSelect.dataset.placeholder || t('solutionProviderProvider'));
+		const solutionProviders = providers.length > 0
+			? providers.filter(provider => provider?.enabled && getProviderModels(provider.id).length > 0)
+			: (solutionSelectableProviders.length > 0 ? solutionSelectableProviders : expertSelectableProviders);
+		providerSelect.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` + solutionProviders.map(provider => `
+			<option value="${escapeHtml(provider.id)}" ${provider.id === selectedProviderId ? 'selected' : ''}>${escapeHtml(provider.name)}</option>
+		`).join('');
+		const placeholderOption = providerSelect.querySelector('option[value=""]');
+		if (placeholderOption && providerSelect.dataset.placeholderKey) {
+			placeholderOption.setAttribute('data-i18n-template', providerSelect.dataset.placeholderKey);
+			placeholderOption.setAttribute('data-i18n-value-value', providerSelect.dataset.placeholderValue || '');
+		}
+		applyI18n();
+	}
+
+	function populateSolutionProviderModels(providerSelect, modelSelect, selectedModelId) {
+		if (!modelSelect) return;
+		const providerId = providerSelect?.value || '';
+		const models = getProviderModels(providerId);
+		const placeholder = modelSelect.dataset.placeholderKey
+			? formatTranslation(t(modelSelect.dataset.placeholderKey), { value: modelSelect.dataset.placeholderValue || '' })
+			: (modelSelect.dataset.placeholder || t('solutionProviderModel'));
+		modelSelect.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` + models.map(model => `
+			<option value="${escapeHtml(model.modelId)}" ${model.modelId === selectedModelId ? 'selected' : ''}>${escapeHtml(model.displayName || model.modelId)}</option>
+		`).join('');
+		const placeholderOption = modelSelect.querySelector('option[value=""]');
+		if (placeholderOption && modelSelect.dataset.placeholderKey) {
+			placeholderOption.setAttribute('data-i18n-template', modelSelect.dataset.placeholderKey);
+			placeholderOption.setAttribute('data-i18n-value-value', modelSelect.dataset.placeholderValue || '');
+		}
 		applyI18n();
 	}
 
@@ -1382,6 +1574,27 @@
 			const selectedModelId = window.panelExpertModeSettings?.modelId || expertModeSettings.modelId;
 			populateExpertModeProviders(panelProvider, selectedProviderId);
 			populateExpertModeModels(panelProvider, panelModel, selectedModelId);
+		}
+	}
+
+	function updateSolutionProviderControls() {
+		if (modalSolutionProviderEnabled) modalSolutionProviderEnabled.checked = !!solutionProviderSettings.enabled;
+		if (modalSolutionProviderReviewWithExpert) modalSolutionProviderReviewWithExpert.checked = !!solutionProviderSettings.reviewWithExpert;
+		populateSolutionProviderProviders(modalSolutionProviderProvider, solutionProviderSettings.providerId);
+		populateSolutionProviderModels(modalSolutionProviderProvider, modalSolutionProviderModel, solutionProviderSettings.modelId);
+
+		const panelProvider = document.getElementById('panelSolutionProviderProvider');
+		const panelModel = document.getElementById('panelSolutionProviderModel');
+		const panelEnabled = document.getElementById('panelSolutionProviderEnabled');
+		const panelReview = document.getElementById('panelSolutionProviderReviewWithExpert');
+		if (panelEnabled) panelEnabled.checked = !!solutionProviderSettings.enabled;
+		if (panelReview) panelReview.checked = !!solutionProviderSettings.reviewWithExpert;
+		if (panelProvider && window.panelProviders) {
+			providers = window.panelProviders;
+			const selectedProviderId = window.panelSolutionProviderSettings?.providerId || solutionProviderSettings.providerId;
+			const selectedModelId = window.panelSolutionProviderSettings?.modelId || solutionProviderSettings.modelId;
+			populateSolutionProviderProviders(panelProvider, selectedProviderId);
+			populateSolutionProviderModels(panelProvider, panelModel, selectedModelId);
 		}
 	}
 
@@ -1450,6 +1663,7 @@
 		vscode.postMessage({ command: 'getSystemPrompt' });
 		vscode.postMessage({ command: 'getChatHistorySettings' });
 		vscode.postMessage({ command: 'getExpertModeSettings' });
+		vscode.postMessage({ command: 'getSolutionProviderSettings' });
 		
 		// Populate the modal with current values
 		// The message handlers below will update the modal fields
@@ -1482,6 +1696,15 @@
 				enabled: modalExpertModeEnabled?.checked || false,
 				providerId: modalExpertModeProvider?.value || '',
 				modelId: modalExpertModeModel?.value || ''
+			}
+		});
+		vscode.postMessage({
+			command: 'updateSolutionProviderSettings',
+			data: {
+				enabled: modalSolutionProviderEnabled?.checked || false,
+				providerId: modalSolutionProviderProvider?.value || '',
+				modelId: modalSolutionProviderModel?.value || '',
+				reviewWithExpert: modalSolutionProviderReviewWithExpert?.checked || false
 			}
 		});
 		closeGlobalSettingsModalFn();

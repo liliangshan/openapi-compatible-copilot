@@ -21,11 +21,15 @@ const DEFAULT_CONTEXT_LENGTH = 128000;
 const DEFAULT_MAX_TOKENS = 16000;
 const ASK_LLSOAI_TOOL_NAME = 'ask_llsoai';
 const EXPERT_TOOL_CALL_PREFIX = 'llsoai';
+const ASK_SOLUTION_PROVIDER_TOOL_NAME = 'ask_solution_provider';
+const SOLUTION_TOOL_CALL_PREFIX = 'llsoai_solution';
 const TODO_TOOL_NAME = 'manage_todo_list';
 const TIMELINE_LIST_TOOL_NAME = 'timeline_list_by_file';
 const TIMELINE_RESTORE_TOOL_NAME = 'timeline_restore_snapshot';
 const TIMELINE_READ_LINES_TOOL_NAME = 'timeline_read_snapshot_lines';
 const MAX_TIMELINE_TOOL_ROUNDS = 3;
+const MAX_SOLUTION_EXPERT_REVIEW_COUNT = 2;
+const MAX_FORCE_EXPERT_REVIEW_REMINDERS = 2;
 
 /**
  * Mask an API key for display, showing first 4 and last 4 characters
@@ -68,10 +72,12 @@ interface ExpertRunState {
 	sessionId: string;
 	askLlsoaiCallId: string;
 	askLlsoaiArguments: any;
+	returnTarget: { type: 'main' } | { type: 'solution'; solutionRunId: string; solutionToolCallId: string };
 	expertContextRecords: any[];
 	expertProviderId: string;
 	expertModelId: string;
 	expertRequestContext: MainRequestContext;
+	expertToolCalling: boolean;
 	expertMessages: any[];
 	consumedToolResultCallIds: Set<string>;
 	pendingExpertToolCallIds: string[];
@@ -81,6 +87,37 @@ interface ExpertRunState {
 	originalMainMessages: any[];
 	mainRequestContext: MainRequestContext;
 	mainTools: readonly any[];
+	createdAt: number;
+}
+
+interface SolutionRunState {
+	runId: string;
+	sessionId: string;
+	askSolutionCallId: string;
+	askSolutionArguments: any;
+	solutionContextRecords: any[];
+	solutionProviderId: string;
+	solutionModelId: string;
+	solutionDraftFile: string;
+	solutionRequestContext: MainRequestContext;
+	solutionMessages: any[];
+	consumedToolResultCallIds: Set<string>;
+	pendingSolutionToolCallIds: string[];
+	pendingSolutionToolCalls: CollectedToolCall[];
+	pendingSolutionToolResults: Map<string, string>;
+	pendingSolutionUserFollowUps: string[];
+	originalMainMessages: any[];
+	mainRequestContext: MainRequestContext;
+	mainTools: readonly any[];
+	solutionToolCalling: boolean;
+	reviewSkippedReason?: string;
+	forceExpertReviewReminderCount: number;
+	reviewWithExpert: boolean;
+	expertReviewAvailable: boolean;
+	requireInitialExpertReview: boolean;
+	expertReviewCompleted: boolean;
+	expertReviewCount: number;
+	pendingExpertReviewCallId?: string;
 	createdAt: number;
 }
 
@@ -343,6 +380,10 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	private _onDidChangeModels: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
 	private _expertRuns: Map<string, ExpertRunState> = new Map();
 	private _activeExpertRunId?: string;
+	private _activeExpertRunBySession: Map<string, string> = new Map();
+	private _solutionRuns: Map<string, SolutionRunState> = new Map();
+	private _activeSolutionRunId?: string;
+	private _activeSolutionRunBySession: Map<string, string> = new Map();
 
 	/**
 	 * Event fired when the available set of language models changes.
@@ -487,6 +528,19 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			progress.report(new vscode.LanguageModelTextPart(compressionText));
 			return;
 		}
+		if (isCompressionRequest(messages) && this._getSolutionRunForSession(currentSessionId)) {
+			const compressionText = this._buildSolutionCompressionResponse(currentSessionId);
+			progress.report(new vscode.LanguageModelTextPart(compressionText));
+			return;
+		}
+
+		const solutionToolResults = this._findSolutionToolResults(messages, currentSessionId);
+		if (solutionToolResults.length > 0) {
+			for (const solutionToolResult of solutionToolResults) {
+				await this._continueSolutionFromToolResult(solutionToolResult.runId, solutionToolResult.originCallId, solutionToolResult.prefixedCallId, solutionToolResult.text, progress, token);
+			}
+			return;
+		}
 
 		const expertToolResults = this._findExpertToolResults(messages, currentSessionId);
 		if (expertToolResults.length > 0) {
@@ -497,12 +551,22 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 
 		const latestUserText = this._getLatestUserText(messages);
-		const activeExpertRun = this._activeExpertRunId ? this._expertRuns.get(this._activeExpertRunId) : undefined;
-		if (activeExpertRun && activeExpertRun.sessionId !== currentSessionId) {
-			this._activeExpertRunId = undefined;
+		const activeExpertRun = this._getExpertRunForSession(currentSessionId);
+		const activeExpertRunId = activeExpertRun?.runId;
+		if (activeExpertRunId && latestUserText) {
+			if (activeExpertRun.returnTarget.type === 'solution') {
+				const solutionState = this._solutionRuns.get(activeExpertRun.returnTarget.solutionRunId);
+				if (solutionState) {
+					solutionState.pendingSolutionUserFollowUps.push(latestUserText);
+					return;
+				}
+			}
+			await this._continueExpertFromUserMessage(activeExpertRunId, latestUserText, progress, token);
+			return;
 		}
-		if (this._activeExpertRunId && activeExpertRun?.sessionId === currentSessionId && latestUserText) {
-			await this._continueExpertFromUserMessage(this._activeExpertRunId, latestUserText, progress, token);
+		const activeSolutionRun = this._getSolutionRunForSession(currentSessionId);
+		if (activeSolutionRun?.runId && latestUserText) {
+			await this._continueSolutionFromUserMessage(activeSolutionRun.runId, latestUserText, progress, token);
 			return;
 		}
 
@@ -535,6 +599,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		};
 		const expertModel = await this._getConfiguredExpertModel();
 		const expertEnabled = !!expertModel;
+		const solutionModel = await this._getConfiguredSolutionProviderModel();
+		const solutionEnabled = !!solutionModel;
 
 		// Update token usage status bar
 		await updateContextStatusBar(
@@ -548,7 +614,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		// Build request body
 		const requestBody: any = {
 			model: modelId,
-			messages: this._withExpertPrompt(this._convertMessages(messages, model, currentSessionId), expertEnabled),
+			messages: this._withSolutionProviderPrompt(
+				this._withExpertPrompt(this._convertMessages(messages, model, currentSessionId), expertEnabled),
+				solutionEnabled,
+				!!solutionModel?.reviewWithExpert && expertEnabled
+			),
 			stream: true,
 		};
 
@@ -571,6 +641,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const builtInTools = [
 			...(this._timelineService ? this._buildTimelineTools() : []),
 			...(expertEnabled ? [this._buildAskLlsoaiTool()] : []),
+			...(solutionEnabled ? [this._buildAskSolutionProviderTool()] : []),
 		];
 		const apiTools = this._mergeToolsWithBuiltIns(options.tools ?? [], builtInTools);
 		if (apiTools && apiTools.length > 0) {
@@ -597,12 +668,26 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		});
 
 		if (result.toolCalls.length > 0) {
+			const internalToolCalls = result.toolCalls.filter(toolCall => toolCall.name === ASK_LLSOAI_TOOL_NAME || toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME);
+			const ordinaryToolCalls = result.toolCalls.filter(toolCall => toolCall.name !== ASK_LLSOAI_TOOL_NAME && toolCall.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME);
+			if (internalToolCalls.length > 1 || (internalToolCalls.length > 0 && ordinaryToolCalls.length > 0)) {
+				await this._continueMainAfterInvalidInternalToolCalls(internalToolCalls, ordinaryToolCalls, requestBody.messages, mainContext, apiTools, progress, token);
+				return;
+			}
 			for (const toolCall of result.toolCalls) {
 				if (toolCall.name === ASK_LLSOAI_TOOL_NAME) {
 					if (expertModel) {
 						await this._startExpertRun(toolCall, expertModel, currentSessionId, requestBody.messages, mainContext, apiTools, progress, token);
 					} else {
 						await this._continueMainAfterUnavailableExpert(toolCall, requestBody.messages, mainContext, apiTools, progress, token);
+					}
+					continue;
+				}
+				if (toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME) {
+					if (solutionModel) {
+						await this._startSolutionRun(toolCall, solutionModel, expertModel, currentSessionId, requestBody.messages, mainContext, apiTools, progress, token);
+					} else {
+						await this._continueMainAfterUnavailableSolutionProvider(toolCall, requestBody.messages, mainContext, apiTools, progress, token);
 					}
 					continue;
 				}
@@ -647,6 +732,69 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		if (result.text) {
 			const chatMessages = this._buildChatMessages(messages, result.text);
 			await this._configManager.saveChatHistory(chatMessages, modelId, options.tools ? [...options.tools] : undefined);
+		}
+	}
+
+	private async _continueMainAfterInvalidInternalToolCalls(
+		internalToolCalls: CollectedToolCall[],
+		ordinaryToolCalls: CollectedToolCall[],
+		mainMessages: any[],
+		mainContext: MainRequestContext,
+		mainTools: readonly any[],
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const internalToolList = internalToolCalls.map(toolCall => `- ${toolCall.name} (${toolCall.id})`).join('\n');
+		const rejectedToolList = ordinaryToolCalls.map(toolCall => `- ${toolCall.name} (${toolCall.id})`).join('\n');
+		const reason = internalToolCalls.length > 1
+			? 'Internal delegation was not started because this assistant message requested multiple internal delegation tool calls. Only one internal delegation tool call is allowed per assistant message.'
+			: 'Internal delegation was not started because this assistant message mixed an internal delegation tool call with ordinary VS Code tool calls.';
+		const requestBody: any = {
+			model: mainContext.modelId,
+			messages: [
+				...mainMessages,
+				{
+					role: 'assistant',
+					tool_calls: internalToolCalls.map(toolCall => this._toOpenAIToolCall(toolCall)),
+				},
+				...internalToolCalls.map((internalToolCall) => ({
+					role: 'tool',
+					tool_call_id: internalToolCall.id,
+					content: [
+						reason,
+						'',
+						'Internal delegation tool calls:',
+						internalToolList,
+						'',
+						ordinaryToolCalls.length > 0 ? 'Ordinary tool calls that must be retried in a later assistant message:' : '',
+						ordinaryToolCalls.length > 0 ? rejectedToolList : '',
+						'',
+						'Please continue by choosing exactly one path at a time: call one internal delegation tool alone, or call ordinary tools alone in the next assistant message.',
+					].join('\n'),
+				})),
+			],
+			stream: true,
+		};
+		this._applySamplingOptions(requestBody, mainContext);
+		if (mainTools.length > 0) {
+			requestBody.tools = mainTools
+				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME && tool?.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME)
+				.map((tool: any) => ({
+					type: 'function',
+					function: {
+						name: tool.name,
+						description: tool.description || '',
+						parameters: tool.inputSchema && Object.keys(tool.inputSchema).length > 0 ? tool.inputSchema : { type: 'object', properties: {} },
+					}
+				}));
+		}
+		const result = await this._requestModel({ ...mainContext, requestBody, requestLabel: `main_after_invalid_internal_tools_${Date.now()}`, progress, token, reportText: true });
+		await this._saveMainChatHistoryFromMessages(requestBody.messages, result.text, mainContext.modelId, mainTools);
+		for (const toolCall of result.toolCalls) {
+			if (toolCall.name === ASK_LLSOAI_TOOL_NAME || toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME) {
+				continue;
+			}
+			progress.report(new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, toolCall.input));
 		}
 	}
 
@@ -695,6 +843,63 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 		
 		return result;
+	}
+
+	private _buildChatMessagesFromOpenAIMessages(
+		messages: any[],
+		assistantResponse: string
+	): Array<{ role: string; content: string; name?: string }> {
+		const result: Array<{ role: string; content: string; name?: string }> = [];
+		for (const msg of messages) {
+			const role = typeof msg?.role === 'string' ? msg.role : 'user';
+			let content = '';
+			if (typeof msg?.content === 'string') {
+				content = msg.content;
+			} else if (Array.isArray(msg?.content)) {
+				content = msg.content.map((part: any) => typeof part?.text === 'string' ? part.text : JSON.stringify(part)).join('\n');
+			} else if (msg?.tool_calls) {
+				content = `Tool calls made:\n${JSON.stringify(msg.tool_calls, null, 2)}`;
+			}
+			if (role === 'tool') {
+				content = `[Tool result for ${msg.tool_call_id || 'unknown'}]: ${content}`;
+			}
+			if (!content) {
+				continue;
+			}
+			const mappedRole = role === 'assistant' || role === 'system' ? role : 'user';
+			const lastMsg = result.length > 0 ? result[result.length - 1] : null;
+			if (lastMsg && lastMsg.role === mappedRole && (mappedRole === 'user' || mappedRole === 'assistant')) {
+				lastMsg.content += '\n' + content;
+			} else {
+				result.push({ role: mappedRole, content });
+			}
+		}
+		if (assistantResponse) {
+			const lastMsg = result.length > 0 ? result[result.length - 1] : null;
+			if (lastMsg && lastMsg.role === 'assistant') {
+				lastMsg.content += '\n' + assistantResponse;
+			} else {
+				result.push({ role: 'assistant', content: assistantResponse });
+			}
+		}
+		return result;
+	}
+
+	private async _saveMainChatHistoryFromMessages(
+		messages: any[],
+		assistantResponse: string,
+		modelId: string,
+		tools?: readonly any[]
+	): Promise<void> {
+		if (!assistantResponse && (!messages || messages.length === 0)) {
+			return;
+		}
+		try {
+			const chatMessages = this._buildChatMessagesFromOpenAIMessages(messages, assistantResponse);
+			await this._configManager.saveChatHistory(chatMessages, modelId, tools ? [...tools] : undefined);
+		} catch (error) {
+			console.error('Failed to save main chat history:', error);
+		}
 	}
 
 	private _buildTimelineTools(): any[] {
@@ -757,6 +962,107 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 
 	private _isTimelineTool(name: string): boolean {
 		return name === TIMELINE_LIST_TOOL_NAME || name === TIMELINE_RESTORE_TOOL_NAME || name === TIMELINE_READ_LINES_TOOL_NAME;
+	}
+
+	private _isInternalDelegationTool(name: string): boolean {
+		return name === ASK_LLSOAI_TOOL_NAME || name === ASK_SOLUTION_PROVIDER_TOOL_NAME;
+	}
+
+	private _isToolHiddenFromChildModel(name: string): boolean {
+		return name === TODO_TOOL_NAME || this._isInternalDelegationTool(name) || this._isTimelineTool(name);
+	}
+
+	private _buildSolutionDraftFilePath(runId: string): string {
+		const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+		return `.LLSOAI/Solution/drafts/${timestamp}-${runId}-draft.md`;
+	}
+
+	private _isWriteFileToolName(name: string): boolean {
+		return [
+			'create_file',
+			'write_file',
+			'edit_file',
+			'apply_patch',
+			'replace_string_in_file',
+			'multi_replace_string_in_file',
+			'insert_edit_into_file',
+		].includes(name);
+	}
+
+	private _normalizeWorkspaceRelativePathForPolicy(rawPath: unknown): string | null {
+		if (typeof rawPath !== 'string' || !rawPath.trim()) {
+			return null;
+		}
+		let candidate = rawPath.trim();
+		try {
+			if (candidate.startsWith('file://')) {
+				candidate = vscode.Uri.parse(candidate).fsPath;
+			}
+		} catch {
+			return null;
+		}
+		const path = require('path');
+		let relativePath = candidate;
+		if (path.isAbsolute(candidate)) {
+			const workspaceFolder = vscode.workspace.workspaceFolders?.find((folder) => {
+				const rel = path.relative(folder.uri.fsPath, candidate);
+				return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+			});
+			if (!workspaceFolder) {
+				return null;
+			}
+			relativePath = path.relative(workspaceFolder.uri.fsPath, candidate);
+		}
+		relativePath = relativePath.replace(/\\/g, '/').replace(/^\.\/+/, '');
+		if (!relativePath || relativePath.startsWith('/') || relativePath.split('/').includes('..')) {
+			return null;
+		}
+		return relativePath;
+	}
+
+	private _extractWriteToolTargetPaths(toolCall: CollectedToolCall): string[] {
+		const input = toolCall.input ?? {};
+		const paths = new Set<string>();
+		const addPath = (value: unknown) => {
+			if (typeof value === 'string' && value.trim()) {
+				paths.add(value.trim());
+			}
+		};
+		addPath(input.filePath ?? input.path ?? input.uri ?? input.targetPath);
+		if (toolCall.name === 'apply_patch') {
+			const patchText = typeof input.input === 'string'
+				? input.input
+				: typeof input.patch === 'string'
+					? input.patch
+					: typeof toolCall.arguments === 'string'
+						? toolCall.arguments
+						: '';
+			for (const line of patchText.split('\n')) {
+				const match = line.match(/^\*\*\*\s+(?:Add|Update|Delete)\s+File:\s+(.+?)(?:\s*$|\s+->\s+)/);
+				if (match?.[1]) {
+					addPath(match[1]);
+				}
+			}
+		}
+		return [...paths];
+	}
+
+	private _getSolutionWriteToolPolicyError(state: SolutionRunState, toolCall: CollectedToolCall): string | null {
+		if (!this._isWriteFileToolName(toolCall.name)) {
+			return null;
+		}
+		const targetPaths = this._extractWriteToolTargetPaths(toolCall);
+		if (targetPaths.length === 0) {
+			return `Write tool ${toolCall.name} was blocked because the target file path could not be determined. Files may only be written under .LLSOAI/Solution/`;
+		}
+		const solutionDir = '.LLSOAI/Solution';
+		for (const targetPath of targetPaths) {
+			const normalizedTarget = this._normalizeWorkspaceRelativePathForPolicy(targetPath);
+			if (!normalizedTarget || !normalizedTarget.startsWith(solutionDir + '/')) {
+				return `Write tool ${toolCall.name} was blocked because it attempted to write outside the .LLSOAI/Solution/ directory. Files may only be created under .LLSOAI/Solution/ with a descriptive name. Requested path: ${targetPath}`;
+			}
+		}
+		return null;
 	}
 
 	private async _executeTimelineToolAsJson(name: string, input: any): Promise<string> {
@@ -1187,7 +1493,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 	}
 
-	private async _getConfiguredExpertModel(): Promise<(MainRequestContext & { providerName: string; modelName: string }) | null> {
+	private async _getConfiguredExpertModel(): Promise<(MainRequestContext & { providerName: string; modelName: string; toolCalling: boolean }) | null> {
 		const config = this._configManager.getEffectiveExpertModeConfig();
 		if (!config.enabled || !config.providerId || !config.modelId) {
 			return null;
@@ -1210,6 +1516,35 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			topP: expertModel.topP ?? 1.0,
 			samplingMode: expertModel.samplingMode ?? 'both',
 			transformThink: expertModel.transformThink ?? false,
+			toolCalling: expertModel.toolCalling ?? true,
+		};
+	}
+
+	private async _getConfiguredSolutionProviderModel(): Promise<(MainRequestContext & { providerName: string; modelName: string; reviewWithExpert: boolean; toolCalling: boolean }) | null> {
+		const config = this._configManager.getEffectiveSolutionProviderConfig();
+		if (!config.enabled || !config.providerId || !config.modelId) {
+			return null;
+		}
+		const providers = await this._configManager.getProvidersWithSecrets();
+		const provider = providers.find((p) => p.id === config.providerId && p.enabled);
+		const solutionModel = provider?.models.find((m) => m.modelId === config.modelId);
+		if (!provider || !solutionModel || !provider.apiKey) {
+			return null;
+		}
+		return {
+			providerId: provider.id,
+			providerName: provider.name,
+			modelId: solutionModel.modelId,
+			modelName: (solutionModel.displayName && solutionModel.displayName.trim()) || solutionModel.modelId,
+			baseUrl: provider.baseUrl,
+			apiType: (provider as any).apiType ?? 'openai-compatible',
+			apiKey: provider.apiKey,
+			temperature: solutionModel.temperature ?? 0.7,
+			topP: solutionModel.topP ?? 1.0,
+			samplingMode: solutionModel.samplingMode ?? 'both',
+			transformThink: solutionModel.transformThink ?? false,
+			reviewWithExpert: config.reviewWithExpert ?? false,
+			toolCalling: solutionModel.toolCalling ?? true,
 		};
 	}
 
@@ -1222,6 +1557,22 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				properties: {
 					question: { type: 'string', description: 'The self-contained concrete question or task for the expert model. Include all relevant requirements, file paths, symbol names, error messages, constraints, and expected outcome because previous conversation context is not sent to the expert.' },
 					context: { type: 'string', description: 'Optional record-only context. This field is cached and shown to the user, but is not sent to the expert model. Put only non-essential previous conversation context here.' },
+				},
+				required: ['question'],
+			},
+		};
+	}
+
+	private _buildAskSolutionProviderTool(): any {
+		return {
+			name: ASK_SOLUTION_PROVIDER_TOOL_NAME,
+			description: 'Delegate solution design, implementation planning, architecture proposal, migration plan, risk analysis, or validation strategy to the configured LLS OAI solution provider model. The solution provider will NOT receive previous conversation history, so the request must be self-contained.',
+			inputSchema: {
+				type: 'object',
+				properties: {
+					question: { type: 'string', description: 'The self-contained solution design task. Include goals, constraints, relevant files, current state, expected deliverables, risks, and acceptance criteria.' },
+					context: { type: 'string', description: 'Optional record-only context for user-visible logging; do not rely on this as full conversation history.' },
+					expectedOutput: { type: 'string', description: 'Optional expected output format, such as implementation plan, phased roadmap, architecture proposal, migration plan, or checklist.' },
 				},
 				required: ['question'],
 			},
@@ -1243,9 +1594,27 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		return next;
 	}
 
+	private _withSolutionProviderPrompt(messages: any[], enabled: boolean, reviewWithExpertAvailable: boolean): any[] {
+		if (!enabled) {
+			return messages;
+		}
+		const reviewText = reviewWithExpertAvailable
+			? ` If solution expert review is enabled and available, the solution provider will call ${ASK_LLSOAI_TOOL_NAME} internally before returning its final solution.`
+			: '';
+		const prompt = `Solution provider is enabled. If the user asks for a design plan, implementation roadmap, architecture proposal, phased migration plan, risk analysis, validation strategy, or you want another model to draft a structured solution, call ${ASK_SOLUTION_PROVIDER_TOOL_NAME}. Use ${ASK_SOLUTION_PROVIDER_TOOL_NAME} for planning, design, architecture, roadmap, migration, and solution drafting. Use ${ASK_LLSOAI_TOOL_NAME} for independent investigation, verification, or expert review of difficult issues. The solution provider will NOT receive previous conversation history, so the question must be self-contained and include relevant goals, constraints, files, assumptions, expected output, and acceptance criteria. After the solution provider returns, continue as the main model and produce the final user-facing answer.${reviewText}`;
+		const next = [...messages];
+		const system = next.find(m => m.role === 'system');
+		if (system && typeof system.content === 'string') {
+			system.content += `\n\n${prompt}`;
+		} else {
+			next.unshift({ role: 'system', content: prompt });
+		}
+		return next;
+	}
+
 	private async _startExpertRun(
 		toolCall: CollectedToolCall,
-		expertContext: MainRequestContext & { providerName?: string; modelName?: string },
+		expertContext: MainRequestContext & { providerName?: string; modelName?: string; toolCalling?: boolean },
 		sessionId: string,
 		mainMessages: any[],
 		mainContext: MainRequestContext,
@@ -1260,10 +1629,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			sessionId,
 			askLlsoaiCallId: toolCall.id,
 			askLlsoaiArguments: toolCall.input,
+			returnTarget: { type: 'main' },
 			expertContextRecords,
 			expertProviderId: expertContext.providerId,
 			expertModelId: expertContext.modelId,
 			expertRequestContext: expertContext,
+			expertToolCalling: expertContext.toolCalling ?? true,
 			expertMessages: this._buildExpertInitialMessages(toolCall.input, expertContext.modelId),
 			consumedToolResultCallIds: new Set<string>(),
 			pendingExpertToolCallIds: [],
@@ -1277,6 +1648,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		};
 		this._expertRuns.set(runId, state);
 		this._activeExpertRunId = runId;
+		this._activeExpertRunBySession.set(sessionId, runId);
 		const expertModelName = expertContext.modelName || expertContext.modelId;
 		progress.report(new vscode.LanguageModelTextPart(`\n\n### 🧠 LLSOAI Expert Mode Started\n\nmodelName: ${expertModelName}\n\nrunId: ${runId}\n\n`));
 		await this._runExpertTurn(state, expertContext, progress, token);
@@ -1318,7 +1690,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		this._applySamplingOptions(requestBody, mainContext);
 		if (mainTools.length > 0) {
 			requestBody.tools = mainTools
-				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME)
+				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME && tool?.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME)
 				.map((tool: any) => ({
 					type: 'function',
 					function: {
@@ -1338,8 +1710,9 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			token,
 			reportText: true,
 		});
+		await this._saveMainChatHistoryFromMessages(requestBody.messages, result.text, mainContext.modelId, mainTools);
 		for (const nextToolCall of result.toolCalls) {
-			if (nextToolCall.name === ASK_LLSOAI_TOOL_NAME) {
+			if (nextToolCall.name === ASK_LLSOAI_TOOL_NAME || nextToolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME) {
 				continue;
 			}
 			progress.report(new vscode.LanguageModelToolCallPart(nextToolCall.id, nextToolCall.name, nextToolCall.input));
@@ -1386,6 +1759,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	}
 
 	private _getExpertRunForSession(currentSessionId: string): ExpertRunState | undefined {
+		const sessionRunId = this._activeExpertRunBySession.get(currentSessionId);
+		const sessionState = sessionRunId ? this._expertRuns.get(sessionRunId) : undefined;
+		if (sessionState?.sessionId === currentSessionId) {
+			return sessionState;
+		}
 		const activeState = this._activeExpertRunId ? this._expertRuns.get(this._activeExpertRunId) : undefined;
 		return activeState?.sessionId === currentSessionId
 			? activeState
@@ -1413,7 +1791,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	}
 
 	private _filterExpertTools(tools: readonly any[]): any[] {
-		return tools.filter((tool: any) => tool?.name !== TODO_TOOL_NAME);
+		return tools.filter((tool: any) => !this._isToolHiddenFromChildModel(tool?.name));
 	}
 
 	/**
@@ -1429,7 +1807,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		// Add system message indicating expert mode
 		result.push({
 			role: 'system',
-			content: `LLSOAI expert mode. Expert model ID: ${state.expertModelId}`,
+			content: `LLSOAI expert mode. Expert model ID: ${state.expertModelId}. Return target: ${state.returnTarget.type}${state.returnTarget.type === 'solution' ? ` (solutionRunId: ${state.returnTarget.solutionRunId})` : ''}`,
 		});
 
 		// Add user's question
@@ -1514,7 +1892,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			stream: true,
 		};
 		this._applySamplingOptions(requestBody, expertContext);
-		const expertTools = this._filterExpertTools(state.mainTools);
+		const expertTools = state.expertToolCalling ? this._filterExpertTools(state.mainTools) : [];
 		if (expertTools.length > 0) {
 			requestBody.tools = expertTools.map((tool: any) => ({
 				type: 'function',
@@ -1585,7 +1963,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 		// 流式处理完成后保存（消息已加入 state.expertMessages）
 		await this._saveExpertChatHistory(state);
-		await this._finishExpertAndContinueMain(state, result.text || '', progress, token);
+		if (state.returnTarget.type === 'solution') {
+			await this._finishExpertAndContinueSolution(state, result.text || '', progress, token);
+		} else {
+			await this._finishExpertAndContinueMain(state, result.text || '', progress, token);
+		}
 	}
 
 	private async _continueExpertFromToolResult(
@@ -1611,14 +1993,21 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		});
 		if (state.pendingExpertToolCallIds.length === 0) {
 			state.expertMessages.push({ role: 'tool', tool_call_id: originCallId, content: text });
-			await this._runExpertTurn(state, expertContext, progress, token);
+			try {
+				await this._runExpertTurn(state, expertContext, progress, token);
+			} catch (error) {
+				if (state.returnTarget.type === 'solution') {
+					await this._failExpertReviewBackToSolution(state, error, progress, token);
+					return;
+				}
+				throw error;
+			}
 			return;
 		}
 
 		state.pendingExpertToolResults.set(originCallId, text);
 		const missingToolCallIds = state.pendingExpertToolCallIds.filter(toolCallId => !state.pendingExpertToolResults.has(toolCallId));
 		if (missingToolCallIds.length > 0) {
-			progress.report(new vscode.LanguageModelTextPart(`\n\nLLSOAI expert is waiting for ${missingToolCallIds.length} more tool result(s) before continuing.\n\n`));
 			this._reportPendingExpertToolCalls(state, missingToolCallIds, progress);
 			return;
 		}
@@ -1640,7 +2029,53 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			});
 			state.pendingExpertUserFollowUps = [];
 		}
-		await this._runExpertTurn(state, expertContext, progress, token);
+		try {
+			await this._runExpertTurn(state, expertContext, progress, token);
+		} catch (error) {
+			if (state.returnTarget.type === 'solution') {
+				await this._failExpertReviewBackToSolution(state, error, progress, token);
+				return;
+			}
+			throw error;
+		}
+	}
+
+	private async _failExpertReviewBackToSolution(
+		state: ExpertRunState,
+		error: unknown,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		this._expertRuns.delete(state.runId);
+		this._activeExpertRunBySession.delete(state.sessionId);
+		if (this._activeExpertRunId === state.runId) {
+			this._activeExpertRunId = undefined;
+		}
+		if (state.returnTarget.type !== 'solution') {
+			return;
+		}
+		const solutionState = this._solutionRuns.get(state.returnTarget.solutionRunId);
+		if (!solutionState) {
+			progress.report(new vscode.LanguageModelTextPart('\n\nExpert review failed, but the solution run no longer exists.\n\n'));
+			return;
+		}
+		const message = error instanceof Error ? error.message : String(error);
+		progress.report(new vscode.LanguageModelTextPart(`\n\n### ❌ Expert Review Failed\n\nError: ${message}\n\n`));
+		solutionState.pendingExpertReviewCallId = undefined;
+		solutionState.reviewSkippedReason = `expert review failed: ${message}`;
+		solutionState.solutionMessages.push({
+			role: 'tool',
+			tool_call_id: state.returnTarget.solutionToolCallId,
+			content: `Expert review failed: ${message}\n\nPlease continue by producing the best final solution based on available information, and mention that expert review failed.`,
+		});
+		if (solutionState.pendingSolutionUserFollowUps.length > 0) {
+			solutionState.solutionMessages.push({
+				role: 'user',
+				content: solutionState.pendingSolutionUserFollowUps.join('\n\n'),
+			});
+			solutionState.pendingSolutionUserFollowUps = [];
+		}
+		await this._runSolutionTurn(solutionState, progress, token);
 	}
 
 	private async _continueExpertFromUserMessage(
@@ -1657,7 +2092,6 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		if (state.pendingExpertToolCallIds.length > 0) {
 			const missingToolCallIds = state.pendingExpertToolCallIds.filter(toolCallId => !state.pendingExpertToolResults.has(toolCallId));
 			state.pendingExpertUserFollowUps.push(text);
-			progress.report(new vscode.LanguageModelTextPart(`\n\nLLSOAI expert is still waiting for ${missingToolCallIds.length} tool result(s). The user follow-up will be processed after the current expert tool calls finish.\n\n`));
 			this._reportPendingExpertToolCalls(state, missingToolCallIds, progress);
 			return;
 		}
@@ -1700,6 +2134,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		token: vscode.CancellationToken
 	): Promise<void> {
 		this._expertRuns.delete(state.runId);
+		this._activeExpertRunBySession.delete(state.sessionId);
 		if (this._activeExpertRunId === state.runId) {
 			this._activeExpertRunId = undefined;
 		}
@@ -1731,7 +2166,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		this._applySamplingOptions(requestBody, state.mainRequestContext);
 		if (state.mainTools.length > 0) {
 			requestBody.tools = state.mainTools
-				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME)
+				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME && tool?.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME)
 				.map((tool: any) => ({
 				type: 'function',
 				function: {
@@ -1751,12 +2186,702 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			token,
 			reportText: true,
 		});
+		await this._saveMainChatHistoryFromMessages(mainMessages, result.text, state.mainRequestContext.modelId, state.mainTools);
 		for (const toolCall of result.toolCalls) {
-			if (toolCall.name === ASK_LLSOAI_TOOL_NAME) {
+			if (toolCall.name === ASK_LLSOAI_TOOL_NAME || toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME) {
 				continue;
 			}
 			progress.report(new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, toolCall.input));
 		}
+	}
+
+	private async _finishExpertAndContinueSolution(
+		state: ExpertRunState,
+		expertAnswer: string,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		this._expertRuns.delete(state.runId);
+		this._activeExpertRunBySession.delete(state.sessionId);
+		if (this._activeExpertRunId === state.runId) {
+			this._activeExpertRunId = undefined;
+		}
+		if (state.returnTarget.type !== 'solution') {
+			return;
+		}
+		const solutionState = this._solutionRuns.get(state.returnTarget.solutionRunId);
+		if (!solutionState) {
+			progress.report(new vscode.LanguageModelTextPart('\n\nSolution run no longer exists. Expert review result cannot be applied.\n\n'));
+			return;
+		}
+		progress.report(new vscode.LanguageModelTextPart('\n\n### ✅ Expert Review Returned to Solution Provider\n\n'));
+		solutionState.expertReviewCompleted = true;
+		solutionState.pendingExpertReviewCallId = undefined;
+		solutionState.solutionMessages.push({
+			role: 'tool',
+			tool_call_id: state.returnTarget.solutionToolCallId,
+			content: expertAnswer,
+		});
+		if (solutionState.pendingSolutionUserFollowUps.length > 0) {
+			solutionState.solutionMessages.push({
+				role: 'user',
+				content: solutionState.pendingSolutionUserFollowUps.join('\n\n'),
+			});
+			solutionState.pendingSolutionUserFollowUps = [];
+		}
+		await this._runSolutionTurn(solutionState, progress, token);
+	}
+
+	private async _startSolutionRun(
+		toolCall: CollectedToolCall,
+		solutionContext: MainRequestContext & { providerName?: string; modelName?: string; reviewWithExpert: boolean; toolCalling: boolean },
+		expertContext: (MainRequestContext & { providerName?: string; modelName?: string; toolCalling: boolean }) | null,
+		sessionId: string,
+		mainMessages: any[],
+		mainContext: MainRequestContext,
+		mainTools: readonly any[],
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+		const solutionDraftFile = this._buildSolutionDraftFilePath(runId);
+		const expertReviewAvailable = !!expertContext;
+		const solutionToolCalling = solutionContext.toolCalling ?? true;
+		const state: SolutionRunState = {
+			runId,
+			sessionId,
+			askSolutionCallId: toolCall.id,
+			askSolutionArguments: toolCall.input,
+			solutionContextRecords: [],
+			solutionProviderId: solutionContext.providerId,
+			solutionModelId: solutionContext.modelId,
+			solutionDraftFile,
+			solutionRequestContext: solutionContext,
+			solutionMessages: [],
+			consumedToolResultCallIds: new Set<string>(),
+			pendingSolutionToolCallIds: [],
+			pendingSolutionToolCalls: [],
+			pendingSolutionToolResults: new Map<string, string>(),
+			pendingSolutionUserFollowUps: [],
+			originalMainMessages: mainMessages,
+			mainRequestContext: mainContext,
+			mainTools,
+			solutionToolCalling,
+			forceExpertReviewReminderCount: 0,
+			reviewWithExpert: !!solutionContext.reviewWithExpert,
+			expertReviewAvailable,
+			requireInitialExpertReview: !!solutionContext.reviewWithExpert && expertReviewAvailable && solutionToolCalling,
+			expertReviewCompleted: false,
+			expertReviewCount: 0,
+			createdAt: Date.now(),
+		};
+		if (state.reviewWithExpert && !expertReviewAvailable) {
+			state.reviewSkippedReason = 'expert review is enabled but expert mode is not currently available';
+		} else if (state.reviewWithExpert && !solutionToolCalling) {
+			state.reviewSkippedReason = 'solution model does not support tool calling';
+		}
+		state.solutionMessages = this._buildSolutionInitialMessages(toolCall.input, solutionContext.modelId, state);
+		this._solutionRuns.set(runId, state);
+		this._activeSolutionRunId = runId;
+		this._activeSolutionRunBySession.set(sessionId, runId);
+		const solutionModelName = solutionContext.modelName || solutionContext.modelId;
+		progress.report(new vscode.LanguageModelTextPart(`\n\n### 🧭 LLSOAI Solution Provider Started\n\nmodelName: ${solutionModelName}\n\nrunId: ${runId}\n\n`));
+		await this._runSolutionTurn(state, progress, token);
+	}
+
+	private _buildSolutionInitialMessages(input: any, solutionModelId: string, state: SolutionRunState): any[] {
+		const question = typeof input?.question === 'string' ? input.question : JSON.stringify(input ?? {});
+		const expectedOutput = typeof input?.expectedOutput === 'string' ? input.expectedOutput : '';
+		const context = typeof input?.context === 'string' ? input.context : '';
+		const reviewPrompt = state.requireInitialExpertReview
+			? `\n\nSolution expert review is enabled. You have access to the ${ASK_LLSOAI_TOOL_NAME} tool for expert review. Before you produce your final solution provider result, you MUST call ${ASK_LLSOAI_TOOL_NAME} at least once to review your proposed solution. The request must include the original delegated task, your proposed solution, relevant files, constraints, assumptions, acceptance criteria, and exact review criteria. Review criteria must include: Correctness, Completeness, Feasibility, Risks and edge cases, Missing constraints or assumptions, Validation plan, Required changes, Optional improvements, and Final recommendation. Do not call ${ASK_LLSOAI_TOOL_NAME} in the same assistant message as ordinary tools. First gather evidence with ordinary tools, wait for their results, draft a complete proposal, then call ${ASK_LLSOAI_TOOL_NAME} with the complete proposal. If you saved the solution draft as Markdown, include solutionFile plus solutionSummary and reviewFocus; do not pass only the path. If the file cannot be read by the expert, include fallbackInlineSolution. After the expert review returns, revise or confirm your solution and then produce the final solution provider result.`
+			: '';
+		const persistencePrompt = `\n\nSolution draft persistence guidance:\nYou may persist the full solution as a Markdown file when doing so improves traceability, expert review quality, or avoids very long inline responses. If you decide to persist the solution, place it under the .LLSOAI/Solution/ directory with a descriptive name that reflects the task and solution type (e.g., .LLSOAI/Solution/\${task-name}-impl-plan.md, .LLSOAI/Solution/\${feature}-migration-guide.md, .LLSOAI/Solution/\${problem}-fix-proposal.md). Do not create or modify files outside .LLSOAI/Solution/. Saving is recommended when the solution is long or multi-phase, expert review is enabled, the task includes architecture/migration/implementation plan details, or the user may need to review, reuse, or audit the plan later. Saving can be skipped when the solution is short, no file writing tool is available, workspace persistence appears unavailable, the task is exploratory, or the user explicitly asked not to write files. Your final solution provider result must include writeStatus (succeeded/skipped/failed), solutionSummary, solutionFile if saved, fullSolutionInline if not saved, and writeReason/writeError when applicable.`;
+		return [
+			{
+				role: 'system',
+				content: `You are LLSOAI solution provider. Your solution model ID is "${solutionModelId}". Your job is to draft a clear, actionable solution or implementation plan for the delegated task. Focus on goals, constraints, affected files/modules, phased steps, risks, validation plan, rollback plan, and open questions. Use tools when available to inspect the workspace and make the plan grounded in the actual project. Do not call ${ASK_SOLUTION_PROVIDER_TOOL_NAME}. Do not use TODO enforcement. When finished, produce a final solution proposal for the main model.${persistencePrompt}${reviewPrompt}`,
+			},
+			{
+				role: 'user',
+				content: `Question:\n${question}${context ? `\n\nRecord-only context:\n${context}` : ''}${expectedOutput ? `\n\nExpected output:\n${expectedOutput}` : ''}`,
+			},
+		];
+	}
+
+	private _appendSolutionContextRecord(state: SolutionRunState, record: any): void {
+		state.solutionContextRecords.push({
+			...record,
+			timestamp: new Date().toISOString(),
+		});
+	}
+
+	private _buildSolutionChatMessages(
+		state: SolutionRunState,
+		currentResponse?: string
+	): Array<{ role: string; content: string; name?: string }> {
+		const result: Array<{ role: string; content: string; name?: string }> = [];
+		result.push({
+			role: 'system',
+			content: [
+				`LLSOAI solution provider. Solution model ID: ${state.solutionModelId}`,
+				`Run ID: ${state.runId}`,
+				`Solution files directory: .LLSOAI/Solution/`,
+				`Review with expert: ${state.reviewWithExpert}`,
+				state.reviewSkippedReason ? `Review skipped reason: ${state.reviewSkippedReason}` : '',
+			].filter(Boolean).join('\n'),
+		});
+		for (const msg of state.solutionMessages) {
+			if (msg.role === 'assistant') {
+				let content = '';
+				if (msg.content) {
+					content += msg.content;
+				}
+				if ((msg as any).tool_calls && (msg as any).tool_calls.length > 0) {
+					if (content) {
+						content += '\n\n';
+					}
+					content += 'Tool calls made:\n';
+					for (const tc of (msg as any).tool_calls) {
+						const func = tc.function || tc;
+						content += `- ${func.name}: ${func.arguments || JSON.stringify(tc.input || {})}\n`;
+					}
+				}
+				if (content) {
+					result.push({ role: 'assistant', content });
+				}
+			} else if (msg.role === 'tool') {
+				const toolMsg = msg as any;
+				result.push({ role: 'user', content: `[Tool result for ${toolMsg.tool_call_id}]: ${toolMsg.content || ''}` });
+			} else if (msg.role === 'user') {
+				const userContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+				if (userContent) {
+					result.push({ role: 'user', content: userContent });
+				}
+			}
+		}
+		if (currentResponse) {
+			result.push({ role: 'assistant', content: currentResponse });
+		}
+		return result;
+	}
+
+	private async _saveSolutionChatHistory(
+		state: SolutionRunState,
+		currentResponse?: string
+	): Promise<void> {
+		try {
+			const chatMessages = this._buildSolutionChatMessages(state, currentResponse);
+			const solutionTools = this._filterSolutionTools(state, state.mainTools);
+			await this._configManager.saveChatHistory(
+				chatMessages,
+				state.solutionModelId,
+				solutionTools.length > 0 ? solutionTools : undefined
+			);
+		} catch (error) {
+			console.error('Failed to save solution provider chat history:', error);
+		}
+	}
+
+	private _buildSolutionMessagesWithContext(state: SolutionRunState): any[] {
+		return [...state.solutionMessages];
+	}
+
+	private _filterSolutionTools(state: SolutionRunState, tools: readonly any[]): any[] {
+		if (!state.solutionToolCalling) {
+			return [];
+		}
+		return tools.filter((tool: any) => {
+			if (tool?.name === ASK_SOLUTION_PROVIDER_TOOL_NAME || tool?.name === TODO_TOOL_NAME || this._isTimelineTool(tool?.name)) {
+				return false;
+			}
+			if (tool?.name === ASK_LLSOAI_TOOL_NAME) {
+				return state.reviewWithExpert && state.expertReviewAvailable;
+			}
+			return true;
+		});
+	}
+
+	private async _runSolutionTurn(
+		state: SolutionRunState,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const requestBody: any = {
+			model: state.solutionRequestContext.modelId,
+			messages: this._buildSolutionMessagesWithContext(state),
+			stream: true,
+		};
+		this._applySamplingOptions(requestBody, state.solutionRequestContext);
+		const solutionTools = this._filterSolutionTools(state, state.mainTools);
+		if (solutionTools.length > 0) {
+			requestBody.tools = solutionTools.map((tool: any) => ({
+				type: 'function',
+				function: {
+					name: tool.name,
+					description: tool.description || '',
+					parameters: tool.inputSchema && Object.keys(tool.inputSchema).length > 0
+						? tool.inputSchema
+						: { type: 'object', properties: {} },
+				}
+			}));
+		}
+
+		const result = await this._requestModel({
+			...state.solutionRequestContext,
+			requestBody,
+			requestLabel: `solution_${state.runId}`,
+			progress,
+			token,
+			reportText: true,
+		});
+
+		if (result.toolCalls.length > 0) {
+			const assistantMessage: any = { role: 'assistant', tool_calls: [] };
+			if (result.text) {
+				assistantMessage.content = result.text;
+				this._appendSolutionContextRecord(state, { type: 'solution_response', content: result.text });
+			}
+			for (const toolCall of result.toolCalls) {
+				assistantMessage.tool_calls.push(this._toOpenAIToolCall(toolCall));
+				this._appendSolutionContextRecord(state, { type: 'tool_call', callId: toolCall.id, name: toolCall.name, input: toolCall.input });
+			}
+			state.solutionMessages.push(assistantMessage);
+			await this._saveSolutionChatHistory(state);
+
+			const ordinaryCalls = result.toolCalls.filter(toolCall => toolCall.name !== ASK_LLSOAI_TOOL_NAME && toolCall.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME);
+			const expertCalls = result.toolCalls.filter(toolCall => toolCall.name === ASK_LLSOAI_TOOL_NAME);
+			const recursiveCalls = result.toolCalls.filter(toolCall => toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME);
+			const allowedOrdinaryCalls: CollectedToolCall[] = [];
+			let appendedImmediateToolResult = false;
+
+			for (const recursiveCall of recursiveCalls) {
+				state.solutionMessages.push({ role: 'tool', tool_call_id: recursiveCall.id, content: 'Recursive ask_solution_provider calls are not allowed. Continue with the current solution task directly.' });
+				appendedImmediateToolResult = true;
+			}
+
+			if (expertCalls.length > 0 && ordinaryCalls.length > 0) {
+				for (const expertCall of expertCalls) {
+					state.solutionMessages.push({
+						role: 'tool',
+						tool_call_id: expertCall.id,
+						content: `Expert review was not started because ${ASK_LLSOAI_TOOL_NAME} was called in the same assistant message as ordinary tools. Please wait for ordinary tool results, update the proposal, then call ${ASK_LLSOAI_TOOL_NAME} again with the complete proposal.`,
+					});
+					appendedImmediateToolResult = true;
+				}
+			}
+
+			for (const ordinaryCall of ordinaryCalls) {
+				const policyError = this._getSolutionWriteToolPolicyError(state, ordinaryCall);
+				if (policyError) {
+					state.solutionMessages.push({ role: 'tool', tool_call_id: ordinaryCall.id, content: policyError });
+					appendedImmediateToolResult = true;
+				} else {
+					allowedOrdinaryCalls.push(ordinaryCall);
+				}
+			}
+
+			if (allowedOrdinaryCalls.length > 0) {
+				state.pendingSolutionToolCallIds = allowedOrdinaryCalls.map(toolCall => toolCall.id);
+				state.pendingSolutionToolCalls = allowedOrdinaryCalls;
+				state.pendingSolutionToolResults = new Map<string, string>();
+				for (const toolCall of allowedOrdinaryCalls) {
+					progress.report(new vscode.LanguageModelToolCallPart(
+						`${SOLUTION_TOOL_CALL_PREFIX}:${state.runId}:${toolCall.id}`,
+						toolCall.name,
+						toolCall.input,
+					));
+				}
+				return;
+			}
+
+			if (expertCalls.length > 0) {
+				const firstExpertCall = expertCalls[0];
+				for (const extraExpertCall of expertCalls.slice(1)) {
+					state.solutionMessages.push({ role: 'tool', tool_call_id: extraExpertCall.id, content: 'Only one expert review can be processed at a time. Continue after the first expert review result.' });
+				}
+				await this._startExpertReviewForSolutionRun(state, firstExpertCall, progress, token);
+				return;
+			}
+
+			if (appendedImmediateToolResult) {
+				await this._runSolutionTurn(state, progress, token);
+			}
+			return;
+		}
+
+		state.solutionMessages.push({ role: 'assistant', content: result.text || '' });
+		if (result.text) {
+			this._appendSolutionContextRecord(state, { type: 'solution_response', content: result.text });
+		}
+		await this._saveSolutionChatHistory(state);
+		if (state.requireInitialExpertReview && !state.expertReviewCompleted) {
+			if (state.forceExpertReviewReminderCount >= MAX_FORCE_EXPERT_REVIEW_REMINDERS) {
+				state.reviewSkippedReason = 'solution model did not call ask_llsoai after required reminders';
+				state.requireInitialExpertReview = false;
+				await this._finishSolutionAndContinueMain(state, result.text || '', progress, token);
+				return;
+			}
+			state.forceExpertReviewReminderCount += 1;
+			state.solutionMessages.push({
+				role: 'user',
+				content: [
+					'Expert review is required before finalizing the solution.',
+					`You have not called ${ASK_LLSOAI_TOOL_NAME} yet, or the expert review has not completed.`,
+					`Please call ${ASK_LLSOAI_TOOL_NAME} now to review your proposed solution.`,
+					'Do not produce the final solution provider result until the expert review result is returned.',
+				].join('\n'),
+			});
+			await this._runSolutionTurn(state, progress, token);
+			return;
+		}
+		await this._finishSolutionAndContinueMain(state, result.text || '', progress, token);
+	}
+
+	private async _startExpertReviewForSolutionRun(
+		state: SolutionRunState,
+		toolCall: CollectedToolCall,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		if (!state.reviewWithExpert || !state.expertReviewAvailable) {
+			state.solutionMessages.push({ role: 'tool', tool_call_id: toolCall.id, content: 'Expert review is not available for this solution run. Continue with the best final solution based on available information.' });
+			await this._runSolutionTurn(state, progress, token);
+			return;
+		}
+		if (state.expertReviewCount >= MAX_SOLUTION_EXPERT_REVIEW_COUNT) {
+			state.solutionMessages.push({ role: 'tool', tool_call_id: toolCall.id, content: 'Maximum expert review count reached. Continue with the current review results.' });
+			await this._runSolutionTurn(state, progress, token);
+			return;
+		}
+		const expertContext = await this._getConfiguredExpertModel();
+		if (!expertContext) {
+			state.reviewSkippedReason = 'expert review became unavailable during solution run';
+			state.solutionMessages.push({ role: 'tool', tool_call_id: toolCall.id, content: 'Expert review became unavailable. Continue with the best final solution based on available information.' });
+			await this._runSolutionTurn(state, progress, token);
+			return;
+		}
+		state.pendingExpertReviewCallId = toolCall.id;
+		state.expertReviewCount += 1;
+		const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+		const expertState: ExpertRunState = {
+			runId,
+			sessionId: state.sessionId,
+			askLlsoaiCallId: toolCall.id,
+			askLlsoaiArguments: toolCall.input,
+			returnTarget: { type: 'solution', solutionRunId: state.runId, solutionToolCallId: toolCall.id },
+			expertContextRecords: [],
+			expertProviderId: expertContext.providerId,
+			expertModelId: expertContext.modelId,
+			expertRequestContext: expertContext,
+			expertToolCalling: expertContext.toolCalling ?? true,
+			expertMessages: this._buildExpertInitialMessages(toolCall.input, expertContext.modelId),
+			consumedToolResultCallIds: new Set<string>(),
+			pendingExpertToolCallIds: [],
+			pendingExpertToolCalls: [],
+			pendingExpertToolResults: new Map<string, string>(),
+			pendingExpertUserFollowUps: [],
+			originalMainMessages: state.originalMainMessages,
+			mainRequestContext: state.mainRequestContext,
+			mainTools: state.mainTools,
+			createdAt: Date.now(),
+		};
+		this._expertRuns.set(runId, expertState);
+		this._activeExpertRunId = runId;
+		this._activeExpertRunBySession.set(state.sessionId, runId);
+		const expertModelName = expertContext.modelName || expertContext.modelId;
+		progress.report(new vscode.LanguageModelTextPart(`\n\n### 🧠 Solution Provider Requested Expert Review\n\nSolution runId: ${state.runId}\nExpert review runId: ${runId}\nExpert model: ${expertModelName}\n\n`));
+		try {
+			await this._runExpertTurn(expertState, expertContext, progress, token);
+		} catch (error) {
+			await this._failExpertReviewBackToSolution(expertState, error, progress, token);
+		}
+	}
+
+	private async _continueSolutionFromToolResult(
+		runId: string,
+		originCallId: string,
+		prefixedCallId: string,
+		text: string,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const state = this._solutionRuns.get(runId);
+		if (!state) {
+			progress.report(new vscode.LanguageModelTextPart(`\n\nLLSOAI solution run ${runId} no longer exists. Unable to continue processing the tool result.\n\n`));
+			return;
+		}
+		state.consumedToolResultCallIds.add(prefixedCallId);
+		this._appendSolutionContextRecord(state, { type: 'tool_result', callId: originCallId, prefixedCallId, content: text });
+		if (state.pendingSolutionToolCallIds.length === 0) {
+			state.solutionMessages.push({ role: 'tool', tool_call_id: originCallId, content: text });
+			try {
+				await this._runSolutionTurn(state, progress, token);
+			} catch (error) {
+				await this._failSolutionRunAndContinueMain(state, error, progress, token);
+			}
+			return;
+		}
+		state.pendingSolutionToolResults.set(originCallId, text);
+		const missingToolCallIds = state.pendingSolutionToolCallIds.filter(toolCallId => !state.pendingSolutionToolResults.has(toolCallId));
+		if (missingToolCallIds.length > 0) {
+			this._reportPendingSolutionToolCalls(state, missingToolCallIds, progress);
+			return;
+		}
+		for (const toolCallId of state.pendingSolutionToolCallIds) {
+			state.solutionMessages.push({ role: 'tool', tool_call_id: toolCallId, content: state.pendingSolutionToolResults.get(toolCallId) || '' });
+		}
+		state.pendingSolutionToolCallIds = [];
+		state.pendingSolutionToolCalls = [];
+		state.pendingSolutionToolResults = new Map<string, string>();
+		if (state.pendingSolutionUserFollowUps.length > 0) {
+			state.solutionMessages.push({ role: 'user', content: state.pendingSolutionUserFollowUps.join('\n\n') });
+			state.pendingSolutionUserFollowUps = [];
+		}
+		try {
+			await this._runSolutionTurn(state, progress, token);
+		} catch (error) {
+			await this._failSolutionRunAndContinueMain(state, error, progress, token);
+		}
+	}
+
+	private async _continueSolutionFromUserMessage(
+		runId: string,
+		text: string,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const state = this._solutionRuns.get(runId);
+		if (!state) {
+			this._activeSolutionRunId = undefined;
+			return;
+		}
+		if (state.pendingSolutionToolCallIds.length > 0 || state.pendingExpertReviewCallId) {
+			const missingToolCallIds = state.pendingSolutionToolCallIds.filter(toolCallId => !state.pendingSolutionToolResults.has(toolCallId));
+			state.pendingSolutionUserFollowUps.push(text);
+			if (missingToolCallIds.length > 0) {
+				this._reportPendingSolutionToolCalls(state, missingToolCallIds, progress);
+			}
+			return;
+		}
+		state.solutionMessages.push({ role: 'user', content: text });
+		this._appendSolutionContextRecord(state, { type: 'user_follow_up', content: text });
+		progress.report(new vscode.LanguageModelTextPart('\n\n### 🧭 User Follow-up Forwarded to LLSOAI Solution Provider\n\n'));
+		await this._runSolutionTurn(state, progress, token);
+	}
+
+	private async _failSolutionRunAndContinueMain(
+		state: SolutionRunState,
+		error: unknown,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const message = error instanceof Error ? error.message : String(error);
+		state.reviewSkippedReason = state.reviewSkippedReason || `solution provider failed: ${message}`;
+		state.pendingSolutionToolCallIds = [];
+		state.pendingSolutionToolCalls = [];
+		state.pendingSolutionToolResults = new Map<string, string>();
+		state.pendingExpertReviewCallId = undefined;
+		state.solutionMessages.push({
+			role: 'assistant',
+			content: `Solution provider failed: ${message}`,
+		});
+		await this._saveSolutionChatHistory(state);
+		await this._finishSolutionAndContinueMain(state, `Solution provider failed before producing a final solution. Error: ${message}`, progress, token);
+	}
+
+	private _reportPendingSolutionToolCalls(
+		state: SolutionRunState,
+		toolCallIds: string[],
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+	): void {
+		const missingIds = new Set(toolCallIds);
+		for (const toolCall of state.pendingSolutionToolCalls) {
+			if (!missingIds.has(toolCall.id)) {
+				continue;
+			}
+			progress.report(new vscode.LanguageModelToolCallPart(
+				`${SOLUTION_TOOL_CALL_PREFIX}:${state.runId}:${toolCall.id}`,
+				toolCall.name,
+				toolCall.input,
+			));
+		}
+	}
+
+	private async _continueMainAfterUnavailableSolutionProvider(
+		toolCall: CollectedToolCall,
+		mainMessages: any[],
+		mainContext: MainRequestContext,
+		mainTools: readonly any[],
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		const unavailableMessage = 'There is currently no available solution provider.';
+		const requestBody: any = {
+			model: mainContext.modelId,
+			messages: [
+				...mainMessages,
+				{ role: 'assistant', tool_calls: [{ id: toolCall.id, type: 'function', function: { name: ASK_SOLUTION_PROVIDER_TOOL_NAME, arguments: JSON.stringify(toolCall.input ?? {}) } }] },
+				{ role: 'tool', tool_call_id: toolCall.id, content: unavailableMessage },
+			],
+			stream: true,
+		};
+		this._applySamplingOptions(requestBody, mainContext);
+		if (mainTools.length > 0) {
+			requestBody.tools = mainTools
+				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME && tool?.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME)
+				.map((tool: any) => ({
+					type: 'function',
+					function: {
+						name: tool.name,
+						description: tool.description || '',
+						parameters: tool.inputSchema && Object.keys(tool.inputSchema).length > 0 ? tool.inputSchema : { type: 'object', properties: {} },
+					}
+				}));
+		}
+		const result = await this._requestModel({ ...mainContext, requestBody, requestLabel: `main_after_unavailable_solution_${Date.now()}`, progress, token, reportText: true });
+		await this._saveMainChatHistoryFromMessages(requestBody.messages, result.text, mainContext.modelId, mainTools);
+		for (const nextToolCall of result.toolCalls) {
+			if (nextToolCall.name === ASK_LLSOAI_TOOL_NAME || nextToolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME) {
+				continue;
+			}
+			progress.report(new vscode.LanguageModelToolCallPart(nextToolCall.id, nextToolCall.name, nextToolCall.input));
+		}
+	}
+
+	private async _finishSolutionAndContinueMain(
+		state: SolutionRunState,
+		solutionAnswer: string,
+		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
+		token: vscode.CancellationToken
+	): Promise<void> {
+		this._solutionRuns.delete(state.runId);
+		this._activeSolutionRunBySession.delete(state.sessionId);
+		if (this._activeSolutionRunId === state.runId) {
+			this._activeSolutionRunId = undefined;
+		}
+		this._cleanupExpertRunsForSolution(state.runId);
+		progress.report(new vscode.LanguageModelTextPart('\n\n### 🧭 Final Solution Provider Result Returned to Main Model\n\n'));
+		const finalSolutionToolResult = [
+			'Solution provider result:',
+			'',
+			solutionAnswer,
+			'',
+			'Expert review status:',
+			`- enabled: ${state.reviewWithExpert}`,
+			`- available: ${state.expertReviewAvailable}`,
+			`- completed: ${state.expertReviewCompleted}`,
+			`- reviewCount: ${state.expertReviewCount}`,
+			state.reviewSkippedReason ? `- skippedReason: ${state.reviewSkippedReason}` : '',
+			'',
+			'Please synthesize the final user-facing answer based on the final solution provider result.',
+		].filter(Boolean).join('\n');
+		const mainMessages = [
+			...state.originalMainMessages,
+			{ role: 'assistant', tool_calls: [{ id: state.askSolutionCallId, type: 'function', function: { name: ASK_SOLUTION_PROVIDER_TOOL_NAME, arguments: JSON.stringify(state.askSolutionArguments ?? {}) } }] },
+			{ role: 'tool', tool_call_id: state.askSolutionCallId, content: finalSolutionToolResult },
+		];
+		const requestBody: any = { model: state.mainRequestContext.modelId, messages: mainMessages, stream: true };
+		this._applySamplingOptions(requestBody, state.mainRequestContext);
+		if (state.mainTools.length > 0) {
+			requestBody.tools = state.mainTools
+				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME && tool?.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME)
+				.map((tool: any) => ({
+					type: 'function',
+					function: {
+						name: tool.name,
+						description: tool.description || '',
+						parameters: tool.inputSchema && Object.keys(tool.inputSchema).length > 0 ? tool.inputSchema : { type: 'object', properties: {} },
+					}
+				}));
+		}
+		const result = await this._requestModel({ ...state.mainRequestContext, requestBody, requestLabel: `main_after_solution_${state.runId}`, progress, token, reportText: true });
+		await this._saveMainChatHistoryFromMessages(mainMessages, result.text, state.mainRequestContext.modelId, state.mainTools);
+		for (const toolCall of result.toolCalls) {
+			if (toolCall.name === ASK_LLSOAI_TOOL_NAME || toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME) {
+				continue;
+			}
+			progress.report(new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, toolCall.input));
+		}
+	}
+
+	private _cleanupExpertRunsForSolution(solutionRunId: string): void {
+		for (const [expertRunId, expertState] of [...this._expertRuns.entries()]) {
+			if (expertState.returnTarget.type === 'solution' && expertState.returnTarget.solutionRunId === solutionRunId) {
+				this._expertRuns.delete(expertRunId);
+				this._activeExpertRunBySession.delete(expertState.sessionId);
+				if (this._activeExpertRunId === expertRunId) {
+					this._activeExpertRunId = undefined;
+				}
+			}
+		}
+	}
+
+	private _findSolutionToolResults(messages: readonly vscode.LanguageModelChatRequestMessage[], currentSessionId: string): Array<{ runId: string; originCallId: string; prefixedCallId: string; text: string }> {
+		const lastMessage = messages[messages.length - 1];
+		if (!lastMessage) {
+			return [];
+		}
+		const results: Array<{ runId: string; originCallId: string; prefixedCallId: string; text: string }> = [];
+		for (const part of lastMessage.content) {
+			if (!isToolResultPart(part)) {
+				continue;
+			}
+			const parsed = this._parseSolutionCallId(part.callId);
+			const state = parsed ? this._solutionRuns.get(parsed.runId) : undefined;
+			if (parsed && state && state.sessionId === currentSessionId && !state.consumedToolResultCallIds.has(part.callId)) {
+				results.push({ ...parsed, prefixedCallId: part.callId, text: collectToolResultText(part) });
+			}
+		}
+		return results;
+	}
+
+	private _parseSolutionCallId(callId: string): { runId: string; originCallId: string } | null {
+		const prefix = `${SOLUTION_TOOL_CALL_PREFIX}:`;
+		if (!callId.startsWith(prefix)) {
+			return null;
+		}
+		const rest = callId.slice(prefix.length);
+		const sep = rest.indexOf(':');
+		if (sep <= 0) {
+			return null;
+		}
+		return { runId: rest.slice(0, sep), originCallId: rest.slice(sep + 1) };
+	}
+
+	private _getSolutionRunForSession(currentSessionId: string): SolutionRunState | undefined {
+		const sessionRunId = this._activeSolutionRunBySession.get(currentSessionId);
+		const sessionState = sessionRunId ? this._solutionRuns.get(sessionRunId) : undefined;
+		if (sessionState?.sessionId === currentSessionId) {
+			return sessionState;
+		}
+		const activeState = this._activeSolutionRunId ? this._solutionRuns.get(this._activeSolutionRunId) : undefined;
+		return activeState?.sessionId === currentSessionId
+			? activeState
+			: [...this._solutionRuns.values()].find(run => run.sessionId === currentSessionId);
+	}
+
+	private _buildSolutionCompressionResponse(currentSessionId: string): string {
+		const state = this._getSolutionRunForSession(currentSessionId);
+		if (!state) {
+			return 'No active LLSOAI solution provider run context is currently available for this session.';
+		}
+		return [
+			'LLSOAI solution provider context summary:',
+			'',
+			`runId: ${state.runId}`,
+			`sessionId: ${state.sessionId}`,
+			`solutionModelId: ${state.solutionModelId}`,
+			'',
+			'Original delegated request:',
+			JSON.stringify(state.askSolutionArguments ?? {}, null, 2),
+			'',
+			'Solution context records:',
+			JSON.stringify(state.solutionContextRecords ?? [], null, 2),
+			'',
+			'Pending solution tool call ids:',
+			JSON.stringify(state.pendingSolutionToolCallIds ?? [], null, 2),
+		].join('\n');
 	}
 
 	private _findExpertToolResults(messages: readonly vscode.LanguageModelChatRequestMessage[], currentSessionId: string): Array<{ runId: string; originCallId: string; prefixedCallId: string; text: string }> {
@@ -2043,7 +3168,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				const base64 = Buffer.from(part.data).toString('base64');
 				textParts.push({ type: 'image_url', image_url: { url: `data:${part.mimeType};base64,${base64}` } });
 			} else if (isToolResultPart(part)) {
-				if (this._parseExpertCallId(part.callId)) {
+				if (this._parseExpertCallId(part.callId) || this._parseSolutionCallId(part.callId)) {
 					continue;
 				}
 				// Handle tool results using unified type guard (reference project approach)
@@ -2121,7 +3246,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			if (part instanceof vscode.LanguageModelTextPart) {
 				textParts.push(part.value);
 			} else if (part instanceof vscode.LanguageModelToolCallPart) {
-				if (this._parseExpertCallId(part.callId)) {
+				if (this._parseExpertCallId(part.callId) || this._parseSolutionCallId(part.callId)) {
 					continue;
 				}
 				toolCalls.push({

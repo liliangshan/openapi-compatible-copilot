@@ -13,6 +13,109 @@ function getExpertSelectableProviders(providers: any[]): any[] {
 		.filter((provider: any) => ((provider.models || provider.apiModels || []) as any[]).length > 0);
 }
 
+type ConfigViewMessageKey = 
+	| 'globalSettingsSaved' 
+	| 'projectSettingsSaved' 
+	| 'providerDeleted' 
+	| 'configExported' 
+	| 'configImported' 
+	| 'expertModeSettingsUpdated' 
+	| 'solutionProviderSettingsUpdated' 
+	| 'chatHistorySettingsUpdated' 
+	| 'projectChatHistorySettingsUpdated' 
+	| 'systemPromptUpdated';
+
+const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>> = {
+	en: {
+		globalSettingsSaved: 'Global settings saved!',
+		projectSettingsSaved: 'Project settings saved!',
+		providerDeleted: 'Provider deleted successfully.',
+		configExported: 'Configuration exported successfully.',
+		configImported: 'Configuration imported successfully.',
+		expertModeSettingsUpdated: 'Expert mode settings updated.',
+		solutionProviderSettingsUpdated: 'Solution provider settings updated.',
+		chatHistorySettingsUpdated: 'Chat history settings updated.',
+		projectChatHistorySettingsUpdated: 'Project chat history settings updated.',
+		systemPromptUpdated: 'System prompt updated.',
+	},
+	'zh-cn': {
+		globalSettingsSaved: '全局设置已保存！',
+		projectSettingsSaved: '项目设置已保存！',
+		providerDeleted: '提供商删除成功。',
+		configExported: '配置导出成功。',
+		configImported: '配置导入成功。',
+		expertModeSettingsUpdated: '专家模式设置已更新。',
+		solutionProviderSettingsUpdated: '方案提供商设置已更新。',
+		chatHistorySettingsUpdated: '聊天历史设置已更新。',
+		projectChatHistorySettingsUpdated: '项目聊天历史设置已更新。',
+		systemPromptUpdated: '系统提示词已更新。',
+	},
+	'zh-tw': {
+		globalSettingsSaved: '全域設定已儲存！',
+		projectSettingsSaved: '專案設定已儲存！',
+		providerDeleted: '供應商刪除成功。',
+		configExported: '組態匯出成功。',
+		configImported: '組態匯入成功。',
+		expertModeSettingsUpdated: '專家模式設定已更新。',
+		solutionProviderSettingsUpdated: '方案供應商設定已更新。',
+		chatHistorySettingsUpdated: '聊天紀錄設定已更新。',
+		projectChatHistorySettingsUpdated: '專案聊天紀錄設定已更新。',
+		systemPromptUpdated: '系統提示詞已更新。',
+	},
+	ko: {
+		globalSettingsSaved: '전역 설정이 저장되었습니다!',
+		projectSettingsSaved: '프로젝트 설정이 저장되었습니다!',
+		providerDeleted: '공급자가 성공적으로 삭제되었습니다.',
+		configExported: '구성이 성공적으로 내보내졌습니다.',
+		configImported: '구성이 성공적으로 가져오기되었습니다.',
+		expertModeSettingsUpdated: '전문가 모드 설정이 업데이트되었습니다.',
+		solutionProviderSettingsUpdated: '솔루션 공급자 설정이 업데이트되었습니다.',
+		chatHistorySettingsUpdated: '채팅 기록 설정이 업데이트되었습니다.',
+		projectChatHistorySettingsUpdated: '프로젝트 채팅 기록 설정이 업데이트되었습니다.',
+		systemPromptUpdated: '시스템 프롬프트가 업데이트되었습니다.',
+	},
+	ja: {
+		globalSettingsSaved: 'グローバル設定を保存しました！',
+		projectSettingsSaved: 'プロジェクト設定を保存しました！',
+		providerDeleted: 'プロバイダーが正常に削除されました。',
+		configExported: '構成が正常にエクスポートされました。',
+		configImported: '構成が正常にインポートされました。',
+		expertModeSettingsUpdated: 'エキスパートモード設定が更新されました。',
+		solutionProviderSettingsUpdated: 'ソリューションプロバイダー設定が更新されました。',
+		chatHistorySettingsUpdated: 'チャット履歴設定が更新されました。',
+		projectChatHistorySettingsUpdated: 'プロジェクトチャット履歴設定が更新されました。',
+		systemPromptUpdated: 'システムプロンプトが更新されました。',
+	},
+	fr: {
+		globalSettingsSaved: 'Paramètres globaux enregistrés !',
+		projectSettingsSaved: 'Paramètres du projet enregistrés !',
+		providerDeleted: 'Fournisseur supprimé avec succès.',
+		configExported: 'Configuration exportée avec succès.',
+		configImported: 'Configuration importée avec succès.',
+		expertModeSettingsUpdated: 'Paramètres du mode expert mis à jour.',
+		solutionProviderSettingsUpdated: 'Paramètres du fournisseur de solutions mis à jour.',
+		chatHistorySettingsUpdated: 'Paramètres de l\'historique de chat mis à jour.',
+		projectChatHistorySettingsUpdated: 'Paramètres de l\'historique de chat du projet mis à jour.',
+		systemPromptUpdated: 'Prompt système mis à jour.',
+	},
+	de: {
+		globalSettingsSaved: 'Globale Einstellungen gespeichert!',
+		projectSettingsSaved: 'Projekteinstellungen gespeichert!',
+		providerDeleted: 'Anbieter erfolgreich gelöscht.',
+		configExported: 'Konfiguration erfolgreich exportiert.',
+		configImported: 'Konfiguration erfolgreich importiert.',
+		expertModeSettingsUpdated: 'Expertenmodus-Einstellungen aktualisiert.',
+		solutionProviderSettingsUpdated: 'Lösungsanbieter-Einstellungen aktualisiert.',
+		chatHistorySettingsUpdated: 'Chatverlaufseinstellungen aktualisiert.',
+		projectChatHistorySettingsUpdated: 'Projekt-Chatverlaufseinstellungen aktualisiert.',
+		systemPromptUpdated: 'Systemprompt aktualisiert.',
+	},
+};
+
+function getConfigViewMessage(language: string, key: ConfigViewMessageKey): string {
+	return CONFIG_VIEW_MESSAGES[language]?.[key] || CONFIG_VIEW_MESSAGES.en[key];
+}
+
 /**
  * Webview panel for managing OpenAPI-compatible providers
  */
@@ -279,7 +382,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					// Notify Copilot that models have changed
 					this._chatProvider.notifyModelsChanged();
 					
-					vscode.window.showInformationMessage('Provider deleted successfully.');
+					vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'providerDeleted'));
 				} catch (error: unknown) {
 					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 					vscode.window.showErrorMessage(`Failed to delete provider: ${errorMessage}`);
@@ -383,7 +486,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				});
 				if (saveUri) {
 					await vscode.workspace.fs.writeFile(saveUri, Buffer.from(content));
-					vscode.window.showInformationMessage('Configuration exported successfully.');
+					vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'configExported'));
 				}
 				break;
 
@@ -406,7 +509,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					// Notify Copilot that models have changed
 					this._chatProvider.notifyModelsChanged();
 					
-					vscode.window.showInformationMessage('Configuration imported successfully.');
+					vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'configImported'));
 				}
 				break;
 
@@ -437,6 +540,25 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				}
 				break;
 
+			case 'getSolutionProviderSettings':
+				try {
+					const solutionProviderSettings = this._configManager.getEffectiveSolutionProviderConfig();
+					const solutionProviderProviders = getExpertSelectableProviders(await this._configManager.getProviders());
+					this._getWebview()?.postMessage({
+						command: 'solutionProviderSettingsLoaded',
+						data: {
+							settings: solutionProviderSettings,
+							globalSettings: this._configManager.getSolutionProviderConfig(),
+							workspaceSettings: this._configManager.getWorkspaceSolutionProviderConfig(),
+							providers: solutionProviderProviders,
+						}
+					});
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to load solution provider settings: ${errorMessage}`);
+				}
+				break;
+
 			case 'updateExpertModeSettings':
 				try {
 					const { enabled, providerId, modelId } = message.data as { enabled: boolean; providerId: string; modelId: string };
@@ -450,10 +572,30 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						},
 						success: true
 					});
-					vscode.window.showInformationMessage('Expert mode settings updated.');
+					vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'expertModeSettingsUpdated'));
 				} catch (error: unknown) {
 					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 					vscode.window.showErrorMessage(`Failed to update expert mode settings: ${errorMessage}`);
+				}
+				break;
+
+			case 'updateSolutionProviderSettings':
+				try {
+					const { enabled, providerId, modelId, reviewWithExpert } = message.data as { enabled: boolean; providerId: string; modelId: string; reviewWithExpert: boolean };
+					const updatedSolutionProviderSettings = await this._configManager.updateSolutionProviderConfig({ enabled, providerId, modelId, reviewWithExpert });
+					const solutionProviderProviders = getExpertSelectableProviders(await this._configManager.getProviders());
+					this._getWebview()?.postMessage({
+						command: 'solutionProviderSettingsLoaded',
+						data: {
+							settings: updatedSolutionProviderSettings,
+							providers: solutionProviderProviders,
+						},
+						success: true
+					});
+					vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'solutionProviderSettingsUpdated'));
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to update solution provider settings: ${errorMessage}`);
 				}
 				break;
 
@@ -466,7 +608,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						data: updatedSettings,
 						success: true
 					});
-					vscode.window.showInformationMessage('Chat history settings updated.');
+					vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'chatHistorySettingsUpdated'));
 				} catch (error: unknown) {
 					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 					vscode.window.showErrorMessage(`Failed to update chat history settings: ${errorMessage}`);
@@ -502,7 +644,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						data: updatedSettings,
 						success: true
 					});
-					vscode.window.showInformationMessage('Project chat history settings updated.');
+					vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'projectChatHistorySettingsUpdated'));
 				} catch (error: unknown) {
 					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 					vscode.window.showErrorMessage(`Failed to update project chat history settings: ${errorMessage}`);
@@ -539,7 +681,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						command: 'systemPromptSaved',
 						success: true
 					});
-					vscode.window.showInformationMessage('System prompt updated.');
+					vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'systemPromptUpdated'));
 				} catch (error: unknown) {
 					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 					vscode.window.showErrorMessage(`Failed to update system prompt: ${errorMessage}`);
@@ -1130,6 +1272,35 @@ After completing the operations, please reply with the following message in both
 							</div>
 						</div>
 
+						<!-- Solution Provider Section -->
+						<div class="modal-section">
+							<h3 data-i18n="solutionProvider">Solution Provider</h3>
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input type="checkbox" id="modalSolutionProviderEnabled" />
+									<span data-i18n="enableSolutionProvider">Enable Solution Provider</span>
+								</label>
+								<div class="help-text" data-i18n="solutionProviderHelp">When enabled, the main model can delegate solution design and implementation planning tasks to a selected solution model.</div>
+							</div>
+							<div class="form-row">
+								<div class="form-group">
+									<label for="modalSolutionProviderProvider" data-i18n="solutionProviderProvider">Solution Provider</label>
+									<select id="modalSolutionProviderProvider"></select>
+								</div>
+								<div class="form-group">
+									<label for="modalSolutionProviderModel" data-i18n="solutionProviderModel">Solution Model</label>
+									<select id="modalSolutionProviderModel"></select>
+								</div>
+							</div>
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input type="checkbox" id="modalSolutionProviderReviewWithExpert" />
+									<span data-i18n="solutionReviewWithExpert">Request expert review before finalizing</span>
+								</label>
+								<div class="help-text" data-i18n="solutionReviewWithExpertHelp">If expert mode is available, the solution model must call ask_llsoai at least once before finalizing.</div>
+							</div>
+						</div>
+
 						<!-- Enhanced TODO Section -->
 						<div class="modal-section">
 							<h3 data-i18n="enhancedTodo">Enhanced TODO</h3>
@@ -1332,6 +1503,9 @@ export class ConfigViewPanel {
 		const expertModeSettings = this._configManager.getExpertModeConfig();
 		const projectExpertModeSettings = this._configManager.getWorkspaceExpertModeConfig();
 		const effectiveExpertModeSettings = this._configManager.getEffectiveExpertModeConfig();
+		const solutionProviderSettings = this._configManager.getSolutionProviderConfig();
+		const projectSolutionProviderSettings = this._configManager.getWorkspaceSolutionProviderConfig();
+		const effectiveSolutionProviderSettings = this._configManager.getEffectiveSolutionProviderConfig();
 		const providers = await this._configManager.getProviders();
 		const globalSystemPrompt = this._configManager.getGlobalSystemPrompt() || '';
 		const projectSystemPrompt = this._configManager.getWorkspaceSystemPrompt() || '';
@@ -1347,6 +1521,9 @@ export class ConfigViewPanel {
 			expertModeSettings,
 			projectExpertModeSettings,
 			effectiveExpertModeSettings,
+			solutionProviderSettings,
+			projectSolutionProviderSettings,
+			effectiveSolutionProviderSettings,
 			providers,
 			expertProviders,
 			globalSystemPrompt,
@@ -1370,8 +1547,22 @@ export class ConfigViewPanel {
 			`<option value="" data-i18n="expertSelectModel">Select model</option>`,
 			...((selectedExpertProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedExpertModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
 		].join('');
+		const selectedSolutionProviderId = settings.solutionProviderSettings?.providerId || '';
+		const selectedSolutionProvider = selectedSolutionProviderId
+			? expertProviders.find((provider: any) => provider.id === selectedSolutionProviderId)
+			: undefined;
+		const selectedSolutionModelId = settings.solutionProviderSettings?.modelId || '';
+		const solutionProviderOptions = [
+			`<option value="" data-i18n="solutionSelectProvider">Select provider</option>`,
+			...expertProviders.map((provider: any) => `<option value="${this._escapeHtml(provider.id)}" ${provider.id === selectedSolutionProviderId ? 'selected' : ''}>${this._escapeHtml(provider.name)}</option>`)
+		].join('');
+		const solutionModelOptions = [
+			`<option value="" data-i18n="solutionSelectModel">Select model</option>`,
+			...((selectedSolutionProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedSolutionModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
+		].join('');
 		const panelProvidersJson = JSON.stringify(expertProviders).replace(/</g, '\\u003c');
 		const panelExpertModeSettingsJson = JSON.stringify(settings.expertModeSettings || { enabled: false, providerId: '', modelId: '' }).replace(/</g, '\\u003c');
+		const panelSolutionProviderSettingsJson = JSON.stringify(settings.solutionProviderSettings || { enabled: false, providerId: '', modelId: '', reviewWithExpert: false }).replace(/</g, '\\u003c');
 
 		return `
 			<div class="settings-panel-header">
@@ -1428,6 +1619,35 @@ export class ConfigViewPanel {
 					</div>
 				</section>
 
+				<!-- Solution Provider Section -->
+				<section class="config-section">
+					<h2 data-i18n="solutionProvider">Solution Provider</h2>
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input type="checkbox" id="panelSolutionProviderEnabled" ${settings.solutionProviderSettings?.enabled ? 'checked' : ''} />
+							<span data-i18n="enableSolutionProvider">Enable Solution Provider</span>
+						</label>
+						<div class="help-text" data-i18n="solutionProviderHelp">When enabled, the main model can delegate solution design and implementation planning tasks to a selected solution model.</div>
+					</div>
+					<div class="form-row">
+						<div class="form-group">
+							<label for="panelSolutionProviderProvider" data-i18n="solutionProviderProvider">Solution Provider</label>
+							<select id="panelSolutionProviderProvider">${solutionProviderOptions}</select>
+						</div>
+						<div class="form-group">
+							<label for="panelSolutionProviderModel" data-i18n="solutionProviderModel">Solution Model</label>
+							<select id="panelSolutionProviderModel">${solutionModelOptions}</select>
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input type="checkbox" id="panelSolutionProviderReviewWithExpert" ${settings.solutionProviderSettings?.reviewWithExpert ? 'checked' : ''} />
+							<span data-i18n="solutionReviewWithExpert">Request expert review before finalizing</span>
+						</label>
+						<div class="help-text" data-i18n="solutionReviewWithExpertHelp">If expert mode is available, the solution model must call ask_llsoai at least once before finalizing.</div>
+					</div>
+				</section>
+
 				<!-- Enhanced TODO Section -->
 				<section class="config-section">
 					<h2 data-i18n="enhancedTodo">Enhanced TODO</h2>
@@ -1462,6 +1682,7 @@ export class ConfigViewPanel {
 				window.settingsMode = 'global';
 				window.panelProviders = ${panelProvidersJson};
 				window.panelExpertModeSettings = ${panelExpertModeSettingsJson};
+				window.panelSolutionProviderSettings = ${panelSolutionProviderSettingsJson};
 			</script>
 		`;
 	}
@@ -1480,7 +1701,12 @@ export class ConfigViewPanel {
 		const expertProviders = settings.expertProviders || [];
 		const projectExpertSettings = settings.projectExpertModeSettings || { enabled: false, enabledState: 'global', providerId: '', modelId: '' };
 		const effectiveExpertSettings = settings.effectiveExpertModeSettings || settings.expertModeSettings || { enabled: false, providerId: '', modelId: '' };
+		const projectSolutionSettings = settings.projectSolutionProviderSettings || { enabled: false, enabledState: 'global', providerId: '', modelId: '', reviewWithExpert: false, reviewWithExpertState: 'global' };
+		const effectiveSolutionSettings = settings.effectiveSolutionProviderSettings || settings.solutionProviderSettings || { enabled: false, providerId: '', modelId: '', reviewWithExpert: false };
 		const enabledState = projectExpertSettings.enabledState === 'enabled' || projectExpertSettings.enabledState === 'disabled' ? projectExpertSettings.enabledState : 'global';
+		const solutionEnabledState = projectSolutionSettings.enabledState === 'enabled' || projectSolutionSettings.enabledState === 'disabled' ? projectSolutionSettings.enabledState : 'global';
+		const solutionReviewWithExpertState = projectSolutionSettings.reviewWithExpertState === 'enabled' || projectSolutionSettings.reviewWithExpertState === 'disabled' ? projectSolutionSettings.reviewWithExpertState : 'global';
+		const solutionEffectiveReviewKey = effectiveSolutionSettings.reviewWithExpert ? 'enabled' : 'disabled';
 		const selectedExpertProviderId = projectExpertSettings.providerId || '';
 		const selectedExpertProvider = expertProviders.find((provider: any) => provider.id === selectedExpertProviderId);
 		const selectedExpertModelId = projectExpertSettings.modelId || '';
@@ -1497,6 +1723,21 @@ export class ConfigViewPanel {
 		].join('');
 		const panelProvidersJson = JSON.stringify(expertProviders).replace(/</g, '\\u003c');
 		const panelExpertModeSettingsJson = JSON.stringify(projectExpertSettings).replace(/</g, '\\u003c');
+		const selectedSolutionProviderId = projectSolutionSettings.providerId || '';
+		const selectedSolutionProvider = expertProviders.find((provider: any) => provider.id === selectedSolutionProviderId);
+		const selectedSolutionModelId = projectSolutionSettings.modelId || '';
+		const effectiveSolutionProviderLabel = this._escapeHtml(effectiveSolutionSettings.providerId || 'not set');
+		const effectiveSolutionModelLabel = this._escapeHtml(effectiveSolutionSettings.modelId || 'not set');
+		const solutionEffectiveEnabledKey = effectiveSolutionSettings.enabled ? 'enabled' : 'disabled';
+		const solutionProviderOptions = [
+			`<option value="" data-i18n-template="solutionUseGlobalProvider" data-i18n-value-value="${effectiveSolutionProviderLabel}">Use global solution provider (${effectiveSolutionProviderLabel})</option>`,
+			...expertProviders.map((provider: any) => `<option value="${this._escapeHtml(provider.id)}" ${provider.id === selectedSolutionProviderId ? 'selected' : ''}>${this._escapeHtml(provider.name)}</option>`)
+		].join('');
+		const solutionModelOptions = [
+			`<option value="" data-i18n-template="solutionUseGlobalModel" data-i18n-value-value="${effectiveSolutionModelLabel}">Use global solution model (${effectiveSolutionModelLabel})</option>`,
+			...((selectedSolutionProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedSolutionModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
+		].join('');
+		const panelSolutionProviderSettingsJson = JSON.stringify(projectSolutionSettings).replace(/</g, '\\u003c');
 
 		return `
 			<div class="settings-panel-header">
@@ -1575,6 +1816,63 @@ export class ConfigViewPanel {
 				<div class="help-text" data-i18n="expertModelOverrideHelp">Select both provider and model to override the global expert model. Leave either empty to keep using the global expert model.</div>
 			</section>
 
+			<!-- Project Solution Provider Section -->
+			<section class="config-section expert-settings-card">
+				<div class="expert-settings-header">
+					<div>
+						<h2 data-i18n="solutionProvider">Solution Provider</h2>
+						<p data-i18n="solutionProjectDescription">Configure how this project uses the LLSOAI solution provider model.</p>
+					</div>
+					<span class="expert-status-pill ${effectiveSolutionSettings.enabled ? 'enabled' : 'disabled'}" data-i18n-template="solutionGlobalStatus" data-i18n-key-state="${solutionEffectiveEnabledKey}">Global ${effectiveSolutionSettings.enabled ? 'Enabled' : 'Disabled'}</span>
+				</div>
+				<div class="expert-state-options">
+					<label class="expert-state-option ${solutionEnabledState === 'global' ? 'selected' : ''}">
+						<input type="radio" name="panelSolutionProviderEnabledState" value="global" ${solutionEnabledState === 'global' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="expertUseGlobal">Use global</span>
+						<span class="expert-state-desc" data-i18n-template="solutionFollowGlobalState" data-i18n-key-state="${solutionEffectiveEnabledKey}">Follow global state: ${effectiveSolutionSettings.enabled ? 'enabled' : 'disabled'}</span>
+					</label>
+					<label class="expert-state-option ${solutionEnabledState === 'enabled' ? 'selected' : ''}">
+						<input type="radio" name="panelSolutionProviderEnabledState" value="enabled" ${solutionEnabledState === 'enabled' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="enabled">Enabled</span>
+						<span class="expert-state-desc" data-i18n="solutionForceEnabledDesc">Force solution provider on for this project.</span>
+					</label>
+					<label class="expert-state-option ${solutionEnabledState === 'disabled' ? 'selected' : ''}">
+						<input type="radio" name="panelSolutionProviderEnabledState" value="disabled" ${solutionEnabledState === 'disabled' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="disabled">Disabled</span>
+						<span class="expert-state-desc" data-i18n="solutionForceDisabledDesc">Force solution provider off for this project.</span>
+					</label>
+				</div>
+				<div class="expert-model-grid">
+					<div class="form-group">
+						<label for="panelSolutionProviderProvider" data-i18n="solutionProviderProvider">Solution Provider</label>
+						<select id="panelSolutionProviderProvider" data-placeholder-key="solutionUseGlobalProvider" data-placeholder-value="${effectiveSolutionProviderLabel}">${solutionProviderOptions}</select>
+					</div>
+					<div class="form-group">
+						<label for="panelSolutionProviderModel" data-i18n="solutionProviderModel">Solution Model</label>
+						<select id="panelSolutionProviderModel" data-placeholder-key="solutionUseGlobalModel" data-placeholder-value="${effectiveSolutionModelLabel}">${solutionModelOptions}</select>
+					</div>
+				</div>
+				<div class="expert-review-options">
+					<label class="expert-state-option ${solutionReviewWithExpertState === 'global' ? 'selected' : ''}">
+						<input type="radio" name="panelSolutionProviderReviewWithExpertState" value="global" ${solutionReviewWithExpertState === 'global' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="solutionReviewUseGlobal">Use global</span>
+						<span class="expert-state-desc" data-i18n-template="solutionFollowGlobalReviewState" data-i18n-key-state="${solutionEffectiveReviewKey}">Follow global: ${effectiveSolutionSettings.reviewWithExpert ? 'enabled' : 'disabled'}</span>
+					</label>
+					<label class="expert-state-option ${solutionReviewWithExpertState === 'enabled' ? 'selected' : ''}">
+						<input type="radio" name="panelSolutionProviderReviewWithExpertState" value="enabled" ${solutionReviewWithExpertState === 'enabled' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="enabled">Enabled</span>
+						<span class="expert-state-desc" data-i18n="solutionReviewForceEnabledDesc">Force expert review on for this project.</span>
+					</label>
+					<label class="expert-state-option ${solutionReviewWithExpertState === 'disabled' ? 'selected' : ''}">
+						<input type="radio" name="panelSolutionProviderReviewWithExpertState" value="disabled" ${solutionReviewWithExpertState === 'disabled' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="disabled">Disabled</span>
+						<span class="expert-state-desc" data-i18n="solutionReviewForceDisabledDesc">Force expert review off for this project.</span>
+					</label>
+				</div>
+				<div class="help-text" data-i18n="solutionReviewWithExpertHelp">When enabled and expert mode is available, the solution model must call ask_llsoai at least once before finalizing.</div>
+				<div class="help-text" data-i18n="solutionModelOverrideHelp">Select both provider and model to override the global solution model. Leave either empty to keep using the global solution model.</div>
+			</section>
+
 			<div class="form-actions sticky-footer">
 				<button type="button" id="panelCancelBtn" class="secondary-btn" data-i18n="cancel">Cancel</button>
 				<button type="button" id="panelSaveBtn" class="primary-btn" data-i18n="save">Save</button>
@@ -1584,6 +1882,7 @@ export class ConfigViewPanel {
 				window.settingsMode = 'project';
 				window.panelProviders = ${panelProvidersJson};
 				window.panelExpertModeSettings = ${panelExpertModeSettingsJson};
+				window.panelSolutionProviderSettings = ${panelSolutionProviderSettingsJson};
 			</script>
 		`;
 	}
@@ -1640,6 +1939,19 @@ export class ConfigViewPanel {
 				});
 				break;
 
+			case 'getSolutionProviderSettings':
+				const solutionProviderProviders = getExpertSelectableProviders(await this._configManager.getProviders());
+				this._currentPanel?.webview.postMessage({
+					command: 'solutionProviderSettingsLoaded',
+					data: {
+						settings: this._configManager.getEffectiveSolutionProviderConfig(),
+						globalSettings: this._configManager.getSolutionProviderConfig(),
+						workspaceSettings: this._configManager.getWorkspaceSolutionProviderConfig(),
+						providers: solutionProviderProviders,
+					}
+				});
+				break;
+
 			case 'getSystemPrompt':
 				const globalPrompt = this._configManager.getGlobalSystemPrompt();
 				const workspacePrompt = this._configManager.getWorkspaceSystemPrompt();
@@ -1660,9 +1972,15 @@ export class ConfigViewPanel {
 					providerId: data.expertModeProviderId || '',
 					modelId: data.expertModeModelId || '',
 				});
+				await this._configManager.updateSolutionProviderConfig({
+					enabled: !!data.solutionProviderEnabled,
+					providerId: data.solutionProviderProviderId || '',
+					modelId: data.solutionProviderModelId || '',
+					reviewWithExpert: !!data.solutionProviderReviewWithExpert,
+				});
 				await this._configManager.updateGlobalForceTodoEnabled(!!data.forceTodoEnabled);
 				this._currentPanel?.dispose();
-				vscode.window.showInformationMessage('Global settings saved!');
+				vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'globalSettingsSaved'));
 				break;
 
 			case 'saveProjectSettings':
@@ -1677,8 +1995,14 @@ export class ConfigViewPanel {
 					providerId: data.expertModeProviderId || '',
 					modelId: data.expertModeModelId || '',
 				});
+				await this._configManager.updateWorkspaceSolutionProviderConfig({
+					enabledState: data.solutionProviderEnabledState || 'global',
+					providerId: data.solutionProviderProviderId || '',
+					modelId: data.solutionProviderModelId || '',
+					reviewWithExpertState: data.solutionProviderReviewWithExpertState || 'global',
+				});
 				this._currentPanel?.dispose();
-				vscode.window.showInformationMessage('Project settings saved!');
+				vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'projectSettingsSaved'));
 				break;
 
 			case 'openGlobalSettings':

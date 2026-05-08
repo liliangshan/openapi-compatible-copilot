@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { ExpertModeConfig, ProviderConfig, ProviderConfigWithoutSecrets, WorkspaceExpertModeConfig, WorkspaceExpertModeEnabledState } from './types';
+import { ExpertModeConfig, ProviderConfig, ProviderConfigWithoutSecrets, SolutionProviderConfig, WorkspaceExpertModeConfig, WorkspaceExpertModeEnabledState, WorkspaceSolutionProviderConfig, WorkspaceSolutionProviderEnabledState, WorkspaceSolutionProviderReviewWithExpertState } from './types';
 
 /**
  * Generate a unique ID
@@ -67,6 +67,13 @@ export class ConfigManager {
 	private static readonly EXPERT_MODE_PROVIDER_CONFIG_KEY = 'expertMode.providerId';
 	private static readonly EXPERT_MODE_MODEL_CONFIG_KEY = 'expertMode.modelId';
 	private static readonly WORKSPACE_EXPERT_MODE_ENABLED_STATE_CONFIG_KEY = 'expertMode.enabledState';
+	private static readonly SOLUTION_PROVIDER_CONFIG_KEY = 'openapicopilot.solutionProviderConfig';
+	private static readonly SOLUTION_PROVIDER_ENABLED_CONFIG_KEY = 'solutionProvider.enabled';
+	private static readonly SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY = 'solutionProvider.providerId';
+	private static readonly SOLUTION_PROVIDER_MODEL_CONFIG_KEY = 'solutionProvider.modelId';
+	private static readonly SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY = 'solutionProvider.reviewWithExpert';
+	private static readonly WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY = 'solutionProvider.reviewWithExpertState';
+	private static readonly WORKSPACE_SOLUTION_PROVIDER_ENABLED_STATE_CONFIG_KEY = 'solutionProvider.enabledState';
 	private static readonly GLOBAL_FORCE_TODO_KEY = 'openapicopilot.globalForceTodoEnabled';
 	private static readonly WORKSPACE_FORCE_TODO_KEY = 'openapicopilot.workspaceForceTodoEnabled';
 	private static readonly LANGUAGE_CONFIG_KEY = 'language';
@@ -334,6 +341,100 @@ export class ConfigManager {
 		await config.update(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY, updated.providerId, false);
 		await config.update(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY, updated.modelId, false);
 		return { ...updated, enabled: enabledState === 'enabled', enabledState };
+	}
+
+	/**
+	 * Get solution provider global settings
+	 */
+	getSolutionProviderConfig(): SolutionProviderConfig {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		const stored = this.context.globalState.get<SolutionProviderConfig>(ConfigManager.SOLUTION_PROVIDER_CONFIG_KEY);
+		const enabledInspect = config.inspect<boolean>(ConfigManager.SOLUTION_PROVIDER_ENABLED_CONFIG_KEY);
+		const providerInspect = config.inspect<string>(ConfigManager.SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY);
+		const modelInspect = config.inspect<string>(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY);
+		const reviewInspect = config.inspect<boolean>(ConfigManager.SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY);
+		return {
+			enabled: enabledInspect?.globalValue ?? stored?.enabled ?? false,
+			providerId: providerInspect?.globalValue ?? stored?.providerId ?? '',
+			modelId: modelInspect?.globalValue ?? stored?.modelId ?? '',
+			reviewWithExpert: reviewInspect?.globalValue ?? stored?.reviewWithExpert ?? false,
+		};
+	}
+
+	/**
+	 * Get solution provider workspace settings. Empty provider/model means using global settings.
+	 */
+	getWorkspaceSolutionProviderConfig(): WorkspaceSolutionProviderConfig {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		const rawEnabledState = config.inspect<WorkspaceSolutionProviderEnabledState>(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_ENABLED_STATE_CONFIG_KEY)?.workspaceValue;
+		const enabledState: WorkspaceSolutionProviderEnabledState = rawEnabledState === 'enabled' || rawEnabledState === 'disabled' ? rawEnabledState : 'global';
+
+		const rawReviewState = config.inspect<WorkspaceSolutionProviderReviewWithExpertState>(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY)?.workspaceValue;
+		const legacyReviewInspect = config.inspect<boolean>(ConfigManager.SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY);
+		let reviewWithExpertState: WorkspaceSolutionProviderReviewWithExpertState;
+		if (rawReviewState === 'enabled' || rawReviewState === 'disabled' || rawReviewState === 'global') {
+			reviewWithExpertState = rawReviewState;
+		} else if (legacyReviewInspect?.workspaceValue !== undefined) {
+			reviewWithExpertState = legacyReviewInspect.workspaceValue ? 'enabled' : 'disabled';
+		} else {
+			reviewWithExpertState = 'global';
+		}
+
+		return {
+			enabled: enabledState === 'enabled',
+			enabledState,
+			providerId: config.inspect<string>(ConfigManager.SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY)?.workspaceValue ?? '',
+			modelId: config.inspect<string>(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY)?.workspaceValue ?? '',
+			reviewWithExpert: reviewWithExpertState === 'enabled',
+			reviewWithExpertState,
+		};
+	}
+
+	/**
+	 * Get the effective solution provider settings. Workspace provider/model overrides global when set.
+	 */
+	getEffectiveSolutionProviderConfig(): SolutionProviderConfig {
+		const globalConfig = this.getSolutionProviderConfig();
+		const workspaceConfig = this.getWorkspaceSolutionProviderConfig();
+		const hasWorkspaceSolutionProvider = !!workspaceConfig.providerId && !!workspaceConfig.modelId;
+		const baseConfig = hasWorkspaceSolutionProvider ? workspaceConfig : globalConfig;
+		return {
+			...baseConfig,
+			enabled: workspaceConfig.enabledState === 'global' ? globalConfig.enabled : workspaceConfig.enabledState === 'enabled',
+			reviewWithExpert: workspaceConfig.reviewWithExpertState === 'global' ? globalConfig.reviewWithExpert : workspaceConfig.reviewWithExpertState === 'enabled',
+		};
+	}
+
+	/**
+	 * Update solution provider global settings
+	 */
+	async updateSolutionProviderConfig(settings: Partial<SolutionProviderConfig>): Promise<SolutionProviderConfig> {
+		const current = this.getSolutionProviderConfig();
+		const updated = { ...current, ...settings };
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update(ConfigManager.SOLUTION_PROVIDER_ENABLED_CONFIG_KEY, updated.enabled, true);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY, updated.providerId, true);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY, updated.modelId, true);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY, updated.reviewWithExpert, true);
+		await this.context.globalState.update(ConfigManager.SOLUTION_PROVIDER_CONFIG_KEY, updated);
+		return updated;
+	}
+
+	/**
+	 * Update solution provider workspace settings
+	 */
+	async updateWorkspaceSolutionProviderConfig(settings: Partial<WorkspaceSolutionProviderConfig>): Promise<WorkspaceSolutionProviderConfig> {
+		const current = this.getWorkspaceSolutionProviderConfig();
+		const updated = { ...current, ...settings };
+		const enabledState: WorkspaceSolutionProviderEnabledState = updated.enabledState === 'enabled' || updated.enabledState === 'disabled' ? updated.enabledState : 'global';
+		const reviewWithExpertState: WorkspaceSolutionProviderReviewWithExpertState = updated.reviewWithExpertState === 'enabled' || updated.reviewWithExpertState === 'disabled' ? updated.reviewWithExpertState : 'global';
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_ENABLED_STATE_CONFIG_KEY, enabledState, false);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY, updated.providerId, false);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY, updated.modelId, false);
+		await config.update(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY, reviewWithExpertState, false);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY, undefined, false);
+		return { ...updated, enabled: enabledState === 'enabled', reviewWithExpert: reviewWithExpertState === 'enabled', enabledState, reviewWithExpertState };
 	}
 
 	/**
