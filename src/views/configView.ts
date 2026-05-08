@@ -22,6 +22,21 @@ function requiresApiKey(apiType?: string): boolean {
 	return apiType === 'anthropic';
 }
 
+type ConfigViewModel = {
+	modelId: string;
+	displayName: string;
+	contextLength: number;
+	maxTokens: number;
+	vision: boolean;
+	toolCalling: boolean;
+	temperature: number;
+	topP: number;
+	samplingMode: 'temperature' | 'top_p' | 'both' | 'none';
+	isUserSelectable?: boolean;
+	transformThink?: boolean;
+	preserveReasoningContent?: boolean;
+};
+
 type ConfigViewMessageKey = 
 	| 'globalSettingsSaved' 
 	| 'projectSettingsSaved' 
@@ -581,6 +596,9 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 			case 'updateExpertModeSettings':
 				try {
+					if ((message as any).panelMode) {
+						return;
+					}
 					const { enabled, providerId, modelId } = message.data as { enabled: boolean; providerId: string; modelId: string };
 					const updatedExpertModeSettings = await this._configManager.updateExpertModeConfig({ enabled, providerId, modelId });
 					const expertModeProviders = getExpertSelectableProviders(await this._configManager.getProviders());
@@ -601,6 +619,9 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 			case 'updateSolutionProviderSettings':
 				try {
+					if ((message as any).panelMode) {
+						return;
+					}
 					const { enabled, providerId, modelId, reviewWithExpert } = message.data as { enabled: boolean; providerId: string; modelId: string; reviewWithExpert: boolean };
 					const updatedSolutionProviderSettings = await this._configManager.updateSolutionProviderConfig({ enabled, providerId, modelId, reviewWithExpert });
 					const solutionProviderProviders = getExpertSelectableProviders(await this._configManager.getProviders());
@@ -621,6 +642,9 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 			case 'updateChatHistorySettings':
 				try {
+					if ((message as any).panelMode) {
+						return;
+					}
 					const { enabled, savePath } = message.data as { enabled: boolean; savePath: string };
 					const updatedSettings = await this._configManager.updateChatHistorySettings({ enabled, savePath });
 					this._getWebview()?.postMessage({
@@ -657,6 +681,9 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 			case 'updateProjectChatHistorySettings':
 				try {
+					if ((message as any).panelMode) {
+						return;
+					}
 					const { enabled, savePath } = message.data as { enabled: boolean; savePath: string };
 					const updatedSettings = await this._configManager.updateProjectChatHistorySettings({ enabled, savePath });
 					this._getWebview()?.postMessage({
@@ -694,6 +721,9 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 			case 'updateSystemPrompt':
 				try {
+					if ((message as any).panelMode) {
+						return;
+					}
 					const { globalPrompt, workspacePrompt } = message.data as { globalPrompt: string; workspacePrompt: string };
 					await this._configManager.updateGlobalSystemPrompt(globalPrompt);
 					await this._configManager.updateWorkspaceSystemPrompt(workspacePrompt);
@@ -824,7 +854,7 @@ After completing the operations, please reply with the following message in both
 	 * If a model is only in API, it gets added with defaults.
 	 * If a model is only local (not in API list), it gets removed to stay in sync with API.
 	 */
-	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }>): Promise<Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }>> {
+	private async _fetchModelsFromAPI(baseUrl: string, apiKey: string, existingModels?: ConfigViewModel[]): Promise<ConfigViewModel[]> {
 		const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
@@ -861,28 +891,46 @@ After completing the operations, please reply with the following message in both
 			topP: 1.0,
 			samplingMode: 'both',
 			isUserSelectable: undefined,
+			preserveReasoningContent: false,
 		})).filter((m: any) => m.modelId);
+
+		const uniqueApiModels: ConfigViewModel[] = [];
+		const seenModelIds = new Set<string>();
+		for (const apiModel of apiModels) {
+			const normalizedModelId = apiModel.modelId.trim();
+			if (!normalizedModelId || seenModelIds.has(normalizedModelId)) {
+				continue;
+			}
+			seenModelIds.add(normalizedModelId);
+			uniqueApiModels.push({
+				...apiModel,
+				modelId: normalizedModelId,
+			});
+		}
 		
 		// If no existing models, return API models
 		if (!existingModels || existingModels.length === 0) {
-			return apiModels;
+			return uniqueApiModels;
 		}
 		
 		// Create a map of existing models by modelId
-		const existingMap = new Map<string, { modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }>();
+		const existingMap = new Map<string, ConfigViewModel>();
 		for (const existing of existingModels) {
-			existingMap.set(existing.modelId, existing);
+			const normalizedModelId = existing.modelId?.trim();
+			if (normalizedModelId && !existingMap.has(normalizedModelId)) {
+				existingMap.set(normalizedModelId, { ...existing, modelId: normalizedModelId });
+			}
 		}
 		
 		// Merge: start with API models, override with local customizations
-		const merged: Array<{ modelId: string; displayName: string; contextLength: number; maxTokens: number; vision: boolean; toolCalling: boolean; temperature: number; topP: number; samplingMode: 'temperature' | 'top_p' | 'both' | 'none'; isUserSelectable?: boolean; transformThink?: boolean }> = [];
+		const merged: ConfigViewModel[] = [];
 		
 		// Add API models (use API data for fields that should stay synced, but preserve local customizations)
-		for (const apiModel of apiModels) {
+		for (const apiModel of uniqueApiModels) {
 			const localModel = existingMap.get(apiModel.modelId);
 			if (localModel) {
 				// Use API data for fields that API provides, keep local values for missing fields
-				// Preserve local vision/temperature/topP/samplingMode/isUserSelectable/transformThink
+				// Preserve local vision/temperature/topP/samplingMode/isUserSelectable/transformThink/preserveReasoningContent
 				merged.push({
 					modelId: apiModel.modelId,
 					displayName: apiModel.displayName,
@@ -895,6 +943,7 @@ After completing the operations, please reply with the following message in both
 					samplingMode: localModel.samplingMode ?? 'both',
 					isUserSelectable: localModel.isUserSelectable,
 					transformThink: localModel.transformThink,
+					preserveReasoningContent: localModel.preserveReasoningContent,
 				});
 			} else {
 				merged.push({
@@ -1157,6 +1206,13 @@ After completing the operations, please reply with the following message in both
 									<input type="checkbox" id="editModelTransformThink" />
 									<span data-i18n="transformThinkTags">Transform Think Tags (&lt;|im_start|&gt;/♩)</span>
 								</label>
+							</div>
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input type="checkbox" id="editModelPreserveReasoningContent" />
+									<span data-i18n="preserveReasoningContent">Preserve reasoning_content</span>
+								</label>
+								<div class="help-text" data-i18n="preserveReasoningContentHelp">For DeepSeek thinking mode. Cache and replay reasoning_content in later requests.</div>
 							</div>
 						</div>
 						<div class="form-row">
@@ -1913,9 +1969,13 @@ export class ConfigViewPanel {
 		}
 
 		const { command, data } = message;
+		const isPanelModeMessage = !!message.panelMode;
 
 		switch (command) {
 			case 'getLanguageSettings':
+				if (!isPanelModeMessage) {
+					return;
+				}
 				this._currentPanel?.webview.postMessage({
 					command: 'languageSettingsLoaded',
 					data: {
@@ -1927,6 +1987,9 @@ export class ConfigViewPanel {
 				break;
 
 			case 'updateLanguageSettings':
+				if (!isPanelModeMessage) {
+					return;
+				}
 				await this._configManager.updateLanguage(data?.language);
 				this._currentPanel?.webview.postMessage({
 					command: 'languageSettingsLoaded',
@@ -1939,6 +2002,9 @@ export class ConfigViewPanel {
 				break;
 
 			case 'getChatHistorySettings':
+				if (!isPanelModeMessage) {
+					return;
+				}
 				const settings = await this._configManager.getChatHistorySettings();
 				this._currentPanel?.webview.postMessage({
 					command: 'chatHistorySettingsLoaded',
@@ -1946,7 +2012,21 @@ export class ConfigViewPanel {
 				});
 				break;
 
+			case 'getProjectChatHistorySettings':
+				if (!isPanelModeMessage) {
+					return;
+				}
+				const projectChatHistorySettings = await this._configManager.getProjectChatHistorySettings();
+				this._currentPanel?.webview.postMessage({
+					command: 'projectChatHistorySettingsLoaded',
+					data: projectChatHistorySettings
+				});
+				break;
+
 			case 'getExpertModeSettings':
+				if (!isPanelModeMessage) {
+					return;
+				}
 				const expertModeProviders = getExpertSelectableProviders(await this._configManager.getProviders());
 				this._currentPanel?.webview.postMessage({
 					command: 'expertModeSettingsLoaded',
@@ -1960,6 +2040,9 @@ export class ConfigViewPanel {
 				break;
 
 			case 'getSolutionProviderSettings':
+				if (!isPanelModeMessage) {
+					return;
+				}
 				const solutionProviderProviders = getExpertSelectableProviders(await this._configManager.getProviders());
 				this._currentPanel?.webview.postMessage({
 					command: 'solutionProviderSettingsLoaded',
@@ -1973,6 +2056,9 @@ export class ConfigViewPanel {
 				break;
 
 			case 'getSystemPrompt':
+				if (!isPanelModeMessage) {
+					return;
+				}
 				const globalPrompt = this._configManager.getGlobalSystemPrompt();
 				const workspacePrompt = this._configManager.getWorkspaceSystemPrompt();
 				this._currentPanel?.webview.postMessage({

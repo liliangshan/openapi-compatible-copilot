@@ -341,9 +341,9 @@ export class ConfigManager {
 		const current = this.getExpertModeConfig();
 		const updated = { ...current, ...settings };
 		const config = vscode.workspace.getConfiguration('openapicopilot');
-		await config.update(ConfigManager.EXPERT_MODE_ENABLED_CONFIG_KEY, updated.enabled, true);
-		await config.update(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY, updated.providerId, true);
-		await config.update(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY, updated.modelId, true);
+		await config.update(ConfigManager.EXPERT_MODE_ENABLED_CONFIG_KEY, updated.enabled, vscode.ConfigurationTarget.Global);
+		await config.update(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY, updated.providerId, vscode.ConfigurationTarget.Global);
+		await config.update(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY, updated.modelId, vscode.ConfigurationTarget.Global);
 		await this.context.globalState.update(ConfigManager.EXPERT_MODE_CONFIG_KEY, updated);
 		return updated;
 	}
@@ -356,9 +356,9 @@ export class ConfigManager {
 		const updated = { ...current, ...settings };
 		const enabledState: WorkspaceExpertModeEnabledState = updated.enabledState === 'enabled' || updated.enabledState === 'disabled' ? updated.enabledState : 'global';
 		const config = vscode.workspace.getConfiguration('openapicopilot');
-		await config.update(ConfigManager.WORKSPACE_EXPERT_MODE_ENABLED_STATE_CONFIG_KEY, enabledState, false);
-		await config.update(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY, updated.providerId, false);
-		await config.update(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY, updated.modelId, false);
+		await config.update(ConfigManager.WORKSPACE_EXPERT_MODE_ENABLED_STATE_CONFIG_KEY, enabledState, vscode.ConfigurationTarget.Workspace);
+		await config.update(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY, updated.providerId, vscode.ConfigurationTarget.Workspace);
+		await config.update(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY, updated.modelId, vscode.ConfigurationTarget.Workspace);
 		return { ...updated, enabled: enabledState === 'enabled', enabledState };
 	}
 
@@ -431,10 +431,10 @@ export class ConfigManager {
 		const current = this.getSolutionProviderConfig();
 		const updated = { ...current, ...settings };
 		const config = vscode.workspace.getConfiguration('openapicopilot');
-		await config.update(ConfigManager.SOLUTION_PROVIDER_ENABLED_CONFIG_KEY, updated.enabled, true);
-		await config.update(ConfigManager.SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY, updated.providerId, true);
-		await config.update(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY, updated.modelId, true);
-		await config.update(ConfigManager.SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY, updated.reviewWithExpert, true);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_ENABLED_CONFIG_KEY, updated.enabled, vscode.ConfigurationTarget.Global);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY, updated.providerId, vscode.ConfigurationTarget.Global);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY, updated.modelId, vscode.ConfigurationTarget.Global);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY, updated.reviewWithExpert, vscode.ConfigurationTarget.Global);
 		await this.context.globalState.update(ConfigManager.SOLUTION_PROVIDER_CONFIG_KEY, updated);
 		return updated;
 	}
@@ -448,11 +448,10 @@ export class ConfigManager {
 		const enabledState: WorkspaceSolutionProviderEnabledState = updated.enabledState === 'enabled' || updated.enabledState === 'disabled' ? updated.enabledState : 'global';
 		const reviewWithExpertState: WorkspaceSolutionProviderReviewWithExpertState = updated.reviewWithExpertState === 'enabled' || updated.reviewWithExpertState === 'disabled' ? updated.reviewWithExpertState : 'global';
 		const config = vscode.workspace.getConfiguration('openapicopilot');
-		await config.update(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_ENABLED_STATE_CONFIG_KEY, enabledState, false);
-		await config.update(ConfigManager.SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY, updated.providerId, false);
-		await config.update(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY, updated.modelId, false);
-		await config.update(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY, reviewWithExpertState, false);
-		await config.update(ConfigManager.SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY, undefined, false);
+		await config.update(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_ENABLED_STATE_CONFIG_KEY, enabledState, vscode.ConfigurationTarget.Workspace);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY, updated.providerId, vscode.ConfigurationTarget.Workspace);
+		await config.update(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY, updated.modelId, vscode.ConfigurationTarget.Workspace);
+		await config.update(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY, reviewWithExpertState, vscode.ConfigurationTarget.Workspace);
 		return { ...updated, enabled: enabledState === 'enabled', reviewWithExpert: reviewWithExpertState === 'enabled', enabledState, reviewWithExpertState };
 	}
 

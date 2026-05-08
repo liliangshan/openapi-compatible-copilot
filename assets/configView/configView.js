@@ -92,6 +92,8 @@
 			visionSupport: 'Vision Support',
 			toolCalling: 'Tool Calling',
 			transformThinkTags: 'Transform Think Tags (<|im_start|>/♩)',
+			preserveReasoningContent: 'Preserve reasoning_content',
+			preserveReasoningContentHelp: 'For DeepSeek thinking mode. Cache and replay reasoning_content in later requests.',
 			temperature: 'Temperature',
 			topP: 'Top P',
 			samplingMode: 'Sampling Mode',
@@ -236,6 +238,8 @@
 			visionSupport: '视觉支持',
 			toolCalling: '工具调用',
 			transformThinkTags: '转换 Think 标签（<|im_start|>/♩）',
+			preserveReasoningContent: '保留 reasoning_content',
+			preserveReasoningContentHelp: '用于 DeepSeek 思考模式。启用后会缓存并在后续请求中回传 reasoning_content。',
 			temperature: 'Temperature',
 			topP: 'Top P',
 			samplingMode: '采样模式',
@@ -322,7 +326,7 @@
 
 	translations['zh-tw'] = {
 		...translations['zh-cn'],
-		importConfiguration: '匯入設定', exportConfiguration: '匯出設定', import: '匯入', export: '匯出', subtitle: 'OpenAPI 相容 Copilot', languageAuto: '自動（跟隨 VS Code）', globalSettings: '全域設定', projectSettings: '專案設定', settingsHint: '系統提示詞、聊天歷史、專家模式、匯入/匯出 Copilot 記錄、增強 TODO 設定', providers: '提供商', noProviders: '尚未設定提供商', addFirstProvider: '新增第一個提供商', enabled: '已啟用', disabled: '已停用', apiType: 'API 類型', configured: '**** 已設定', notSet: '⚠️ 未設定', autoFetchModels: '自動取得模型', autoFetchModelsTitle: '開啟設定時自動從 API 取得模型', models: '模型', fetchingModels: '正在取得模型...', noModels: '⚠️ 無模型（請檢查 API Key）', edit: '編輯', delete: '刪除', fetchModels: '取得模型', loading: '載入中...', addModel: '+ 新增模型', showInChatSelector: '顯示在聊天選擇器中', addProvider: '新增提供商', editProvider: '編輯提供商', providerName: '提供商名稱', providerNamePlaceholder: '例如：MyOpenAI、LocalLLM', providerNameHelp: '用於在 Copilot 中識別此提供商的唯一名稱', apiTypeHelp: '此提供商使用的 API 協定', baseUrlHelp: 'API 端點位址', apiKeyHelp: '編輯時留空表示保留現有金鑰', cancel: '取消', save: '儲存', saveProvider: '儲存提供商', editModel: '編輯模型', modelId: '模型 ID', modelIdPlaceholder: '例如：gpt-4o', displayName: '顯示名稱', displayNamePlaceholder: '例如：GPT-4o', contextLength: '上下文長度', maxTokens: '最大 Token 數', visionSupport: '視覺支援', toolCalling: '工具呼叫', transformThinkTags: '轉換 Think 標籤（<|im_start|>/♩）', samplingMode: '取樣模式', samplingBoth: '同時傳遞 temperature + top_p', samplingTemperature: '僅傳遞 Temperature', samplingTopP: '僅傳遞 Top P', samplingNone: '不傳遞取樣參數', samplingHelp: '部分模型（例如 Claude）一次只接受一個取樣參數', saveModel: '儲存模型', chatHistorySettings: '聊天歷史設定', autoSaveChatHistory: '自動儲存聊天歷史', chatHistoryHelp: '自動將聊天對話儲存到本機檔案', savePath: '儲存路徑', savePathPlaceholder: '聊天歷史儲存路徑', defaultSavePathHelp: '預設：Windows: %APPDATA%/LLSOAI，macOS/Linux: ~/.LLSOAI', saveChatHistory: '儲存聊天記錄', chatHistorySavePath: '儲存路徑', chatHistorySavePathHelp: '用於儲存聊天記錄的目錄。預設為專案的 .LLSOAI 資料夾。', editSystemPrompt: '編輯系統提示詞', globalSystemPrompt: '全域系統提示詞', globalSystemPromptPlaceholder: '在此輸入全域系統提示詞...', globalSystemPromptHelp: '套用於所有工作區，儲存在全域設定中。', projectSystemPrompt: '專案系統提示詞', projectWorkspaceSystemPrompt: '專案（工作區）系統提示詞', projectSystemPromptPlaceholder: '在此輸入專案專屬系統提示詞...', projectSystemPromptHelp: '僅套用於目前工作區，儲存在工作區設定中。', chatHistory: '聊天歷史', expertMode: '專家模式', enableExpertMode: '啟用專家模式', expertModeHelp: '啟用後，主模型可以將複雜任務委派給所選專家模型。', expertProvider: '專家提供商', expertModel: '專家模型', expertSelectProvider: '選擇提供商', expertSelectModel: '選擇模型', expertProjectDescription: '設定目前專案如何使用 LLSOAI 專家模型。', expertGlobalStatus: '全域{state}', expertUseGlobal: '使用全域', expertFollowGlobalState: '跟隨全域狀態：{state}', expertForceEnabledDesc: '強制目前專案開啟專家模式。', expertForceDisabledDesc: '強制目前專案關閉專家模式。', expertUseGlobalProvider: '使用全域專家提供商（{value}）', expertUseGlobalModel: '使用全域專家模型（{value}）', expertModelOverrideHelp: '同時選擇提供商和模型即可覆蓋全域專家模型；任一項留空則繼續使用全域專家模型。', enhancedTodo: '增強 TODO', enableEnhancedTodo: '啟用增強 TODO', enhancedTodoHelp: '啟用後會自動將 TODO 儲存到專案目錄；建立新 TODO 時會檢查是否存在未完成 TODO。', copilotRecords: 'Copilot 記錄', copilotRecordsHelp: '匯入/匯出 VS Code Copilot 聊天記錄', importRecords: '匯入記錄', exportRecords: '匯出記錄', saveAll: '全部儲存', errorExtensionNotInitialized: '錯誤：擴充功能未初始化', modelIdRequired: '模型 ID 不能為空', enterProviderName: '請輸入提供商名稱', enterBaseUrl: '請輸入 Base URL', enterApiKey: '請為新提供商輸入 API Key', chatHistoryEnabled: '已啟用', chatHistoryDisabled: '已停用', adLabel: '廣告'
+		importConfiguration: '匯入設定', exportConfiguration: '匯出設定', import: '匯入', export: '匯出', subtitle: 'OpenAPI 相容 Copilot', languageAuto: '自動（跟隨 VS Code）', globalSettings: '全域設定', projectSettings: '專案設定', settingsHint: '系統提示詞、聊天歷史、專家模式、匯入/匯出 Copilot 記錄、增強 TODO 設定', providers: '提供商', noProviders: '尚未設定提供商', addFirstProvider: '新增第一個提供商', enabled: '已啟用', disabled: '已停用', apiType: 'API 類型', configured: '**** 已設定', notSet: '⚠️ 未設定', autoFetchModels: '自動取得模型', autoFetchModelsTitle: '開啟設定時自動從 API 取得模型', models: '模型', fetchingModels: '正在取得模型...', noModels: '⚠️ 無模型（請檢查 API Key）', edit: '編輯', delete: '刪除', fetchModels: '取得模型', loading: '載入中...', addModel: '+ 新增模型', showInChatSelector: '顯示在聊天選擇器中', addProvider: '新增提供商', editProvider: '編輯提供商', providerName: '提供商名稱', providerNamePlaceholder: '例如：MyOpenAI、LocalLLM', providerNameHelp: '用於在 Copilot 中識別此提供商的唯一名稱', apiTypeHelp: '此提供商使用的 API 協定', baseUrlHelp: 'API 端點位址', apiKeyHelp: '編輯時留空表示保留現有金鑰', cancel: '取消', save: '儲存', saveProvider: '儲存提供商', editModel: '編輯模型', modelId: '模型 ID', modelIdPlaceholder: '例如：gpt-4o', displayName: '顯示名稱', displayNamePlaceholder: '例如：GPT-4o', contextLength: '上下文長度', maxTokens: '最大 Token 數', visionSupport: '視覺支援', toolCalling: '工具呼叫', transformThinkTags: '轉換 Think 標籤（<|im_start|>/♩）', preserveReasoningContent: '保留 reasoning_content', preserveReasoningContentHelp: '用於 DeepSeek 思考模式。啟用後會快取並在後續請求中回傳 reasoning_content。', samplingMode: '取樣模式', samplingBoth: '同時傳遞 temperature + top_p', samplingTemperature: '僅傳遞 Temperature', samplingTopP: '僅傳遞 Top P', samplingNone: '不傳遞取樣參數', samplingHelp: '部分模型（例如 Claude）一次只接受一個取樣參數', saveModel: '儲存模型', chatHistorySettings: '聊天歷史設定', autoSaveChatHistory: '自動儲存聊天歷史', chatHistoryHelp: '自動將聊天對話儲存到本機檔案', savePath: '儲存路徑', savePathPlaceholder: '聊天歷史儲存路徑', defaultSavePathHelp: '預設：Windows: %APPDATA%/LLSOAI，macOS/Linux: ~/.LLSOAI', saveChatHistory: '儲存聊天記錄', chatHistorySavePath: '儲存路徑', chatHistorySavePathHelp: '用於儲存聊天記錄的目錄。預設為專案的 .LLSOAI 資料夾。', editSystemPrompt: '編輯系統提示詞', globalSystemPrompt: '全域系統提示詞', globalSystemPromptPlaceholder: '在此輸入全域系統提示詞...', globalSystemPromptHelp: '套用於所有工作區，儲存在全域設定中。', projectSystemPrompt: '專案系統提示詞', projectWorkspaceSystemPrompt: '專案（工作區）系統提示詞', projectSystemPromptPlaceholder: '在此輸入專案專屬系統提示詞...', projectSystemPromptHelp: '僅套用於目前工作區，儲存在工作區設定中。', chatHistory: '聊天歷史', expertMode: '專家模式', enableExpertMode: '啟用專家模式', expertModeHelp: '啟用後，主模型可以將複雜任務委派給所選專家模型。', expertProvider: '專家提供商', expertModel: '專家模型', expertSelectProvider: '選擇提供商', expertSelectModel: '選擇模型', expertProjectDescription: '設定目前專案如何使用 LLSOAI 專家模型。', expertGlobalStatus: '全域{state}', expertUseGlobal: '使用全域', expertFollowGlobalState: '跟隨全域狀態：{state}', expertForceEnabledDesc: '強制目前專案開啟專家模式。', expertForceDisabledDesc: '強制目前專案關閉專家模式。', expertUseGlobalProvider: '使用全域專家提供商（{value}）', expertUseGlobalModel: '使用全域專家模型（{value}）', expertModelOverrideHelp: '同時選擇提供商和模型即可覆蓋全域專家模型；任一項留空則繼續使用全域專家模型。', enhancedTodo: '增強 TODO', enableEnhancedTodo: '啟用增強 TODO', enhancedTodoHelp: '啟用後會自動將 TODO 儲存到專案目錄；建立新 TODO 時會檢查是否存在未完成 TODO。', copilotRecords: 'Copilot 記錄', copilotRecordsHelp: '匯入/匯出 VS Code Copilot 聊天記錄', importRecords: '匯入記錄', exportRecords: '匯出記錄', saveAll: '全部儲存', errorExtensionNotInitialized: '錯誤：擴充功能未初始化', modelIdRequired: '模型 ID 不能為空', enterProviderName: '請輸入提供商名稱', enterBaseUrl: '請輸入 Base URL', enterApiKey: '請為新提供商輸入 API Key', chatHistoryEnabled: '已啟用', chatHistoryDisabled: '已停用', adLabel: '廣告'
 	};
 
 	translations.ko = {
@@ -341,6 +345,23 @@
 		...translations.en,
 		importConfiguration: 'Konfiguration importieren', exportConfiguration: 'Konfiguration exportieren', import: 'Importieren', export: 'Exportieren', subtitle: 'OpenAPI-kompatibler Copilot', languageLabel: 'Sprache', languageAuto: 'Automatisch (VS Code folgen)', globalSettings: 'Globale Einstellungen', projectSettings: 'Projekteinstellungen', settingsHint: 'System-Prompt, Chatverlauf, Expertenmodus, Copilot-Datensätze importieren/exportieren, erweiterte TODO-Einstellungen', providers: 'Anbieter', noProviders: 'Noch keine Anbieter konfiguriert', addFirstProvider: 'Ersten Anbieter hinzufügen', enabled: 'Aktiviert', disabled: 'Deaktiviert', apiType: 'API-Typ', configured: '**** Konfiguriert', notSet: '⚠️ Nicht festgelegt', autoFetchModels: 'Modelle automatisch abrufen', autoFetchModelsTitle: 'Modelle beim Öffnen der Einstellungen automatisch von der API abrufen', models: 'Modelle', fetchingModels: 'Modelle werden abgerufen...', noModels: '⚠️ Keine Modelle (API Key prüfen)', edit: 'Bearbeiten', delete: 'Löschen', fetchModels: 'Modelle abrufen', loading: 'Wird geladen...', addModel: '+ Modell hinzufügen', showInChatSelector: 'Im Chat-Auswahlmenü anzeigen', addProvider: 'Anbieter hinzufügen', editProvider: 'Anbieter bearbeiten', providerName: 'Anbietername', providerNameHelp: 'Eindeutiger Name zur Identifizierung dieses Anbieters in Copilot', apiTypeHelp: 'Von diesem Anbieter verwendetes API-Protokoll', baseUrlHelp: 'API-Endpunkt', apiKeyHelp: 'Beim Bearbeiten leer lassen, um den vorhandenen Schlüssel beizubehalten', cancel: 'Abbrechen', save: 'Speichern', saveProvider: 'Anbieter speichern', editModel: 'Modell bearbeiten', modelId: 'Modell-ID', displayName: 'Anzeigename', contextLength: 'Kontextlänge', maxTokens: 'Max. Tokens', visionSupport: 'Vision-Unterstützung', toolCalling: 'Tool-Aufrufe', transformThinkTags: 'Think-Tags umwandeln (<|im_start|>/♩)', samplingMode: 'Sampling-Modus', samplingBoth: 'Beide (temperature + top_p)', samplingTemperature: 'Nur Temperature', samplingTopP: 'Nur Top P', samplingNone: 'Keine', samplingHelp: 'Einige Modelle (z. B. Claude) akzeptieren jeweils nur einen Sampling-Parameter', saveModel: 'Modell speichern', chatHistorySettings: 'Chatverlauf-Einstellungen', autoSaveChatHistory: 'Chatverlauf automatisch speichern', chatHistoryHelp: 'Chatunterhaltungen automatisch in lokalen Dateien speichern', savePath: 'Speicherpfad', savePathPlaceholder: 'Pfad zum Speichern des Chatverlaufs', defaultSavePathHelp: 'Standard: Windows: %APPDATA%/LLSOAI, macOS/Linux: ~/.LLSOAI', saveChatHistory: 'Chatverlauf speichern', chatHistorySavePath: 'Speicherpfad', chatHistorySavePathHelp: 'Verzeichnis zum Speichern des Chatverlaufs. Standardmäßig der .LLSOAI-Ordner des Projekts.', editSystemPrompt: 'System-Prompt bearbeiten', globalSystemPrompt: 'Globaler System-Prompt', globalSystemPromptPlaceholder: 'Globalen System-Prompt hier eingeben...', globalSystemPromptHelp: 'Gilt für alle Arbeitsbereiche und wird in globalen Einstellungen gespeichert.', projectSystemPrompt: 'Projekt-System-Prompt', projectWorkspaceSystemPrompt: 'Projekt-/Arbeitsbereich-System-Prompt', projectSystemPromptPlaceholder: 'Projektspezifischen System-Prompt hier eingeben...', projectSystemPromptHelp: 'Gilt nur für den aktuellen Arbeitsbereich und wird in Arbeitsbereichseinstellungen gespeichert.', chatHistory: 'Chatverlauf', expertMode: 'Expertenmodus', enableExpertMode: 'Expertenmodus aktivieren', expertModeHelp: 'Wenn aktiviert, kann das Hauptmodell schwierige Aufgaben an das ausgewählte Expertenmodell delegieren.', expertProvider: 'Expertenanbieter', expertModel: 'Expertenmodell', expertSelectProvider: 'Anbieter auswählen', expertSelectModel: 'Modell auswählen', expertProjectDescription: 'Konfigurieren Sie, wie dieses Projekt das LLSOAI-Expertenmodell verwendet.', expertGlobalStatus: 'Global {state}', expertUseGlobal: 'Globale Einstellungen verwenden', expertFollowGlobalState: 'Globalem Status folgen: {state}', expertForceEnabledDesc: 'Expertenmodus für dieses Projekt erzwingen.', expertForceDisabledDesc: 'Expertenmodus für dieses Projekt deaktivieren erzwingen.', expertUseGlobalProvider: 'Globalen Expertenanbieter verwenden ({value})', expertUseGlobalModel: 'Globales Expertenmodell verwenden ({value})', expertModelOverrideHelp: 'Wählen Sie sowohl Anbieter als auch Modell aus, um das globale Expertenmodell zu überschreiben. Lassen Sie eines davon leer, um weiterhin das globale Expertenmodell zu verwenden.', enhancedTodo: 'Erweitertes TODO', enableEnhancedTodo: 'Erweitertes TODO aktivieren', enhancedTodoHelp: 'Wenn aktiviert, werden TODOs automatisch im Projektverzeichnis gespeichert; beim Erstellen neuer TODOs wird auf unvollständige TODOs geprüft.', copilotRecords: 'Copilot-Datensätze', copilotRecordsHelp: 'Chatdatensätze aus VS Code Copilot importieren/exportieren', importRecords: 'Datensätze importieren', exportRecords: 'Datensätze exportieren', saveAll: 'Alle speichern', errorExtensionNotInitialized: 'Fehler: Erweiterung nicht initialisiert', modelIdRequired: 'Modell-ID ist erforderlich', enterProviderName: 'Bitte Anbietername eingeben', enterBaseUrl: 'Bitte Base URL eingeben', enterApiKey: 'Bitte API Key für neue Anbieter eingeben', chatHistoryEnabled: 'Aktiviert', chatHistoryDisabled: 'Deaktiviert', adLabel: 'Anzeige'
 	};
+
+	Object.assign(translations.ko, {
+		preserveReasoningContent: 'reasoning_content 보존',
+		preserveReasoningContentHelp: 'DeepSeek 사고 모드용입니다. reasoning_content를 캐시하고 이후 요청에 다시 전달합니다.',
+	});
+	Object.assign(translations.ja, {
+		preserveReasoningContent: 'reasoning_content を保持',
+		preserveReasoningContentHelp: 'DeepSeek 思考モード用です。reasoning_content をキャッシュし、後続リクエストで再送します。',
+	});
+	Object.assign(translations.fr, {
+		preserveReasoningContent: 'Conserver reasoning_content',
+		preserveReasoningContentHelp: 'Pour le mode de réflexion DeepSeek. Met en cache reasoning_content et le renvoie dans les requêtes suivantes.',
+	});
+	Object.assign(translations.de, {
+		preserveReasoningContent: 'reasoning_content beibehalten',
+		preserveReasoningContentHelp: 'Für den DeepSeek-Denkmodus. Speichert reasoning_content zwischen und sendet es in späteren Anfragen erneut.',
+	});
 
 	Object.assign(translations['zh-tw'], {
 		solutionProvider: '方案提供商',
@@ -602,19 +623,21 @@
 	const chatHistoryStatus = document.getElementById('chatHistoryStatus');
 	const isPanelMode = !!document.getElementById('panelSaveBtn');
 
-	// Initialize
-	vscode.postMessage({ command: 'getLanguageSettings' });
 	if (isPanelMode) {
+		// Initialize
+		vscode.postMessage({ command: 'getLanguageSettings', panelMode: true });
 		if (window.settingsMode === 'global') {
-			vscode.postMessage({ command: 'getChatHistorySettings' });
-			vscode.postMessage({ command: 'getExpertModeSettings' });
-			vscode.postMessage({ command: 'getSolutionProviderSettings' });
-			vscode.postMessage({ command: 'getSystemPrompt' });
+			vscode.postMessage({ command: 'getChatHistorySettings', panelMode: true });
+			vscode.postMessage({ command: 'getExpertModeSettings', panelMode: true });
+			vscode.postMessage({ command: 'getSolutionProviderSettings', panelMode: true });
+			vscode.postMessage({ command: 'getSystemPrompt', panelMode: true });
 		} else if (window.settingsMode === 'project') {
-			vscode.postMessage({ command: 'getProjectChatHistorySettings' });
-			vscode.postMessage({ command: 'getSystemPrompt' });
+			vscode.postMessage({ command: 'getProjectChatHistorySettings', panelMode: true });
+			vscode.postMessage({ command: 'getSystemPrompt', panelMode: true });
 		}
 	} else {
+			// Initialize
+			vscode.postMessage({ command: 'getLanguageSettings' });
 		vscode.postMessage({ command: 'getProviders' });
 		vscode.postMessage({ command: 'getChatHistorySettings' });
 		vscode.postMessage({ command: 'getExpertModeSettings' });
@@ -879,6 +902,7 @@
 				const solutionProviderReviewWithExpert = document.getElementById('panelSolutionProviderReviewWithExpert')?.checked || false;
 				vscode.postMessage({
 					command: 'saveGlobalSettings',
+					panelMode: true,
 					data: {
 						globalSystemPrompt,
 						chatHistoryEnabled,
@@ -907,6 +931,7 @@
 				const solutionProviderReviewWithExpertState = document.querySelector('input[name="panelSolutionProviderReviewWithExpertState"]:checked')?.value || 'global';
 				vscode.postMessage({
 					command: 'saveProjectSettings',
+					panelMode: true,
 					data: { projectSystemPrompt, projectChatHistoryEnabled, projectChatHistorySavePath, forceTodoEnabled, expertModeEnabledState, expertModeProviderId, expertModeModelId, solutionProviderEnabledState, solutionProviderProviderId, solutionProviderModelId, solutionProviderReviewWithExpertState }
 				});
 			}
@@ -1260,6 +1285,7 @@
 			samplingMode: 'both',
 			isUserSelectable: false,
 			transformThink: false,
+			preserveReasoningContent: false,
 		};
 		
 		const modelName = document.getElementById('editModelName');
@@ -1273,6 +1299,7 @@
 		const modelSamplingMode = document.getElementById('editModelSamplingMode');
 		const modelUserSelectable = document.getElementById('editModelUserSelectable');
 		const modelTransformThink = document.getElementById('editModelTransformThink');
+		const modelPreserveReasoningContent = document.getElementById('editModelPreserveReasoningContent');
 		
 		if (modelName) modelName.value = '';
 		if (modelDisplayName) modelDisplayName.value = '';
@@ -1285,6 +1312,7 @@
 		if (modelSamplingMode) modelSamplingMode.value = 'both';
 		if (modelUserSelectable) modelUserSelectable.checked = false;
 		if (modelTransformThink) modelTransformThink.checked = false;
+		if (modelPreserveReasoningContent) modelPreserveReasoningContent.checked = false;
 		
 		// Ensure models list remains expanded
 		expandedProviders.add(providerId);
@@ -1319,6 +1347,7 @@
 		const modelSamplingMode = document.getElementById('editModelSamplingMode');
 		const modelUserSelectable = document.getElementById('editModelUserSelectable');
 		const modelTransformThink = document.getElementById('editModelTransformThink');
+		const modelPreserveReasoningContent = document.getElementById('editModelPreserveReasoningContent');
 		
 		if (modelName) modelName.value = editingModelData.modelId || '';
 		if (modelDisplayName) modelDisplayName.value = editingModelData.displayName || '';
@@ -1331,6 +1360,7 @@
 		if (modelSamplingMode) modelSamplingMode.value = editingModelData.samplingMode ?? 'both';
 		if (modelUserSelectable) modelUserSelectable.checked = editingModelData.isUserSelectable ?? false;
 		if (modelTransformThink) modelTransformThink.checked = editingModelData.transformThink ?? false;
+		if (modelPreserveReasoningContent) modelPreserveReasoningContent.checked = editingModelData.preserveReasoningContent ?? false;
 		
 		// Ensure provider remains expanded when editing
 		expandedProviders.add(providerId);
@@ -1354,6 +1384,7 @@
 		const modelSamplingMode = document.getElementById('editModelSamplingMode');
 		const modelUserSelectable = document.getElementById('editModelUserSelectable');
 		const modelTransformThink = document.getElementById('editModelTransformThink');
+		const modelPreserveReasoningContent = document.getElementById('editModelPreserveReasoningContent');
 		
 		if (!modelName || !modelName.value.trim()) {
 			alert(t('modelIdRequired'));
@@ -1371,6 +1402,7 @@
 		editingModelData.samplingMode = modelSamplingMode?.value || 'both';
 		editingModelData.isUserSelectable = modelUserSelectable?.checked ?? true;
 		editingModelData.transformThink = modelTransformThink?.checked ?? false;
+		editingModelData.preserveReasoningContent = modelPreserveReasoningContent?.checked ?? false;
 		
 		// Update the provider
 		const provider = providers.find(p => p.id === editingModelProviderId);

@@ -50,6 +50,8 @@ export interface ModelConfig {
 	isUserSelectable?: boolean;
 	/** Whether to transform 认 tags in model responses */
 	transformThink?: boolean;
+	/** Whether to preserve and replay reasoning_content for APIs that require it, such as DeepSeek thinking mode */
+	preserveReasoningContent?: boolean;
 }
 
 /**
