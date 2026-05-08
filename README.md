@@ -5,6 +5,7 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 ## Features
 
 - 🚀 **Multiple Provider Support** - Add and manage multiple OpenAI-compatible and Anthropic API providers
+- 🦙 **Local LLM Friendly** - OpenAI-compatible and Responses API providers can be used without an API key, making local runtimes such as llama.cpp, LM Studio, Ollama-compatible endpoints, vLLM, and LocalAI easy to connect
 - 🔐 **Secure Key Storage** - API keys are stored securely using VS Code's secret storage
 - 🎨 **Beautiful Configuration UI** - Easy-to-use webview interface for managing providers
 - 🔌 **Copilot Integration** - Seamlessly integrates with GitHub Copilot Chat
@@ -18,6 +19,26 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 🎯 **Expert Mode** - Use mid/low-tier models for development tasks and high-tier models as expert reviewers for supplementation and quality assurance
 - 🧭 **Solution Provider** - Delegate solution design, implementation planning, and architecture proposals to a dedicated solution model, with optional expert review before finalizing
 - 🖼️ **Vision/Multimodal Input Support** - Supports image input forwarding across OpenAI-compatible Chat Completions, Responses API, and Anthropic Messages API providers
+
+## 🦙 Local LLMs Without API Keys
+
+OpenAI-compatible and Responses API providers support an optional API key. This makes it possible to connect local model servers that do not require authentication, such as llama.cpp, LM Studio, Ollama-compatible OpenAI endpoints, vLLM, and LocalAI.
+
+Example local llama.cpp-style configuration:
+
+| Field | Example |
+|-------|---------|
+| **API Type** | `OpenAI-Compatible` |
+| **Base URL** | `http://127.0.0.1:8080/v1` |
+| **API Key** | Leave empty |
+
+When the API key is empty, the extension does not send an empty `Authorization: Bearer` header. If your provider does require authentication, simply enter the API key and the normal `Authorization: Bearer <key>` header will be sent.
+
+Notes:
+
+- Anthropic providers still require an API key.
+- Expert Mode and Solution Provider selectors intentionally show only providers with a configured API key. No-key local providers are supported for normal chat models.
+- If a local server does not expose `/models`, you can disable auto-fetch and add models manually in the provider UI.
 
 ## 🎯 Expert Mode
 

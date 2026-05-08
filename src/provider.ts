@@ -581,9 +581,9 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const forceTodoEnabled = this._configManager.getGlobalForceTodoEnabled() || this._configManager.getWorkspaceForceTodoEnabled();
 
 		// Get API key from secrets
-		const apiKey = await this._configManager.getApiKey(providerId);
-		if (!apiKey) {
-			throw new Error(`No API key configured for provider "${metadata.providerName}". Please configure it in the provider management UI.`);
+		const apiKey = (await this._configManager.getApiKey(providerId)).trim();
+		if (apiType === 'anthropic' && !apiKey) {
+			throw new Error(`No API key configured for Anthropic provider "${metadata.providerName}". Please configure it in the provider management UI.`);
 		}
 
 		const mainContext: MainRequestContext = {
@@ -1183,7 +1183,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			if (isAnthropic) {
 				headers['x-api-key'] = apiKey;
 				headers['anthropic-version'] = '2023-06-01';
-			} else {
+			} else if (apiKey) {
 				headers['Authorization'] = `Bearer ${apiKey}`;
 			}
 			// Request body: v1-response needs conversion from chat completions format to Responses API format.
@@ -1508,7 +1508,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const providers = await this._configManager.getProvidersWithSecrets();
 		const provider = providers.find((p) => p.id === config.providerId && p.enabled);
 		const expertModel = provider?.models.find((m) => m.modelId === config.modelId);
-		if (!provider || !expertModel || !provider.apiKey) {
+		const apiKey = provider?.apiKey?.trim() || '';
+		if (!provider || !expertModel || !apiKey) {
 			return null;
 		}
 		return {
@@ -1518,7 +1519,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			modelName: (expertModel.displayName && expertModel.displayName.trim()) || expertModel.modelId,
 			baseUrl: provider.baseUrl,
 			apiType: (provider as any).apiType ?? 'openai-compatible',
-			apiKey: provider.apiKey,
+			apiKey,
 			temperature: expertModel.temperature ?? 0.7,
 			topP: expertModel.topP ?? 1.0,
 			samplingMode: expertModel.samplingMode ?? 'both',
@@ -1535,7 +1536,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const providers = await this._configManager.getProvidersWithSecrets();
 		const provider = providers.find((p) => p.id === config.providerId && p.enabled);
 		const solutionModel = provider?.models.find((m) => m.modelId === config.modelId);
-		if (!provider || !solutionModel || !provider.apiKey) {
+		const apiKey = provider?.apiKey?.trim() || '';
+		if (!provider || !solutionModel || !apiKey) {
 			return null;
 		}
 		return {
@@ -1545,7 +1547,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			modelName: (solutionModel.displayName && solutionModel.displayName.trim()) || solutionModel.modelId,
 			baseUrl: provider.baseUrl,
 			apiType: (provider as any).apiType ?? 'openai-compatible',
-			apiKey: provider.apiKey,
+			apiKey,
 			temperature: solutionModel.temperature ?? 0.7,
 			topP: solutionModel.topP ?? 1.0,
 			samplingMode: solutionModel.samplingMode ?? 'both',

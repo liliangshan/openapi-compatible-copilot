@@ -89,7 +89,23 @@ export class ConfigManager {
 	 */
 	async getProviders(): Promise<ProviderConfigWithoutSecrets[]> {
 		const stored = this.context.globalState.get<ProviderConfigWithoutSecrets[]>(ConfigManager.PROVIDERS_KEY, []);
-		return stored;
+		const providers: ProviderConfigWithoutSecrets[] = [];
+		let changed = false;
+		for (const provider of stored) {
+			const apiKey = await this.secrets.get(`${ConfigManager.SECRET_PREFIX}${provider.id}`);
+			const hasApiKey = !!apiKey?.trim();
+			if (provider.hasApiKey !== hasApiKey) {
+				changed = true;
+			}
+			providers.push({
+				...provider,
+				hasApiKey,
+			});
+		}
+		if (changed) {
+			await this.context.globalState.update(ConfigManager.PROVIDERS_KEY, providers);
+		}
+		return providers;
 	}
 
 	/**
@@ -217,7 +233,10 @@ export class ConfigManager {
 	 * Import configurations (for restore)
 	 */
 	async importConfig(data: { providers: ProviderConfigWithoutSecrets[] }): Promise<void> {
-		await this.context.globalState.update(ConfigManager.PROVIDERS_KEY, data.providers);
+		await this.context.globalState.update(ConfigManager.PROVIDERS_KEY, data.providers.map(provider => ({
+			...provider,
+			hasApiKey: false,
+		})));
 	}
 
 	/**

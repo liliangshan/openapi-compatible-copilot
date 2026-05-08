@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.5.3
+
+### Added
+
+- **No-key Local LLM Support** — OpenAI-compatible and Responses API providers can now be added and used without an API key, improving compatibility with local runtimes such as llama.cpp, LM Studio, Ollama-compatible OpenAI endpoints, vLLM, and LocalAI.
+
+### Changed
+
+- **Optional Authorization Header** — The extension no longer sends an empty `Authorization: Bearer` header when an OpenAI-compatible or Responses API provider has no API key configured. Providers with a key continue to send the standard bearer token header.
+- **Local Model Fetching** — Model fetching from `/models` now also works without an API key for local OpenAI-compatible providers. If a local server does not expose `/models`, models can still be added manually.
+- **Expert/Solution Provider Filtering** — Expert Mode and Solution Provider selectors now intentionally show only providers with a configured API key, while no-key local providers remain available for normal chat models.
+
+### Fixed
+
+- **Provider Key State Accuracy** — Provider `hasApiKey` state is recalculated from VS Code SecretStorage to avoid stale imported or edited configuration state.
+- **First Provider Button** — The empty-state “Add Your First Provider” button now opens the same provider dialog as the main Add Provider button.
+
 ## 2.5.1
 
 ### Added

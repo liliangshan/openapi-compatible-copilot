@@ -62,7 +62,7 @@
 			autoFetchModelsTitle: 'Automatically fetch models from API when settings open',
 			models: 'Models',
 			fetchingModels: 'Fetching models...',
-			noModels: '⚠️ No models (check API Key)',
+			noModels: '⚠️ No models (check Base URL / API Key, or add manually)',
 			edit: 'Edit',
 			delete: 'Delete',
 			fetchModels: 'Fetch Models',
@@ -77,8 +77,8 @@
 			apiTypeHelp: 'The API protocol used by this provider',
 			baseUrlPlaceholder: 'https://api.openai.com/v1',
 			baseUrlHelp: 'The API endpoint',
-			apiKeyPlaceholder: 'sk-...',
-			apiKeyHelp: 'Leave empty to keep existing key (when editing)',
+			apiKeyPlaceholder: 'sk-... / optional for local models',
+			apiKeyHelp: 'OpenAI-compatible / v1-response may be left empty for local models. Anthropic requires an API key. Leave empty when editing to keep the existing key.',
 			cancel: 'Cancel',
 			save: 'Save',
 			saveProvider: 'Save Provider',
@@ -168,7 +168,8 @@
 			modelIdRequired: 'Model ID is required',
 			enterProviderName: 'Please enter a provider name',
 			enterBaseUrl: 'Please enter a base URL',
-			enterApiKey: 'Please enter an API key for new providers',
+			enterApiKey: 'Please enter an API key for Anthropic providers',
+			enterAnthropicApiKey: 'Anthropic provider requires an API Key',
 			chatHistoryEnabled: 'Enabled',
 			chatHistoryDisabled: 'Disabled',
 			adLabel: 'AD'
@@ -205,7 +206,7 @@
 			autoFetchModelsTitle: '打开设置时自动从 API 获取模型',
 			models: '模型',
 			fetchingModels: '正在获取模型...',
-			noModels: '⚠️ 无模型（请检查 API Key）',
+			noModels: '⚠️ 无模型（请检查 Base URL / API Key，或手动添加模型）',
 			edit: '编辑',
 			delete: '删除',
 			fetchModels: '获取模型',
@@ -220,8 +221,8 @@
 			apiTypeHelp: '此提供商使用的 API 协议',
 			baseUrlPlaceholder: 'https://api.openai.com/v1',
 			baseUrlHelp: 'API 端点地址',
-			apiKeyPlaceholder: 'sk-...',
-			apiKeyHelp: '编辑时留空表示保留现有密钥',
+			apiKeyPlaceholder: 'sk-... / 本地模型可留空',
+			apiKeyHelp: 'OpenAI-compatible / v1-response 可留空用于本地模型；Anthropic 必填。编辑时留空表示保留现有密钥。',
 			cancel: '取消',
 			save: '保存',
 			saveProvider: '保存提供商',
@@ -311,7 +312,8 @@
 			modelIdRequired: '模型 ID 不能为空',
 			enterProviderName: '请输入提供商名称',
 			enterBaseUrl: '请输入 Base URL',
-			enterApiKey: '请为新提供商输入 API Key',
+			enterApiKey: '请为 Anthropic 提供商输入 API Key',
+			enterAnthropicApiKey: 'Anthropic 提供商必须填写 API Key',
 			chatHistoryEnabled: '已启用',
 			chatHistoryDisabled: '已禁用',
 			adLabel: '广告'
@@ -458,6 +460,26 @@
 		solutionUseGlobalProvider: 'Globalen Lösungsanbieter verwenden ({value})',
 		solutionUseGlobalModel: 'Globales Lösungsmodell verwenden ({value})',
 		solutionModelOverrideHelp: 'Wählen Sie sowohl Anbieter als auch Modell aus, um das globale Lösungsmodell zu überschreiben. Lassen Sie eines davon leer, um weiterhin das globale Lösungsmodell zu verwenden.',
+	});
+
+	Object.assign(translations['zh-tw'], {
+		apiKeyHelp: 'OpenAI-compatible / v1-response 可留空用於本機模型；Anthropic 必填。編輯時留空表示保留現有金鑰。',
+	});
+
+	Object.assign(translations.ko, {
+		apiKeyHelp: 'OpenAI-compatible / v1-response는 로컬 모델에서 비워 둘 수 있습니다. Anthropic은 API Key가 필요합니다. 편집 시 비워 두면 기존 키를 유지합니다.',
+	});
+
+	Object.assign(translations.ja, {
+		apiKeyHelp: 'OpenAI-compatible / v1-response はローカルモデルでは空のままにできます。Anthropic では API Key が必須です。編集中に空のままにすると既存キーを保持します。',
+	});
+
+	Object.assign(translations.fr, {
+		apiKeyHelp: 'OpenAI-compatible / v1-response peut être laissé vide pour les modèles locaux. Anthropic nécessite une API Key. Laissez vide lors de la modification pour conserver la clé existante.',
+	});
+
+	Object.assign(translations.de, {
+		apiKeyHelp: 'OpenAI-compatible / v1-response kann für lokale Modelle leer bleiben. Anthropic erfordert einen API Key. Beim Bearbeiten leer lassen, um den vorhandenen Schlüssel beizubehalten.',
 	});
 
 	function t(key) {
@@ -708,6 +730,8 @@
 			} else if (target.classList.contains('delete-btn')) {
 				const id = target.dataset.id;
 				if (id) deleteProvider(id);
+			} else if (target.classList.contains('add-first-provider-btn')) {
+				openAddProviderModal();
 			} else if (target.classList.contains('edit-model-btn')) {
 				// Edit model in provider list
 				const modelId = target.dataset.modelId;
@@ -947,7 +971,7 @@
 				if (isInitialLoad) {
 					isInitialLoad = false;
 					providers.forEach(p => {
-						if (p.enabled && p.hasApiKey && p.autoFetchModels !== false) {
+						if (p.enabled && p.autoFetchModels !== false && (p.apiType !== 'anthropic' || p.hasApiKey)) {
 							loadingProviders.add(p.id);
 						}
 					});
@@ -1079,7 +1103,7 @@
 			providersList.innerHTML = `
 				<div class="empty-state">
 					<p>${t('noProviders')}</p>
-					<button class="primary-btn" onclick="document.getElementById('addProviderBtn').click()">${t('addFirstProvider')}</button>
+					<button class="primary-btn add-first-provider-btn">${t('addFirstProvider')}</button>
 				</div>
 			`;
 			return;
@@ -1435,8 +1459,8 @@
 			return;
 		}
 
-		if (!editingProviderId && !apiKey) {
-			alert(t('enterApiKey'));
+		if (!editingProviderId && apiType === 'anthropic' && !apiKey) {
+			alert(t('enterAnthropicApiKey') || t('enterApiKey'));
 			return;
 		}
 
@@ -1449,7 +1473,6 @@
 				data: {
 					id: editingProviderId,
 					...providerData,
-					hasApiKey: !!apiKey || true,
 				},
 			});
 		} else {
@@ -1479,7 +1502,7 @@
 
 	function getExpertSelectableProviders() {
 		if (providers.length > 0) {
-			return providers.filter(provider => provider?.enabled && getProviderModels(provider.id).length > 0);
+			return providers.filter(provider => provider?.enabled && provider?.hasApiKey === true && getProviderModels(provider.id).length > 0);
 		}
 		return expertSelectableProviders;
 	}
@@ -1528,7 +1551,7 @@
 			? formatTranslation(t(providerSelect.dataset.placeholderKey), { value: providerSelect.dataset.placeholderValue || '' })
 			: (providerSelect.dataset.placeholder || t('solutionProviderProvider'));
 		const solutionProviders = providers.length > 0
-			? providers.filter(provider => provider?.enabled && getProviderModels(provider.id).length > 0)
+			? getExpertSelectableProviders()
 			: (solutionSelectableProviders.length > 0 ? solutionSelectableProviders : expertSelectableProviders);
 		providerSelect.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` + solutionProviders.map(provider => `
 			<option value="${escapeHtml(provider.id)}" ${provider.id === selectedProviderId ? 'selected' : ''}>${escapeHtml(provider.name)}</option>

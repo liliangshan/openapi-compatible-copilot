@@ -4,13 +4,22 @@ import { WebviewMessage, ProviderConfigWithoutSecrets } from '../types';
 
 function getExpertSelectableProviders(providers: any[]): any[] {
 	return (providers || [])
-		.filter((provider: any) => provider?.enabled)
+		// Expert Mode and Solution Provider intentionally require API-key-backed providers.
+		// No-key local providers are supported only in normal chat.
+		.filter((provider: any) => provider?.enabled && provider?.hasApiKey === true)
 		.map((provider: any) => ({
 			...provider,
 			models: ((provider.models || []) as any[]).filter((model: any) => model?.isUserSelectable === true),
 			apiModels: ((provider.apiModels || []) as any[]).filter((model: any) => model?.isUserSelectable === true),
 		}))
-		.filter((provider: any) => ((provider.models || provider.apiModels || []) as any[]).length > 0);
+		.filter((provider: any) =>
+			((provider.models || []) as any[]).length > 0 ||
+			((provider.apiModels || []) as any[]).length > 0
+		);
+}
+
+function requiresApiKey(apiType?: string): boolean {
+	return apiType === 'anthropic';
 }
 
 type ConfigViewMessageKey = 
@@ -241,14 +250,19 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 			case 'addProvider':
 				try {
-					const provider = message.data as { name: string; baseUrl: string; apiKey: string; apiType?: 'openai-compatible' | 'anthropic'; models?: any[]; autoFetchModels?: boolean };
+					const provider = message.data as { name: string; baseUrl: string; apiKey: string; apiType?: 'openai-compatible' | 'anthropic' | 'v1-response'; models?: any[]; autoFetchModels?: boolean };
+					const apiType = provider.apiType || 'openai-compatible';
+					const apiKey = provider.apiKey?.trim() || '';
+					if (requiresApiKey(apiType) && !apiKey) {
+						throw new Error('Anthropic provider requires an API key.');
+					}
 					
 					// Use models from request if provided, otherwise fetch from API
 					let models: any[] = provider.models || [];
-					const shouldFetch = provider.autoFetchModels !== false && models.length === 0 && provider.apiKey;
+					const shouldFetch = provider.autoFetchModels !== false && models.length === 0 && (!requiresApiKey(apiType) || !!apiKey);
 					if (shouldFetch) {
 						try {
-							models = await this._fetchModelsFromAPI(provider.baseUrl, provider.apiKey);
+							models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey);
 						} catch (err) {
 							// If fetch fails, allow provider to be added without models
 						}
@@ -257,8 +271,8 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					const newProvider = await this._configManager.addProvider({
 						name: provider.name,
 						baseUrl: provider.baseUrl,
-						apiKey: provider.apiKey,
-						apiType: provider.apiType || 'openai-compatible',
+						apiKey,
+						apiType,
 						models: models,
 						enabled: true,
 						autoFetchModels: provider.autoFetchModels !== false,
@@ -292,19 +306,25 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			case 'updateProvider':
 				try {
 					const { id, apiKey, ...updates } = message.data as ProviderConfigWithoutSecrets & { apiKey?: string; models?: any[] };
+					const normalizedApiKey = apiKey?.trim() || '';
 					
 					// Get current provider to merge models
 					const currentProvider = await this._configManager.getProvider(id);
 					const currentModels = currentProvider?.models || [];
+					const finalApiType = updates.apiType || currentProvider?.apiType || 'openai-compatible';
+					const fetchApiKey = normalizedApiKey || currentProvider?.apiKey || '';
+					if (requiresApiKey(finalApiType) && !normalizedApiKey && !currentProvider?.apiKey) {
+						throw new Error('Anthropic provider requires an API key.');
+					}
 					
 					// Use models from request if provided, otherwise fetch from API and merge
 					if (updates.models && updates.models.length > 0) {
 						// User provided models, use them
-					} else if (apiKey && updates.enabled !== false && updates.autoFetchModels !== false) {
+					} else if (updates.enabled !== false && updates.autoFetchModels !== false && (!requiresApiKey(finalApiType) || !!fetchApiKey)) {
 						const baseUrl = updates.baseUrl || currentProvider?.baseUrl || '';
 						if (baseUrl) {
 							try {
-								const models = await this._fetchModelsFromAPI(baseUrl, apiKey, currentModels);
+								const models = await this._fetchModelsFromAPI(baseUrl, fetchApiKey, currentModels);
 								updates.models = models;
 							} catch (err) {
 								// If fetch fails, keep existing models
@@ -315,8 +335,8 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					
 					// Only pass apiKey if it's provided (non-empty), otherwise keep existing key
 					const updateData: any = { ...updates };
-					if (apiKey) {
-						updateData.apiKey = apiKey;
+					if (normalizedApiKey) {
+						updateData.apiKey = normalizedApiKey;
 					}
 					
 					await this._configManager.updateProvider(id, updateData);
@@ -416,11 +436,11 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					if (autoFetchModels) {
 						const providers = await this._configManager.getProviders();
 						const provider = providers.find(p => p.id === id);
-						if (provider && provider.enabled && provider.hasApiKey) {
+						if (provider && provider.enabled) {
 							const apiKey = await this._configManager.getApiKey(id);
-							if (apiKey) {
+							if (!requiresApiKey(provider.apiType) || !!apiKey.trim()) {
 								try {
-									const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey, provider.models);
+									const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey.trim(), provider.models);
 									await this._configManager.updateProvider(id, { models });
 									this._getWebview()?.postMessage({
 										command: 'providerModelsUpdated',
@@ -447,9 +467,9 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					const { id } = message.data as { id: string };
 					const providers = await this._configManager.getProviders();
 					const provider = providers.find(p => p.id === id);
-					if (provider && provider.enabled && provider.hasApiKey) {
+					if (provider && provider.enabled) {
 						const apiKey = await this._configManager.getApiKey(id);
-						if (apiKey) {
+						if (!requiresApiKey(provider.apiType) || !!apiKey.trim()) {
 							// Set loading state
 							this._getWebview()?.postMessage({
 								command: 'providerModelsLoading',
@@ -457,7 +477,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 							});
 							
 							try {
-								const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey, provider.models);
+								const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey.trim(), provider.models);
 								await this._configManager.updateProvider(id, { models });
 								this._getWebview()?.postMessage({
 									command: 'providerModelsUpdated',
@@ -810,12 +830,16 @@ After completing the operations, please reply with the following message in both
 		const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
 		try {
+			const headers: Record<string, string> = {
+				'Content-Type': 'application/json',
+			};
+			const normalizedApiKey = apiKey?.trim() || '';
+			if (normalizedApiKey) {
+				headers['Authorization'] = `Bearer ${normalizedApiKey}`;
+			}
 			const response = await fetch(`${normalizedBaseUrl}/models`, {
 				method: 'GET',
-				headers: {
-					'Authorization': `Bearer ${apiKey}`,
-					'Content-Type': 'application/json',
-				},
+				headers,
 				signal: controller.signal,
 			});
 
@@ -901,17 +925,13 @@ After completing the operations, please reply with the following message in both
 			if (!provider.enabled || provider.autoFetchModels === false) {
 				continue;
 			}
-			if (!provider.hasApiKey) {
-				continue;
-			}
-			
 			const apiKey = await this._configManager.getApiKey(provider.id);
-			if (!apiKey) {
+			if (requiresApiKey(provider.apiType) && !apiKey.trim()) {
 				continue;
 			}
 			
 			try {
-				const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey, provider.models);
+				const models = await this._fetchModelsFromAPI(provider.baseUrl, apiKey.trim(), provider.models);
 				// Save merged models back to storage so Copilot can see them
 				await this._configManager.updateProvider(provider.id, { models });
 				
