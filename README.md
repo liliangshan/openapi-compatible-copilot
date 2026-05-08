@@ -94,6 +94,38 @@ Expert Mode conversations are automatically saved when the expert model complete
 - ✅ Both global and project-level saves apply to Expert Mode
 - ✅ Saves the complete expert context for review and continuity
 
+## 📸 Timeline Snapshot
+
+When Copilot executes `read_file` tool calls, the extension automatically creates timestamped file backups:
+
+| Feature | Description |
+|---------|-------------|
+| **Automatic Backup** | Files are snapshotted before `read_file` tool calls |
+| **Timestamped** | Each snapshot includes date/time for easy comparison |
+| **OpenAI-Compatible** | Supports parameters from `arguments` JSON string or `input` object |
+| **Non-blocking** | Snapshot failures don't interfere with tool execution |
+
+### How It Works
+
+When Copilot reads a file:
+1. The extension intercepts the `read_file` tool call
+2. A timestamped backup is created in the same directory (`.LLSOAI/timeline/`)
+3. Copilot continues with the file read operation
+4. You can compare the current file with the snapshot to see changes
+
+### Snapshot Format
+
+```
+.<project>/.LLSOAI/timeline/<original_filename>_<YYYYMMDDHHMMSS>.bak
+```
+
+### Benefits
+
+- 🛡️ **Safety Net** — Always have a backup before Copilot reads a file
+- 🔍 **Easy Comparison** — Quickly compare current file state with snapshot
+- 📋 **Change Tracking** — Track what Copilot might modify based on file state
+- 🔧 **Debugging** — Understand Copilot's context by reviewing historical snapshots
+
 ## Supported APIs
 
 | API Type | Endpoint | Notes |

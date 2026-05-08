@@ -14,6 +14,7 @@ import {
 	convertV1ResponseEventToOpenAIChunks,
 	type V1ResponseStreamState,
 } from './utils/v1ResponseConverter';
+import { TimelineService, timelineErrorToJson } from './timeline/service';
 
 const EXTENSION_LABEL = 'LLS OAI';
 const DEFAULT_CONTEXT_LENGTH = 128000;
@@ -21,6 +22,10 @@ const DEFAULT_MAX_TOKENS = 16000;
 const ASK_LLSOAI_TOOL_NAME = 'ask_llsoai';
 const EXPERT_TOOL_CALL_PREFIX = 'llsoai';
 const TODO_TOOL_NAME = 'manage_todo_list';
+const TIMELINE_LIST_TOOL_NAME = 'timeline_list_by_file';
+const TIMELINE_RESTORE_TOOL_NAME = 'timeline_restore_snapshot';
+const TIMELINE_READ_LINES_TOOL_NAME = 'timeline_read_snapshot_lines';
+const MAX_TIMELINE_TOOL_ROUNDS = 3;
 
 /**
  * Mask an API key for display, showing first 4 and last 4 characters
@@ -347,7 +352,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 
 	constructor(
 		private readonly _configManager: ConfigManager,
-		statusBarItem: vscode.StatusBarItem
+		statusBarItem: vscode.StatusBarItem,
+		private readonly _timelineService?: TimelineService
 	) {
 		this._statusBarItem = statusBarItem;
 	}
@@ -562,9 +568,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 
 		// Handle tool calling if present
-		const apiTools = expertEnabled
-			? [...(options.tools ?? []), this._buildAskLlsoaiTool()]
-			: options.tools;
+		const builtInTools = [
+			...(this._timelineService ? this._buildTimelineTools() : []),
+			...(expertEnabled ? [this._buildAskLlsoaiTool()] : []),
+		];
+		const apiTools = this._mergeToolsWithBuiltIns(options.tools ?? [], builtInTools);
 		if (apiTools && apiTools.length > 0) {
 			requestBody.tools = apiTools
 				.map((tool: any) => ({
@@ -579,7 +587,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				}));
 		}
 
-		const result = await this._requestModel({
+		const result = await this._requestModelWithTimelineTools({
 			...mainContext,
 			requestBody,
 			requestLabel: 'main',
@@ -592,9 +600,9 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			for (const toolCall of result.toolCalls) {
 				if (toolCall.name === ASK_LLSOAI_TOOL_NAME) {
 					if (expertModel) {
-						await this._startExpertRun(toolCall, expertModel, currentSessionId, requestBody.messages, mainContext, options.tools ?? [], progress, token);
+						await this._startExpertRun(toolCall, expertModel, currentSessionId, requestBody.messages, mainContext, apiTools, progress, token);
 					} else {
-						await this._continueMainAfterUnavailableExpert(toolCall, requestBody.messages, mainContext, options.tools ?? [], progress, token);
+						await this._continueMainAfterUnavailableExpert(toolCall, requestBody.messages, mainContext, apiTools, progress, token);
 					}
 					continue;
 				}
@@ -603,6 +611,34 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					const mergedTodoInput = getMergedTodoInputForConflict(toolCall.input, currentSessionId);
 					finalArgs = mergedTodoInput ?? toolCall.input;
 					saveTodoToolState(finalArgs, forceTodoEnabled, currentSessionId);
+				}
+				// Create snapshot for read_file tool calls (OpenAI-Compatible format: params in arguments JSON string)
+				if (toolCall.name === 'read_file') {
+					let readFileInput = toolCall.input;
+					let filePath = readFileInput?.filePath ?? readFileInput?.path;
+
+					// If not found in input, try parsing from arguments (OpenAI-Compatible JSON string format)
+					if (typeof filePath !== 'string' || !filePath) {
+						if (typeof toolCall.arguments === 'string' && toolCall.arguments.trim()) {
+							try {
+								const parsedArgs = JSON.parse(toolCall.arguments);
+								if (parsedArgs && typeof parsedArgs === 'object') {
+									readFileInput = { ...(readFileInput ?? {}), ...parsedArgs };
+									filePath = readFileInput?.filePath ?? readFileInput?.path;
+								}
+							} catch {
+								// ignore parse error
+							}
+						}
+					}
+
+					if (typeof filePath === 'string' && filePath) {
+						try {
+							await this._timelineService?.checkAndCreateSnapshotByPath(filePath);
+						} catch {
+							// snapshot failure should not block tool call
+						}
+					}
 				}
 				progress.report(new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, finalArgs));
 			}
@@ -659,6 +695,138 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 		
 		return result;
+	}
+
+	private _buildTimelineTools(): any[] {
+		return [
+			{
+				name: TIMELINE_LIST_TOOL_NAME,
+				description: 'List local timeline snapshots for a source file by absolute path or workspace-relative path.',
+				inputSchema: {
+					type: 'object',
+					additionalProperties: false,
+					properties: {
+						filePath: { type: 'string', description: 'Source file path. Absolute path or workspace-relative path.' },
+						includeCommittedCleaned: { type: 'boolean', description: 'Whether to include lastGitCleanup info. Defaults to true.' },
+					},
+					required: ['filePath'],
+				},
+			},
+			{
+				name: TIMELINE_RESTORE_TOOL_NAME,
+				description: 'Restore a local timeline snapshot for a file. Only restores snapshots still present in metadata and refuses tracked clean files.',
+				inputSchema: {
+					type: 'object',
+					additionalProperties: false,
+					properties: {
+						filePath: { type: 'string', description: 'Source file path. Absolute path or workspace-relative path.' },
+						snapshotId: { type: 'string', description: 'Snapshot id returned by timeline_list_by_file.' },
+						expectedSha256: { type: 'string', description: 'Optional expected snapshot sha256.' },
+					},
+					required: ['filePath', 'snapshotId'],
+				},
+			},
+			{
+				name: TIMELINE_READ_LINES_TOOL_NAME,
+				description: 'Read a line range from a local timeline snapshot. Lines are 1-based and at most 200 lines are returned.',
+				inputSchema: {
+					type: 'object',
+					additionalProperties: false,
+					properties: {
+						filePath: { type: 'string', description: 'Source file path. Absolute path or workspace-relative path.' },
+						snapshotId: { type: 'string', description: 'Snapshot id returned by timeline_list_by_file.' },
+						startLine: { type: 'integer', minimum: 1, description: '1-based start line.' },
+						lineCount: { type: 'integer', minimum: 1, maximum: 200, description: 'Number of lines to read, max 200.' },
+					},
+					required: ['filePath', 'snapshotId', 'startLine', 'lineCount'],
+				},
+			},
+		];
+	}
+
+	private _mergeToolsWithBuiltIns(externalTools: readonly any[], builtIns: any[]): any[] {
+		if (builtIns.length === 0) {
+			return [...externalTools];
+		}
+		const builtInNames = new Set(builtIns.map(tool => tool.name));
+		return [
+			...externalTools.filter((tool: any) => !builtInNames.has(tool?.name)),
+			...builtIns,
+		];
+	}
+
+	private _isTimelineTool(name: string): boolean {
+		return name === TIMELINE_LIST_TOOL_NAME || name === TIMELINE_RESTORE_TOOL_NAME || name === TIMELINE_READ_LINES_TOOL_NAME;
+	}
+
+	private async _executeTimelineToolAsJson(name: string, input: any): Promise<string> {
+		if (!this._timelineService) {
+			return JSON.stringify({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'Timeline service is not available.', retryable: false } });
+		}
+		try {
+			if (name === TIMELINE_LIST_TOOL_NAME) {
+				return JSON.stringify(await this._timelineService.listSnapshotsByFile(String(input?.filePath ?? '')));
+			}
+			if (name === TIMELINE_RESTORE_TOOL_NAME) {
+				return JSON.stringify(await this._timelineService.restoreSnapshotById(String(input?.filePath ?? ''), String(input?.snapshotId ?? ''), input?.expectedSha256));
+			}
+			if (name === TIMELINE_READ_LINES_TOOL_NAME) {
+				return JSON.stringify(await this._timelineService.readSnapshotLines(String(input?.filePath ?? ''), String(input?.snapshotId ?? ''), Number(input?.startLine), Number(input?.lineCount)));
+			}
+			return JSON.stringify({ ok: false, error: { code: 'INVALID_ARGUMENT', message: `Unknown timeline tool: ${name}`, retryable: false } });
+		} catch (error) {
+			return timelineErrorToJson(error);
+		}
+	}
+
+	private _toOpenAIToolCall(toolCall: CollectedToolCall): any {
+		return {
+			id: toolCall.id,
+			type: 'function',
+			function: {
+				name: toolCall.name,
+				arguments: toolCall.arguments || JSON.stringify(toolCall.input ?? {}),
+			},
+		};
+	}
+
+	private async _requestModelWithTimelineTools(params: ModelRequestParams): Promise<ModelRequestResult> {
+		let requestBody = params.requestBody;
+		for (let round = 0; round <= MAX_TIMELINE_TOOL_ROUNDS; round++) {
+			const result = await this._requestModel({
+				...params,
+				requestBody,
+				requestLabel: round === 0 ? params.requestLabel : `${params.requestLabel ?? 'main'}_timeline_${round}`,
+			});
+			const timelineCalls = result.toolCalls.filter(call => this._isTimelineTool(call.name));
+			if (timelineCalls.length === 0) {
+				return result;
+			}
+			if (round === MAX_TIMELINE_TOOL_ROUNDS) {
+				return {
+					text: `${result.text}\n${JSON.stringify({ ok: false, error: { code: 'TOO_MANY_INTERNAL_TOOL_ROUNDS', message: 'Timeline tool call loop exceeded the maximum number of rounds.', retryable: false } })}`,
+					toolCalls: result.toolCalls.filter(call => !this._isTimelineTool(call.name)),
+				};
+			}
+
+			const nextMessages = [...(requestBody.messages ?? [])];
+			nextMessages.push({
+				role: 'assistant',
+				content: result.text || null,
+				tool_calls: timelineCalls.map(call => this._toOpenAIToolCall(call)),
+			});
+			for (const call of timelineCalls) {
+				const resultText = await this._executeTimelineToolAsJson(call.name, call.input);
+				params.progress?.report(new vscode.LanguageModelToolResultPart(call.id, [new vscode.LanguageModelTextPart(resultText)]));
+				nextMessages.push({
+					role: 'tool',
+					tool_call_id: call.id,
+					content: resultText,
+				});
+			}
+			requestBody = { ...requestBody, messages: nextMessages };
+		}
+		return { text: '', toolCalls: [] };
 	}
 
 	private async _requestModel(params: ModelRequestParams): Promise<ModelRequestResult> {

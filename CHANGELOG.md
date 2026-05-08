@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.0
+
+### Added
+- **Timeline Snapshot for read_file** — Automatically creates file snapshots before `read_file` tool calls are executed. When Copilot reads a file, the extension captures a timestamped backup, enabling easy comparison with subsequent modifications and providing a safety net for reviewing changes. Supports OpenAI-Compatible format (parameters in `arguments` JSON string) and standard response format.
+
 ## 2.3.0
 
 ### Added
