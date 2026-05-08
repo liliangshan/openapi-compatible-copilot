@@ -615,7 +615,14 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const requestBody: any = {
 			model: modelId,
 			messages: this._withSolutionProviderPrompt(
-				this._withExpertPrompt(this._convertMessages(messages, model, currentSessionId), expertEnabled),
+				this._withExpertPrompt(this._convertMessages(
+					messages,
+					model,
+					currentSessionId,
+					expertEnabled,
+					solutionEnabled,
+					!!solutionModel?.reviewWithExpert && expertEnabled
+				), expertEnabled),
 				solutionEnabled,
 				!!solutionModel?.reviewWithExpert && expertEnabled
 			),
@@ -1579,11 +1586,22 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		};
 	}
 
+	private _buildExpertPrompt(): string {
+		return `Expert mode is enabled. If you cannot confidently solve the task, need independent verification, need deeper investigation, or want another model to perform a tool-assisted subtask, call the tool ${ASK_LLSOAI_TOOL_NAME}. This tool starts an expert model run; it is not limited to pure analysis. The expert model can use the same currently available VS Code tools as you, including file/search/error tools when available. Do not refuse to call ${ASK_LLSOAI_TOOL_NAME} merely because the task may require tool or file access. The expert will NOT receive previous conversation history, your current message list, or the main model context. Therefore, the question you send to ${ASK_LLSOAI_TOOL_NAME} MUST be self-contained: include the user's concrete requirement, relevant file paths, active file/selection when useful, symbol/function names, constraints, errors, attempted changes, expected output, and any other information required for the expert to work independently. Do not pass long prior conversation history to the expert; instead summarize only the task-relevant facts inside question. If you need to preserve non-essential previous conversation context, put it in the optional context field as record-only context. The record-only context is not sent to the expert model. After the expert returns, continue as the main model and produce the final user-facing answer.`;
+	}
+
+	private _buildSolutionProviderPrompt(reviewWithExpertAvailable: boolean): string {
+		const reviewText = reviewWithExpertAvailable
+			? ` If solution expert review is enabled and available, the solution provider will call ${ASK_LLSOAI_TOOL_NAME} internally before returning its final solution.`
+			: '';
+		return `Solution provider is enabled. If the user asks for a design specification solution, design plan, implementation plan, implementation roadmap, architecture proposal, phased migration plan, migration plan, risk analysis, validation strategy, or any other structured solution planning task, call the tool ${ASK_SOLUTION_PROVIDER_TOOL_NAME}. Use ${ASK_SOLUTION_PROVIDER_TOOL_NAME} for planning, design, architecture, roadmap, migration, risk analysis, validation strategy, and solution drafting. Use ${ASK_LLSOAI_TOOL_NAME} for independent investigation, verification, or expert review of difficult issues. The solution provider will NOT receive previous conversation history, so the question must be self-contained and include relevant goals, constraints, files, assumptions, expected output, and acceptance criteria. After the solution provider returns, continue as the main model and produce the final user-facing answer.${reviewText}`;
+	}
+
 	private _withExpertPrompt(messages: any[], enabled: boolean): any[] {
 		if (!enabled) {
 			return messages;
 		}
-		const prompt = `Expert mode is enabled. If you cannot confidently solve the task, need independent verification, need deeper investigation, or want another model to perform a tool-assisted subtask, call the tool ${ASK_LLSOAI_TOOL_NAME}. This tool starts an expert model run; it is not limited to pure analysis. The expert model can use the same currently available VS Code tools as you, including file/search/error tools when available. Do not refuse to call ${ASK_LLSOAI_TOOL_NAME} merely because the task may require tool or file access. The expert will NOT receive previous conversation history, your current message list, or the main model context. Therefore, the question you send to ${ASK_LLSOAI_TOOL_NAME} MUST be self-contained: include the user's concrete requirement, relevant file paths, active file/selection when useful, symbol/function names, constraints, errors, attempted changes, expected output, and any other information required for the expert to work independently. Do not pass long prior conversation history to the expert; instead summarize only the task-relevant facts inside question. If you need to preserve non-essential previous conversation context, put it in the optional context field as record-only context. The record-only context is not sent to the expert model. After the expert returns, continue as the main model and produce the final user-facing answer.`;
+		const prompt = this._buildExpertPrompt();
 		const next = [...messages];
 		const system = next.find(m => m.role === 'system');
 		if (system && typeof system.content === 'string') {
@@ -1598,10 +1616,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		if (!enabled) {
 			return messages;
 		}
-		const reviewText = reviewWithExpertAvailable
-			? ` If solution expert review is enabled and available, the solution provider will call ${ASK_LLSOAI_TOOL_NAME} internally before returning its final solution.`
-			: '';
-		const prompt = `Solution provider is enabled. If the user asks for a design plan, implementation roadmap, architecture proposal, phased migration plan, risk analysis, validation strategy, or you want another model to draft a structured solution, call ${ASK_SOLUTION_PROVIDER_TOOL_NAME}. Use ${ASK_SOLUTION_PROVIDER_TOOL_NAME} for planning, design, architecture, roadmap, migration, and solution drafting. Use ${ASK_LLSOAI_TOOL_NAME} for independent investigation, verification, or expert review of difficult issues. The solution provider will NOT receive previous conversation history, so the question must be self-contained and include relevant goals, constraints, files, assumptions, expected output, and acceptance criteria. After the solution provider returns, continue as the main model and produce the final user-facing answer.${reviewText}`;
+		const prompt = this._buildSolutionProviderPrompt(reviewWithExpertAvailable);
 		const next = [...messages];
 		const system = next.find(m => m.role === 'system');
 		if (system && typeof system.content === 'string') {
@@ -2958,7 +2973,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	/**
 	 * Convert VS Code chat messages to OpenAI format
 	 */
-	private _convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], model: vscode.LanguageModelChatInformation, sessionId: string): Array<any> {
+	private _convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], model: vscode.LanguageModelChatInformation, sessionId: string, expertEnabled = false, solutionEnabled = false, solutionReviewWithExpertAvailable = false): Array<any> {
 		const result: Array<any> = [];
 		const lastSourceMessage = messages[messages.length - 1];
 		const isLastSourceMessageUser = lastSourceMessage?.role === vscode.LanguageModelChatMessageRole.User;
@@ -3074,6 +3089,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const lastMsg = result[result.length - 1];
 			if (lastMsg.role === 'user') {
 				const promptAppendix: string[] = [];
+				if (expertEnabled) {
+					promptAppendix.push(this._buildExpertPrompt());
+				}
+				if (solutionEnabled) {
+					promptAppendix.push(this._buildSolutionProviderPrompt(solutionReviewWithExpertAvailable));
+				}
 				if (hasCurrentTodoTask) {
 					if (isLastSourceMessageUser && !lastUserContainsTodoListTag) {
 						promptAppendix.push(`TODO-LOCK: The user message below lacks <todoList>. It is a queued NEXT request, not a TODO item. Before any other action, call manage_todo_list with the exact active todoList below, finish ALL active unfinished TODOs in order, and update status after each item. Only after ALL active TODOs are completed may you process the user message below. Do not create/merge/rename/reorder/replace TODOs.\n\n${getCurrentTodoTaskContent(sessionId) || ''}`);
