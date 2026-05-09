@@ -114,6 +114,33 @@ export interface WorkspaceSolutionProviderConfig extends SolutionProviderConfig 
 }
 
 /**
+ * Prompt enhancement global settings
+ */
+export interface PromptEnhancementConfig {
+	/** Whether prompt enhancement is enabled */
+	enabled: boolean;
+	/** Whether to automatically submit the optimized prompt after inserting it */
+	autoSend: boolean;
+	/** Provider used by prompt enhancement */
+	providerId: string;
+	/** Model used by prompt enhancement */
+	modelId: string;
+}
+
+export type WorkspacePromptEnhancementEnabledState = 'global' | 'enabled' | 'disabled';
+export type WorkspacePromptEnhancementAutoSendState = 'global' | 'enabled' | 'disabled';
+
+/**
+ * Prompt enhancement workspace settings
+ */
+export interface WorkspacePromptEnhancementConfig extends PromptEnhancementConfig {
+	/** Whether the workspace uses global enabled state, forces enabled, or forces disabled */
+	enabledState: WorkspacePromptEnhancementEnabledState;
+	/** Whether the workspace uses global auto-send state, forces enabled, or forces disabled */
+	autoSendState: WorkspacePromptEnhancementAutoSendState;
+}
+
+/**
  * Message types for Webview communication
  */
 export interface WebviewMessage {

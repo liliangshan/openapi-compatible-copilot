@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { ExpertModeConfig, ProviderConfig, ProviderConfigWithoutSecrets, SolutionProviderConfig, WorkspaceExpertModeConfig, WorkspaceExpertModeEnabledState, WorkspaceSolutionProviderConfig, WorkspaceSolutionProviderEnabledState, WorkspaceSolutionProviderReviewWithExpertState } from './types';
+import { ExpertModeConfig, PromptEnhancementConfig, ProviderConfig, ProviderConfigWithoutSecrets, SolutionProviderConfig, WorkspaceExpertModeConfig, WorkspaceExpertModeEnabledState, WorkspacePromptEnhancementAutoSendState, WorkspacePromptEnhancementConfig, WorkspacePromptEnhancementEnabledState, WorkspaceSolutionProviderConfig, WorkspaceSolutionProviderEnabledState, WorkspaceSolutionProviderReviewWithExpertState } from './types';
 
 /**
  * Generate a unique ID
@@ -25,6 +25,10 @@ export type AppLanguage = 'auto' | 'en' | 'zh-cn' | 'zh-tw' | 'ko' | 'ja' | 'fr'
 export type ResolvedAppLanguage = 'en' | 'zh-cn' | 'zh-tw' | 'ko' | 'ja' | 'fr' | 'de';
 
 const SUPPORTED_APP_LANGUAGES: readonly ResolvedAppLanguage[] = ['en', 'zh-cn', 'zh-tw', 'ko', 'ja', 'fr', 'de'];
+
+function getWorkspaceInspectValue<T>(inspect: { workspaceValue?: T; workspaceFolderValue?: T } | undefined): T | undefined {
+	return inspect?.workspaceFolderValue ?? inspect?.workspaceValue;
+}
 
 /**
  * Get default chat history save path based on platform
@@ -74,6 +78,13 @@ export class ConfigManager {
 	private static readonly SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY = 'solutionProvider.reviewWithExpert';
 	private static readonly WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY = 'solutionProvider.reviewWithExpertState';
 	private static readonly WORKSPACE_SOLUTION_PROVIDER_ENABLED_STATE_CONFIG_KEY = 'solutionProvider.enabledState';
+	private static readonly PROMPT_ENHANCEMENT_CONFIG_KEY = 'openapicopilot.promptEnhancementConfig';
+	private static readonly PROMPT_ENHANCEMENT_ENABLED_CONFIG_KEY = 'promptEnhancement.enabled';
+	private static readonly PROMPT_ENHANCEMENT_AUTO_SEND_CONFIG_KEY = 'promptEnhancement.autoSend';
+	private static readonly PROMPT_ENHANCEMENT_PROVIDER_CONFIG_KEY = 'promptEnhancement.providerId';
+	private static readonly PROMPT_ENHANCEMENT_MODEL_CONFIG_KEY = 'promptEnhancement.modelId';
+	private static readonly WORKSPACE_PROMPT_ENHANCEMENT_ENABLED_STATE_CONFIG_KEY = 'promptEnhancement.enabledState';
+	private static readonly WORKSPACE_PROMPT_ENHANCEMENT_AUTO_SEND_STATE_CONFIG_KEY = 'promptEnhancement.autoSendState';
 	private static readonly GLOBAL_FORCE_TODO_KEY = 'openapicopilot.globalForceTodoEnabled';
 	private static readonly WORKSPACE_FORCE_TODO_KEY = 'openapicopilot.workspaceForceTodoEnabled';
 	private static readonly LANGUAGE_CONFIG_KEY = 'language';
@@ -310,13 +321,13 @@ export class ConfigManager {
 	 */
 	getWorkspaceExpertModeConfig(): WorkspaceExpertModeConfig {
 		const config = vscode.workspace.getConfiguration('openapicopilot');
-		const rawEnabledState = config.inspect<WorkspaceExpertModeEnabledState>(ConfigManager.WORKSPACE_EXPERT_MODE_ENABLED_STATE_CONFIG_KEY)?.workspaceValue;
+		const rawEnabledState = getWorkspaceInspectValue(config.inspect<WorkspaceExpertModeEnabledState>(ConfigManager.WORKSPACE_EXPERT_MODE_ENABLED_STATE_CONFIG_KEY));
 		const enabledState: WorkspaceExpertModeEnabledState = rawEnabledState === 'enabled' || rawEnabledState === 'disabled' ? rawEnabledState : 'global';
 		return {
 			enabled: enabledState === 'enabled',
 			enabledState,
-			providerId: config.inspect<string>(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY)?.workspaceValue ?? '',
-			modelId: config.inspect<string>(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY)?.workspaceValue ?? '',
+			providerId: getWorkspaceInspectValue(config.inspect<string>(ConfigManager.EXPERT_MODE_PROVIDER_CONFIG_KEY)) ?? '',
+			modelId: getWorkspaceInspectValue(config.inspect<string>(ConfigManager.EXPERT_MODE_MODEL_CONFIG_KEY)) ?? '',
 		};
 	}
 
@@ -385,16 +396,16 @@ export class ConfigManager {
 	 */
 	getWorkspaceSolutionProviderConfig(): WorkspaceSolutionProviderConfig {
 		const config = vscode.workspace.getConfiguration('openapicopilot');
-		const rawEnabledState = config.inspect<WorkspaceSolutionProviderEnabledState>(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_ENABLED_STATE_CONFIG_KEY)?.workspaceValue;
+		const rawEnabledState = getWorkspaceInspectValue(config.inspect<WorkspaceSolutionProviderEnabledState>(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_ENABLED_STATE_CONFIG_KEY));
 		const enabledState: WorkspaceSolutionProviderEnabledState = rawEnabledState === 'enabled' || rawEnabledState === 'disabled' ? rawEnabledState : 'global';
 
-		const rawReviewState = config.inspect<WorkspaceSolutionProviderReviewWithExpertState>(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY)?.workspaceValue;
+		const rawReviewState = getWorkspaceInspectValue(config.inspect<WorkspaceSolutionProviderReviewWithExpertState>(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY));
 		const legacyReviewInspect = config.inspect<boolean>(ConfigManager.SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY);
 		let reviewWithExpertState: WorkspaceSolutionProviderReviewWithExpertState;
 		if (rawReviewState === 'enabled' || rawReviewState === 'disabled' || rawReviewState === 'global') {
 			reviewWithExpertState = rawReviewState;
-		} else if (legacyReviewInspect?.workspaceValue !== undefined) {
-			reviewWithExpertState = legacyReviewInspect.workspaceValue ? 'enabled' : 'disabled';
+		} else if (getWorkspaceInspectValue(legacyReviewInspect) !== undefined) {
+			reviewWithExpertState = getWorkspaceInspectValue(legacyReviewInspect) ? 'enabled' : 'disabled';
 		} else {
 			reviewWithExpertState = 'global';
 		}
@@ -402,8 +413,8 @@ export class ConfigManager {
 		return {
 			enabled: enabledState === 'enabled',
 			enabledState,
-			providerId: config.inspect<string>(ConfigManager.SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY)?.workspaceValue ?? '',
-			modelId: config.inspect<string>(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY)?.workspaceValue ?? '',
+			providerId: getWorkspaceInspectValue(config.inspect<string>(ConfigManager.SOLUTION_PROVIDER_PROVIDER_CONFIG_KEY)) ?? '',
+			modelId: getWorkspaceInspectValue(config.inspect<string>(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY)) ?? '',
 			reviewWithExpert: reviewWithExpertState === 'enabled',
 			reviewWithExpertState,
 		};
@@ -453,6 +464,90 @@ export class ConfigManager {
 		await config.update(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY, updated.modelId, vscode.ConfigurationTarget.Workspace);
 		await config.update(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY, reviewWithExpertState, vscode.ConfigurationTarget.Workspace);
 		return { ...updated, enabled: enabledState === 'enabled', reviewWithExpert: reviewWithExpertState === 'enabled', enabledState, reviewWithExpertState };
+	}
+
+	/**
+	 * Get prompt enhancement global settings
+	 */
+	getPromptEnhancementConfig(): PromptEnhancementConfig {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		const stored = this.context.globalState.get<PromptEnhancementConfig>(ConfigManager.PROMPT_ENHANCEMENT_CONFIG_KEY);
+		const enabledInspect = config.inspect<boolean>(ConfigManager.PROMPT_ENHANCEMENT_ENABLED_CONFIG_KEY);
+		const autoSendInspect = config.inspect<boolean>(ConfigManager.PROMPT_ENHANCEMENT_AUTO_SEND_CONFIG_KEY);
+		const providerInspect = config.inspect<string>(ConfigManager.PROMPT_ENHANCEMENT_PROVIDER_CONFIG_KEY);
+		const modelInspect = config.inspect<string>(ConfigManager.PROMPT_ENHANCEMENT_MODEL_CONFIG_KEY);
+		return {
+			enabled: enabledInspect?.globalValue ?? stored?.enabled ?? false,
+			autoSend: autoSendInspect?.globalValue ?? stored?.autoSend ?? false,
+			providerId: providerInspect?.globalValue ?? stored?.providerId ?? '',
+			modelId: modelInspect?.globalValue ?? stored?.modelId ?? '',
+		};
+	}
+
+	/**
+	 * Get prompt enhancement workspace settings. Empty provider/model means using global settings.
+	 */
+	getWorkspacePromptEnhancementConfig(): WorkspacePromptEnhancementConfig {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		const rawEnabledState = getWorkspaceInspectValue(config.inspect<WorkspacePromptEnhancementEnabledState>(ConfigManager.WORKSPACE_PROMPT_ENHANCEMENT_ENABLED_STATE_CONFIG_KEY));
+		const enabledState: WorkspacePromptEnhancementEnabledState = rawEnabledState === 'enabled' || rawEnabledState === 'disabled' ? rawEnabledState : 'global';
+		const rawAutoSendState = getWorkspaceInspectValue(config.inspect<WorkspacePromptEnhancementAutoSendState>(ConfigManager.WORKSPACE_PROMPT_ENHANCEMENT_AUTO_SEND_STATE_CONFIG_KEY));
+		const autoSendState: WorkspacePromptEnhancementAutoSendState = rawAutoSendState === 'enabled' || rawAutoSendState === 'disabled' ? rawAutoSendState : 'global';
+
+		return {
+			enabled: enabledState === 'enabled',
+			enabledState,
+			autoSend: autoSendState === 'enabled',
+			autoSendState,
+			providerId: getWorkspaceInspectValue(config.inspect<string>(ConfigManager.PROMPT_ENHANCEMENT_PROVIDER_CONFIG_KEY)) ?? '',
+			modelId: getWorkspaceInspectValue(config.inspect<string>(ConfigManager.PROMPT_ENHANCEMENT_MODEL_CONFIG_KEY)) ?? '',
+		};
+	}
+
+	/**
+	 * Get the effective prompt enhancement settings. Workspace provider/model overrides global when set.
+	 */
+	getEffectivePromptEnhancementConfig(): PromptEnhancementConfig {
+		const globalConfig = this.getPromptEnhancementConfig();
+		const workspaceConfig = this.getWorkspacePromptEnhancementConfig();
+		const hasWorkspacePromptEnhancementModel = !!workspaceConfig.providerId && !!workspaceConfig.modelId;
+		const baseConfig = hasWorkspacePromptEnhancementModel ? workspaceConfig : globalConfig;
+		return {
+			...baseConfig,
+			enabled: workspaceConfig.enabledState === 'global' ? globalConfig.enabled : workspaceConfig.enabledState === 'enabled',
+			autoSend: workspaceConfig.autoSendState === 'global' ? globalConfig.autoSend : workspaceConfig.autoSendState === 'enabled',
+		};
+	}
+
+	/**
+	 * Update prompt enhancement global settings
+	 */
+	async updatePromptEnhancementConfig(settings: Partial<PromptEnhancementConfig>): Promise<PromptEnhancementConfig> {
+		const current = this.getPromptEnhancementConfig();
+		const updated = { ...current, ...settings };
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update(ConfigManager.PROMPT_ENHANCEMENT_ENABLED_CONFIG_KEY, updated.enabled, vscode.ConfigurationTarget.Global);
+		await config.update(ConfigManager.PROMPT_ENHANCEMENT_AUTO_SEND_CONFIG_KEY, updated.autoSend, vscode.ConfigurationTarget.Global);
+		await config.update(ConfigManager.PROMPT_ENHANCEMENT_PROVIDER_CONFIG_KEY, updated.providerId, vscode.ConfigurationTarget.Global);
+		await config.update(ConfigManager.PROMPT_ENHANCEMENT_MODEL_CONFIG_KEY, updated.modelId, vscode.ConfigurationTarget.Global);
+		await this.context.globalState.update(ConfigManager.PROMPT_ENHANCEMENT_CONFIG_KEY, updated);
+		return updated;
+	}
+
+	/**
+	 * Update prompt enhancement workspace settings
+	 */
+	async updateWorkspacePromptEnhancementConfig(settings: Partial<WorkspacePromptEnhancementConfig>): Promise<WorkspacePromptEnhancementConfig> {
+		const current = this.getWorkspacePromptEnhancementConfig();
+		const updated = { ...current, ...settings };
+		const enabledState: WorkspacePromptEnhancementEnabledState = updated.enabledState === 'enabled' || updated.enabledState === 'disabled' ? updated.enabledState : 'global';
+		const autoSendState: WorkspacePromptEnhancementAutoSendState = updated.autoSendState === 'enabled' || updated.autoSendState === 'disabled' ? updated.autoSendState : 'global';
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update(ConfigManager.WORKSPACE_PROMPT_ENHANCEMENT_ENABLED_STATE_CONFIG_KEY, enabledState, vscode.ConfigurationTarget.Workspace);
+		await config.update(ConfigManager.WORKSPACE_PROMPT_ENHANCEMENT_AUTO_SEND_STATE_CONFIG_KEY, autoSendState, vscode.ConfigurationTarget.Workspace);
+		await config.update(ConfigManager.PROMPT_ENHANCEMENT_PROVIDER_CONFIG_KEY, updated.providerId, vscode.ConfigurationTarget.Workspace);
+		await config.update(ConfigManager.PROMPT_ENHANCEMENT_MODEL_CONFIG_KEY, updated.modelId, vscode.ConfigurationTarget.Workspace);
+		return { ...updated, enabled: enabledState === 'enabled', enabledState, autoSend: autoSendState === 'enabled', autoSendState };
 	}
 
 	/**

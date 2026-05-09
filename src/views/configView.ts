@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConfigManager } from '../configManager';
 import { WebviewMessage, ProviderConfigWithoutSecrets } from '../types';
+import { optimizePrompt } from '../promptEnhancementStatusBar';
 
 function getExpertSelectableProviders(providers: any[]): any[] {
 	return (providers || [])
@@ -743,6 +744,27 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				}
 				break;
 
+			case 'optimizeSystemPrompt':
+				try {
+					const { target, prompt, providerId, modelId } = message.data as { target: string; prompt: string; providerId?: string; modelId?: string };
+					const language = this._configManager.getResolvedLanguage();
+					const optimizedPrompt = await optimizePrompt(this._configManager, prompt || '', language, { providerId, modelId });
+					this._getWebview()?.postMessage({
+						command: 'systemPromptOptimized',
+						data: { target, prompt: optimizedPrompt },
+						success: true
+					});
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to optimize system prompt: ${errorMessage}`);
+					this._getWebview()?.postMessage({
+						command: 'systemPromptOptimized',
+						success: false,
+						error: errorMessage
+					});
+				}
+				break;
+
 			case 'exportRecords':
 				try {
 					// Get VS Code workspace storage path based on platform
@@ -1278,11 +1300,17 @@ After completing the operations, please reply with the following message in both
 						<div class="form-group">
 						<label for="globalSystemPromptTextarea" data-i18n="globalSystemPrompt">Global System Prompt</label>
 						<textarea id="globalSystemPromptTextarea" rows="6" placeholder="Enter global system prompt here..." data-i18n-placeholder="globalSystemPromptPlaceholder"></textarea>
+							<div class="form-actions inline-actions">
+								<button type="button" id="optimizeGlobalSystemPromptBtn" class="secondary-btn" data-i18n="optimizePrompt">Optimize</button>
+							</div>
 						<div class="help-text" data-i18n="globalSystemPromptHelp">Applied to all workspaces. Stored in global settings.</div>
 					</div>
 					<div class="form-group">
 						<label for="workspaceSystemPromptTextarea" data-i18n="projectWorkspaceSystemPrompt">Project (Workspace) System Prompt</label>
 						<textarea id="workspaceSystemPromptTextarea" rows="6" placeholder="Enter project-specific system prompt here..." data-i18n-placeholder="projectSystemPromptPlaceholder"></textarea>
+							<div class="form-actions inline-actions">
+								<button type="button" id="optimizeWorkspaceSystemPromptBtn" class="secondary-btn" data-i18n="optimizePrompt">Optimize</button>
+							</div>
 						<div class="help-text" data-i18n="projectSystemPromptHelp">Applied only to current workspace. Stored in workspace settings.</div>
 						</div>
 						<div class="form-actions">
@@ -1305,6 +1333,9 @@ After completing the operations, please reply with the following message in both
 							<h3 data-i18n="globalSystemPrompt">Global System Prompt</h3>
 							<div class="form-group">
 								<textarea id="modalGlobalSystemPrompt" rows="6" placeholder="Enter global system prompt here..." data-i18n-placeholder="globalSystemPromptPlaceholder"></textarea>
+								<div class="form-actions inline-actions">
+									<button type="button" id="modalOptimizeGlobalSystemPromptBtn" class="secondary-btn" data-i18n="optimizePrompt">Optimize</button>
+								</div>
 								<div class="help-text" data-i18n="globalSystemPromptHelp">Applied to all workspaces. Stored in global settings.</div>
 							</div>
 						</div>
@@ -1426,6 +1457,9 @@ After completing the operations, please reply with the following message in both
 							</div>
 							<div class="form-group">
 								<textarea id="modalProjectSystemPrompt" rows="8" placeholder="Enter project-specific system prompt here..." data-i18n-placeholder="projectSystemPromptPlaceholder"></textarea>
+								<div class="form-actions inline-actions">
+									<button type="button" id="modalOptimizeProjectSystemPromptBtn" class="secondary-btn" data-i18n="optimizePrompt">Optimize</button>
+								</div>
 								<div class="help-text" data-i18n="projectSystemPromptHelp">Applied only to current workspace. Stored in workspace settings.</div>
 							</div>
 						</div>
@@ -1582,6 +1616,9 @@ export class ConfigViewPanel {
 		const solutionProviderSettings = this._configManager.getSolutionProviderConfig();
 		const projectSolutionProviderSettings = this._configManager.getWorkspaceSolutionProviderConfig();
 		const effectiveSolutionProviderSettings = this._configManager.getEffectiveSolutionProviderConfig();
+		const promptEnhancementSettings = this._configManager.getPromptEnhancementConfig();
+		const projectPromptEnhancementSettings = this._configManager.getWorkspacePromptEnhancementConfig();
+		const effectivePromptEnhancementSettings = this._configManager.getEffectivePromptEnhancementConfig();
 		const providers = await this._configManager.getProviders();
 		const globalSystemPrompt = this._configManager.getGlobalSystemPrompt() || '';
 		const projectSystemPrompt = this._configManager.getWorkspaceSystemPrompt() || '';
@@ -1600,6 +1637,9 @@ export class ConfigViewPanel {
 			solutionProviderSettings,
 			projectSolutionProviderSettings,
 			effectiveSolutionProviderSettings,
+			promptEnhancementSettings,
+			projectPromptEnhancementSettings,
+			effectivePromptEnhancementSettings,
 			providers,
 			expertProviders,
 			globalSystemPrompt,
@@ -1639,17 +1679,64 @@ export class ConfigViewPanel {
 		const panelProvidersJson = JSON.stringify(expertProviders).replace(/</g, '\\u003c');
 		const panelExpertModeSettingsJson = JSON.stringify(settings.expertModeSettings || { enabled: false, providerId: '', modelId: '' }).replace(/</g, '\\u003c');
 		const panelSolutionProviderSettingsJson = JSON.stringify(settings.solutionProviderSettings || { enabled: false, providerId: '', modelId: '', reviewWithExpert: false }).replace(/</g, '\\u003c');
+		const promptEnhancementSettings = settings.promptEnhancementSettings || { enabled: false, autoSend: false, providerId: '', modelId: '' };
+		const panelPromptEnhancementSettingsJson = JSON.stringify(promptEnhancementSettings).replace(/</g, '\\u003c');
+		const selectedPromptEnhancementProviderId = promptEnhancementSettings.providerId || '';
+		const selectedPromptEnhancementProvider = selectedPromptEnhancementProviderId
+			? expertProviders.find((provider: any) => provider.id === selectedPromptEnhancementProviderId)
+			: undefined;
+		const selectedPromptEnhancementModelId = promptEnhancementSettings.modelId || '';
+		const promptEnhancementProviderOptions = [
+			`<option value="" data-i18n="promptEnhancementSelectProvider">Select provider</option>`,
+			...expertProviders.map((provider: any) => `<option value="${this._escapeHtml(provider.id)}" ${provider.id === selectedPromptEnhancementProviderId ? 'selected' : ''}>${this._escapeHtml(provider.name)}</option>`)
+		].join('');
+		const promptEnhancementModelOptions = [
+			`<option value="" data-i18n="promptEnhancementSelectModel">Select model</option>`,
+			...((selectedPromptEnhancementProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedPromptEnhancementModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
+		].join('');
 
 		return `
 			<div class="settings-panel-header">
 				<h1 data-i18n="globalSettings">Global Settings</h1>
 			</div>
 
+			<!-- Prompt Enhancement Section -->
+			<section class="config-section">
+				<h2 data-i18n="promptEnhancement">Prompt Enhancement</h2>
+				<div class="form-group">
+				<label class="checkbox-label">
+					<input type="checkbox" id="panelPromptEnhancementEnabled" ${promptEnhancementSettings.enabled ? 'checked' : ''} />
+					<span data-i18n="enablePromptEnhancement">Enable Prompt Enhancement</span>
+				</label>
+				<div class="help-text" data-i18n="promptEnhancementHelp">Automatically optimize prompts with a model before requests.</div>
+				</div>
+				<div class="form-group">
+				<label class="checkbox-label">
+					<input type="checkbox" id="panelPromptEnhancementAutoSend" ${promptEnhancementSettings.autoSend ? 'checked' : ''} />
+					<span data-i18n="promptEnhancementAutoSend">Automatically submit optimized prompt</span>
+				</label>
+				<div class="help-text" data-i18n="promptEnhancementAutoSendHelp">When enabled, the optimized prompt will be inserted and submitted automatically.</div>
+				</div>
+				<div class="form-row">
+				<div class="form-group">
+					<label for="panelPromptEnhancementProvider" data-i18n="promptEnhancementProvider">Prompt Enhancement Provider</label>
+					<select id="panelPromptEnhancementProvider">${promptEnhancementProviderOptions}</select>
+				</div>
+				<div class="form-group">
+					<label for="panelPromptEnhancementModel" data-i18n="promptEnhancementModel">Prompt Enhancement Model</label>
+					<select id="panelPromptEnhancementModel">${promptEnhancementModelOptions}</select>
+				</div>
+				</div>
+			</section>
+
 			<!-- Global System Prompt Section -->
 			<section class="config-section">
 				<h2 data-i18n="globalSystemPrompt">Global System Prompt</h2>
 				<div class="form-group">
 					<textarea id="panelGlobalSystemPrompt" rows="6" placeholder="Enter global system prompt here..." data-i18n-placeholder="globalSystemPromptPlaceholder">${settings.globalSystemPrompt || ''}</textarea>
+					<div class="form-actions inline-actions">
+						<button type="button" id="panelOptimizeGlobalSystemPromptBtn" class="secondary-btn" data-i18n="optimizePrompt">Optimize</button>
+					</div>
 					<div class="help-text" data-i18n="globalSystemPromptHelp">Applied to all workspaces. Stored in global settings.</div>
 				</div>
 			</section>
@@ -1759,6 +1846,7 @@ export class ConfigViewPanel {
 				window.panelProviders = ${panelProvidersJson};
 				window.panelExpertModeSettings = ${panelExpertModeSettingsJson};
 				window.panelSolutionProviderSettings = ${panelSolutionProviderSettingsJson};
+				window.panelPromptEnhancementSettings = ${panelPromptEnhancementSettingsJson};
 			</script>
 		`;
 	}
@@ -1779,8 +1867,12 @@ export class ConfigViewPanel {
 		const effectiveExpertSettings = settings.effectiveExpertModeSettings || settings.expertModeSettings || { enabled: false, providerId: '', modelId: '' };
 		const projectSolutionSettings = settings.projectSolutionProviderSettings || { enabled: false, enabledState: 'global', providerId: '', modelId: '', reviewWithExpert: false, reviewWithExpertState: 'global' };
 		const effectiveSolutionSettings = settings.effectiveSolutionProviderSettings || settings.solutionProviderSettings || { enabled: false, providerId: '', modelId: '', reviewWithExpert: false };
+		const projectPromptEnhancementSettings = settings.projectPromptEnhancementSettings || { enabled: false, enabledState: 'global', autoSend: false, autoSendState: 'global', providerId: '', modelId: '' };
+		const effectivePromptEnhancementSettings = settings.effectivePromptEnhancementSettings || settings.promptEnhancementSettings || { enabled: false, autoSend: false, providerId: '', modelId: '' };
 		const enabledState = projectExpertSettings.enabledState === 'enabled' || projectExpertSettings.enabledState === 'disabled' ? projectExpertSettings.enabledState : 'global';
 		const solutionEnabledState = projectSolutionSettings.enabledState === 'enabled' || projectSolutionSettings.enabledState === 'disabled' ? projectSolutionSettings.enabledState : 'global';
+		const promptEnhancementEnabledState = projectPromptEnhancementSettings.enabledState === 'enabled' || projectPromptEnhancementSettings.enabledState === 'disabled' ? projectPromptEnhancementSettings.enabledState : 'global';
+		const promptEnhancementAutoSendState = projectPromptEnhancementSettings.autoSendState === 'enabled' || projectPromptEnhancementSettings.autoSendState === 'disabled' ? projectPromptEnhancementSettings.autoSendState : 'global';
 		const solutionReviewWithExpertState = projectSolutionSettings.reviewWithExpertState === 'enabled' || projectSolutionSettings.reviewWithExpertState === 'disabled' ? projectSolutionSettings.reviewWithExpertState : 'global';
 		const solutionEffectiveReviewKey = effectiveSolutionSettings.reviewWithExpert ? 'enabled' : 'disabled';
 		const selectedExpertProviderId = projectExpertSettings.providerId || '';
@@ -1814,11 +1906,83 @@ export class ConfigViewPanel {
 			...((selectedSolutionProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedSolutionModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
 		].join('');
 		const panelSolutionProviderSettingsJson = JSON.stringify(projectSolutionSettings).replace(/</g, '\\u003c');
+		const selectedPromptEnhancementProviderId = projectPromptEnhancementSettings.providerId || '';
+		const selectedPromptEnhancementProvider = expertProviders.find((provider: any) => provider.id === selectedPromptEnhancementProviderId);
+		const selectedPromptEnhancementModelId = projectPromptEnhancementSettings.modelId || '';
+		const effectivePromptEnhancementProviderLabel = this._escapeHtml(effectivePromptEnhancementSettings.providerId || 'not set');
+		const effectivePromptEnhancementModelLabel = this._escapeHtml(effectivePromptEnhancementSettings.modelId || 'not set');
+		const promptEnhancementEffectiveEnabledKey = effectivePromptEnhancementSettings.enabled ? 'enabled' : 'disabled';
+		const promptEnhancementEffectiveAutoSendKey = effectivePromptEnhancementSettings.autoSend ? 'enabled' : 'disabled';
+		const promptEnhancementProviderOptions = [
+			`<option value="" data-i18n-template="promptEnhancementUseGlobalProvider" data-i18n-value-value="${effectivePromptEnhancementProviderLabel}">Use global prompt enhancement provider (${effectivePromptEnhancementProviderLabel})</option>`,
+			...expertProviders.map((provider: any) => `<option value="${this._escapeHtml(provider.id)}" ${provider.id === selectedPromptEnhancementProviderId ? 'selected' : ''}>${this._escapeHtml(provider.name)}</option>`)
+		].join('');
+		const promptEnhancementModelOptions = [
+			`<option value="" data-i18n-template="promptEnhancementUseGlobalModel" data-i18n-value-value="${effectivePromptEnhancementModelLabel}">Use global prompt enhancement model (${effectivePromptEnhancementModelLabel})</option>`,
+			...((selectedPromptEnhancementProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedPromptEnhancementModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
+		].join('');
+		const panelPromptEnhancementSettingsJson = JSON.stringify(projectPromptEnhancementSettings).replace(/</g, '\\u003c');
 
 		return `
 			<div class="settings-panel-header">
 				<h1 data-i18n="projectSettings">Project Settings</h1>
 			</div>
+
+			<!-- Project Prompt Enhancement Section -->
+			<section class="config-section expert-settings-card">
+				<div class="expert-settings-header">
+					<div>
+						<h2 data-i18n="promptEnhancement">Prompt Enhancement</h2>
+						<p data-i18n="promptEnhancementProjectDescription">Configure how this project uses the prompt enhancement model.</p>
+					</div>
+					<span class="expert-status-pill ${effectivePromptEnhancementSettings.enabled ? 'enabled' : 'disabled'}" data-i18n-template="promptEnhancementGlobalStatus" data-i18n-key-state="${promptEnhancementEffectiveEnabledKey}">Global ${effectivePromptEnhancementSettings.enabled ? 'Enabled' : 'Disabled'}</span>
+				</div>
+				<div class="expert-state-options">
+					<label class="expert-state-option ${promptEnhancementEnabledState === 'global' ? 'selected' : ''}">
+						<input type="radio" name="panelPromptEnhancementEnabledState" value="global" ${promptEnhancementEnabledState === 'global' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="promptEnhancementUseGlobal">Use global</span>
+						<span class="expert-state-desc" data-i18n-template="promptEnhancementFollowGlobalState" data-i18n-key-state="${promptEnhancementEffectiveEnabledKey}">Follow global state: ${effectivePromptEnhancementSettings.enabled ? 'enabled' : 'disabled'}</span>
+					</label>
+					<label class="expert-state-option ${promptEnhancementEnabledState === 'enabled' ? 'selected' : ''}">
+						<input type="radio" name="panelPromptEnhancementEnabledState" value="enabled" ${promptEnhancementEnabledState === 'enabled' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="enabled">Enabled</span>
+						<span class="expert-state-desc" data-i18n="promptEnhancementForceEnabledDesc">Force prompt enhancement on for this project.</span>
+					</label>
+					<label class="expert-state-option ${promptEnhancementEnabledState === 'disabled' ? 'selected' : ''}">
+						<input type="radio" name="panelPromptEnhancementEnabledState" value="disabled" ${promptEnhancementEnabledState === 'disabled' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="disabled">Disabled</span>
+						<span class="expert-state-desc" data-i18n="promptEnhancementForceDisabledDesc">Force prompt enhancement off for this project.</span>
+					</label>
+				</div>
+				<div class="expert-model-grid">
+					<div class="form-group">
+						<label for="panelPromptEnhancementProvider" data-i18n="promptEnhancementProvider">Prompt Enhancement Provider</label>
+						<select id="panelPromptEnhancementProvider" data-placeholder-key="promptEnhancementUseGlobalProvider" data-placeholder-value="${effectivePromptEnhancementProviderLabel}">${promptEnhancementProviderOptions}</select>
+					</div>
+					<div class="form-group">
+						<label for="panelPromptEnhancementModel" data-i18n="promptEnhancementModel">Prompt Enhancement Model</label>
+						<select id="panelPromptEnhancementModel" data-placeholder-key="promptEnhancementUseGlobalModel" data-placeholder-value="${effectivePromptEnhancementModelLabel}">${promptEnhancementModelOptions}</select>
+					</div>
+				</div>
+				<div class="help-text" data-i18n="promptEnhancementModelOverrideHelp">Select both provider and model to override the global prompt enhancement model. Leave either empty to keep using the global prompt enhancement model.</div>
+				<div class="expert-review-options">
+					<label class="expert-state-option ${promptEnhancementAutoSendState === 'global' ? 'selected' : ''}">
+						<input type="radio" name="panelPromptEnhancementAutoSendState" value="global" ${promptEnhancementAutoSendState === 'global' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="promptEnhancementAutoSendUseGlobal">Use global</span>
+						<span class="expert-state-desc" data-i18n-template="promptEnhancementAutoSendFollowGlobalState" data-i18n-key-state="${promptEnhancementEffectiveAutoSendKey}">Follow global auto-submit: ${effectivePromptEnhancementSettings.autoSend ? 'enabled' : 'disabled'}</span>
+					</label>
+					<label class="expert-state-option ${promptEnhancementAutoSendState === 'enabled' ? 'selected' : ''}">
+						<input type="radio" name="panelPromptEnhancementAutoSendState" value="enabled" ${promptEnhancementAutoSendState === 'enabled' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="enabled">Enabled</span>
+						<span class="expert-state-desc" data-i18n="promptEnhancementAutoSendForceEnabledDesc">Force auto-submit optimized prompts on for this project.</span>
+					</label>
+					<label class="expert-state-option ${promptEnhancementAutoSendState === 'disabled' ? 'selected' : ''}">
+						<input type="radio" name="panelPromptEnhancementAutoSendState" value="disabled" ${promptEnhancementAutoSendState === 'disabled' ? 'checked' : ''} />
+						<span class="expert-state-title" data-i18n="disabled">Disabled</span>
+						<span class="expert-state-desc" data-i18n="promptEnhancementAutoSendForceDisabledDesc">Force auto-submit optimized prompts off for this project.</span>
+					</label>
+				</div>
+			</section>
 
 			<!-- Project System Prompt Section -->
 			<section class="config-section">
@@ -1832,6 +1996,9 @@ export class ConfigViewPanel {
 				</div>
 				<div class="form-group">
 					<textarea id="panelProjectSystemPrompt" rows="8" placeholder="Enter project-specific system prompt here..." data-i18n-placeholder="projectSystemPromptPlaceholder">${settings.projectSystemPrompt || ''}</textarea>
+					<div class="form-actions inline-actions">
+						<button type="button" id="panelOptimizeProjectSystemPromptBtn" class="secondary-btn" data-i18n="optimizePrompt">Optimize</button>
+					</div>
 					<div class="help-text" data-i18n="projectSystemPromptHelp">Applied only to current workspace. Stored in workspace settings.</div>
 				</div>
 			</section>
@@ -1852,6 +2019,7 @@ export class ConfigViewPanel {
 					<div class="help-text" data-i18n="chatHistorySavePathHelp">Directory to save chat history. Defaults to project's .LLSOAI folder.</div>
 				</div>
 			</section>
+
 
 			<!-- Project Expert Mode Section -->
 			<section class="config-section expert-settings-card">
@@ -1959,6 +2127,7 @@ export class ConfigViewPanel {
 				window.panelProviders = ${panelProvidersJson};
 				window.panelExpertModeSettings = ${panelExpertModeSettingsJson};
 				window.panelSolutionProviderSettings = ${panelSolutionProviderSettingsJson};
+				window.panelPromptEnhancementSettings = ${panelPromptEnhancementSettingsJson};
 			</script>
 		`;
 	}
@@ -2067,6 +2236,28 @@ export class ConfigViewPanel {
 				});
 				break;
 
+			case 'optimizeSystemPrompt': {
+				const { target, prompt, providerId, modelId } = data as { target: string; prompt: string; providerId?: string; modelId?: string };
+				try {
+					const language = this._configManager.getResolvedLanguage();
+					const optimizedPrompt = await optimizePrompt(this._configManager, prompt || '', language, { providerId, modelId });
+					this._currentPanel?.webview.postMessage({
+						command: 'systemPromptOptimized',
+						data: { target, prompt: optimizedPrompt },
+						success: true
+					});
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to optimize system prompt: ${errorMessage}`);
+					this._currentPanel?.webview.postMessage({
+						command: 'systemPromptOptimized',
+						success: false,
+						error: errorMessage
+					});
+				}
+				break;
+			}
+
 			case 'saveGlobalSettings':
 				await this._configManager.updateGlobalSystemPrompt(data.globalSystemPrompt);
 				await this._configManager.updateChatHistorySettings({
@@ -2083,6 +2274,12 @@ export class ConfigViewPanel {
 					providerId: data.solutionProviderProviderId || '',
 					modelId: data.solutionProviderModelId || '',
 					reviewWithExpert: !!data.solutionProviderReviewWithExpert,
+				});
+				await this._configManager.updatePromptEnhancementConfig({
+					enabled: !!data.promptEnhancementEnabled,
+					autoSend: !!data.promptEnhancementAutoSend,
+					providerId: data.promptEnhancementProviderId || '',
+					modelId: data.promptEnhancementModelId || '',
 				});
 				await this._configManager.updateGlobalForceTodoEnabled(!!data.forceTodoEnabled);
 				this._currentPanel?.dispose();
@@ -2106,6 +2303,12 @@ export class ConfigViewPanel {
 					providerId: data.solutionProviderProviderId || '',
 					modelId: data.solutionProviderModelId || '',
 					reviewWithExpertState: data.solutionProviderReviewWithExpertState || 'global',
+				});
+				await this._configManager.updateWorkspacePromptEnhancementConfig({
+					enabledState: data.promptEnhancementEnabledState || 'global',
+					autoSendState: data.promptEnhancementAutoSendState || 'global',
+					providerId: data.promptEnhancementProviderId || '',
+					modelId: data.promptEnhancementModelId || '',
 				});
 				this._currentPanel?.dispose();
 				vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'projectSettingsSaved'));

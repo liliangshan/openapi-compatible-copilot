@@ -5,7 +5,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.5.4",
+	"version": "2.6.0",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -187,6 +187,52 @@
 					"default": "global",
 					"description": "Workspace solution provider expert review state. Use global, force enabled, or force disabled for this workspace.",
 					"scope": "resource"
+				},
+				"openapicopilot.promptEnhancement.enabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable prompt enhancement. When enabled, prompts can be automatically optimized by a selected model before requests.",
+					"scope": "application"
+				},
+				"openapicopilot.promptEnhancement.autoSend": {
+					"type": "boolean",
+					"default": false,
+					"description": "Automatically submit the optimized prompt after inserting it into chat input.",
+					"scope": "application"
+				},
+				"openapicopilot.promptEnhancement.enabledState": {
+					"type": "string",
+					"enum": [
+						"global",
+						"enabled",
+						"disabled"
+					],
+					"default": "global",
+					"description": "Workspace prompt enhancement enabled state. Use global, force enabled, or force disabled for this workspace.",
+					"scope": "resource"
+				},
+				"openapicopilot.promptEnhancement.autoSendState": {
+					"type": "string",
+					"enum": [
+						"global",
+						"enabled",
+						"disabled"
+					],
+					"default": "global",
+					"description": "Workspace prompt enhancement auto-send state. Use global, force enabled, or force disabled for this workspace.",
+					"scope": "resource"
+				},
+				"openapicopilot.promptEnhancement.providerId": {
+					"type": "string",
+					"default": "",
+					"description": "Provider ID used by prompt enhancement.",
+					"scope": "machine-overridable"
+				},
+				"openapicopilot.promptEnhancement.modelId": {
+					"type": "string",
+					"default": "",
+					"description": "Model ID used by prompt enhancement.",
+					"scope": "machine-overridable"
 				}
 			}
 		}

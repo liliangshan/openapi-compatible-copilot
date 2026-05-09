@@ -3,6 +3,7 @@ import { ConfigManager } from './configManager';
 import { OpenAPIChatModelProvider } from './provider';
 import { ConfigViewProvider, ConfigViewPanel } from './views/configView';
 import { initStatusBar } from './statusBar';
+import { initPromptEnhancementStatusBar } from './promptEnhancementStatusBar';
 import { TimelineService } from './timeline/service';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -13,6 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Initialize config manager
 	const configManager = new ConfigManager(context, context.secrets);
+	initPromptEnhancementStatusBar(context, configManager);
 
 	// Initialize local timeline service for AI agent recovery support
 	const timelineOutput = vscode.window.createOutputChannel('OpenAPI Copilot Timeline');

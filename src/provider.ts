@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
-import { ConfigManager } from './configManager.js';
+import { ConfigManager, type ResolvedAppLanguage } from './configManager.js';
+import {
+	OPTIMIZED_PROMPT_PREFIX,
+	optimizePrompt,
+	insertIntoChatInput,
+} from './promptEnhancementStatusBar';
 import { updateContextStatusBar, resetStatusBar } from './statusBar';
 import {
 	convertOpenAIRequestToAnthropic,
@@ -18,6 +23,16 @@ import { TimelineService, timelineErrorToJson } from './timeline/service';
 
 const EXTENSION_LABEL = 'LLS OAI';
 const DEFAULT_CONTEXT_LENGTH = 128000;
+
+const AUTO_PROMPT_ENHANCEMENT_DONE_MESSAGE: Record<ResolvedAppLanguage, string> = {
+	en: 'Prompt optimized. Please submit again, or edit it before submitting.',
+	'zh-cn': '提示词已优化，请再次提交，或者修改后提交。',
+	'zh-tw': '提示詞已最佳化，請再次提交，或修改後再提交。',
+	ko: '프롬프트가 최적화되었습니다. 다시 제출하거나 수정한 후 제출하세요.',
+	ja: 'プロンプトを最適化しました。再度送信するか、編集してから送信してください。',
+	fr: 'Le prompt a été optimisé. Veuillez le soumettre à nouveau, ou le modifier avant de le soumettre.',
+	de: 'Der Prompt wurde optimiert. Bitte erneut senden oder vor dem Senden bearbeiten.',
+};
 const DEFAULT_MAX_TOKENS = 16000;
 const ASK_LLSOAI_TOOL_NAME = 'ask_llsoai';
 const EXPERT_TOOL_CALL_PREFIX = 'llsoai';
@@ -627,6 +642,37 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 
 		const latestUserText = this._getLatestUserText(messages);
+		const latestUserRequestText = this._extractUserRequestText(latestUserText);
+		const promptTextForEnhancement = latestUserRequestText || latestUserText;
+
+		// ── Auto prompt enhancement interception ─────────────────────────────────
+		const autoEnhanceConfig = this._configManager.getEffectivePromptEnhancementConfig();
+		if (autoEnhanceConfig.enabled) {
+			const lastMsg = messages[messages.length - 1];
+			const isLastUser = lastMsg?.role === vscode.LanguageModelChatMessageRole.User;
+			if (isLastUser && promptTextForEnhancement) {
+				if (!this._hasOptimizedPromptPrefix(promptTextForEnhancement)) {
+					// No prefix → optimize and insert into chat, then return early.
+					const language = this._configManager.getResolvedLanguage();
+					if (autoEnhanceConfig.providerId && autoEnhanceConfig.modelId) {
+						let optimizedPrompt = promptTextForEnhancement;
+						try {
+							optimizedPrompt = await optimizePrompt(this._configManager, promptTextForEnhancement, language);
+						} catch (err) {
+							console.error('[Auto Prompt Enhancement] Failed:', err);
+						}
+						const prefixed = `${OPTIMIZED_PROMPT_PREFIX[language]}\n${optimizedPrompt}`;
+						await insertIntoChatInput(prefixed, autoEnhanceConfig.autoSend);
+						progress.report(new vscode.LanguageModelTextPart(AUTO_PROMPT_ENHANCEMENT_DONE_MESSAGE[language]));
+					}
+					return;
+				} else {
+					// Has prefix → will strip it below after message conversion.
+				}
+			}
+		}
+		// ── End auto prompt enhancement ──────────────────────────────────────────
+
 		const activeExpertRun = this._getExpertRunForSession(currentSessionId);
 		const activeExpertRunId = activeExpertRun?.runId;
 		if (activeExpertRunId && latestUserText) {
@@ -688,17 +734,25 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		);
 
 		// Build request body
+		let convertedMessages = this._convertMessages(
+			messages,
+			model,
+			currentSessionId,
+			expertEnabled,
+			solutionEnabled,
+			!!solutionModel?.reviewWithExpert && expertEnabled
+		);
+
+		// Strip the optimized prompt prefix from all user messages if the last user
+		// message had the prefix (meaning this request originated from auto-enhancement).
+		if (autoEnhanceConfig.enabled && this._hasOptimizedPromptPrefix(promptTextForEnhancement)) {
+			this._stripOptimizedPromptPrefixFromMessages(convertedMessages);
+		}
+
 		const requestBody: any = {
 			model: modelId,
 			messages: this._withSolutionProviderPrompt(
-				this._withExpertPrompt(this._convertMessages(
-					messages,
-					model,
-					currentSessionId,
-					expertEnabled,
-					solutionEnabled,
-					!!solutionModel?.reviewWithExpert && expertEnabled
-				), expertEnabled),
+				this._withExpertPrompt(convertedMessages, expertEnabled),
 				solutionEnabled,
 				!!solutionModel?.reviewWithExpert && expertEnabled
 			),
@@ -768,7 +822,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					continue;
 				}
 				if (toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME) {
-					if (solutionModel) {
+					if (solutionEnabled && solutionModel) {
 						await this._startSolutionRun(toolCall, solutionModel, expertModel, currentSessionId, requestBody.messages, mainContext, apiTools, progress, token);
 					} else {
 						await this._continueMainAfterUnavailableSolutionProvider(toolCall, requestBody.messages, mainContext, apiTools, currentSessionId, progress, token);
@@ -3041,6 +3095,69 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			return text;
 		}
 		return '';
+	}
+
+	/**
+	 * Extract the actual user request from VS Code-wrapped messages when present.
+	 */
+	private _extractUserRequestText(text: string): string {
+		if (!text) {
+			return '';
+		}
+		const match = text.match(/<userRequest>\s*([\s\S]*?)\s*<\/userRequest>/i);
+		return match?.[1]?.trim() ?? '';
+	}
+
+	/**
+	 * Check if the given text contains an optimized prompt prefix (in any language).
+	 */
+	private _hasOptimizedPromptPrefix(text: string): boolean {
+		if (!text) {
+			return false;
+		}
+		const normalizedText = text.normalize('NFKC');
+		return Object.values(OPTIMIZED_PROMPT_PREFIX)
+			.some(prefix => normalizedText.includes(prefix.normalize('NFKC')));
+	}
+
+	/**
+	 * Strip the optimized prompt prefix (in any language) from text.
+	 * Returns the original text if no prefix is found.
+	 */
+	private _stripOptimizedPromptPrefix(text: string): string {
+		if (!text) {
+			return text;
+		}
+		const normalizedText = text.normalize('NFKC');
+		for (const prefix of Object.values(OPTIMIZED_PROMPT_PREFIX)) {
+			const normalizedPrefix = prefix.normalize('NFKC');
+			const prefixIndex = normalizedText.indexOf(normalizedPrefix);
+			if (prefixIndex >= 0) {
+				return `${text.slice(0, prefixIndex)}${text.slice(prefixIndex + prefix.length).trimStart()}`;
+			}
+		}
+		return text;
+	}
+
+	/**
+	 * Strip the optimized prompt prefix from all user message contents in the converted array.
+	 * The array may contain strings or multimodal content arrays.
+	 */
+	private _stripOptimizedPromptPrefixFromMessages(convertedMessages: Array<{ role: string; content: any }>): void {
+		for (const msg of convertedMessages) {
+			if (msg.role !== 'user') {
+				continue;
+			}
+			if (typeof msg.content === 'string') {
+				msg.content = this._stripOptimizedPromptPrefix(msg.content);
+			} else if (Array.isArray(msg.content)) {
+				for (const part of msg.content) {
+					if (part?.type === 'text' && typeof part.text === 'string') {
+						part.text = this._stripOptimizedPromptPrefix(part.text);
+					}
+				}
+			}
+		}
 	}
 
 	/**

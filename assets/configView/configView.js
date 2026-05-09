@@ -16,6 +16,8 @@
 	let expertSelectableProviders = [];
 	let solutionProviderSettings = { enabled: false, providerId: '', modelId: '', reviewWithExpert: false };
 	let solutionSelectableProviders = [];
+	let promptEnhancementSettings = { enabled: false, autoSend: false, providerId: '', modelId: '' };
+	let promptEnhancementSelectableProviders = [];
 	let configuredLanguage = 'auto';
 	function resolveLanguage(language) {
 		const normalized = (language || '').toLowerCase();
@@ -28,6 +30,25 @@
 		return 'en';
 	}
 	let currentLanguage = resolveLanguage(window.VSCODE_LOCALE);
+	const autoSendTranslationsFallback = {
+		optimizePrompt: 'Optimize',
+		optimizingPrompt: 'Optimizing...',
+		promptEnhancementAutoSend: 'Automatically submit optimized prompt',
+		promptEnhancementAutoSendHelp: 'When enabled, the optimized prompt will be inserted and submitted automatically.',
+		promptEnhancementAutoSendUseGlobal: 'Use global',
+		promptEnhancementAutoSendFollowGlobalState: 'Follow global auto-submit: {state}',
+		promptEnhancementAutoSendForceEnabledDesc: 'Force auto-submit optimized prompts on for this project.',
+		promptEnhancementAutoSendForceDisabledDesc: 'Force auto-submit optimized prompts off for this project.',
+	};
+	const promptOptimizeTranslations = {
+		'en': { optimizePrompt: 'Optimize', optimizingPrompt: 'Optimizing...' },
+		'zh-cn': { optimizePrompt: '优化', optimizingPrompt: '优化中...' },
+		'zh-tw': { optimizePrompt: '最佳化', optimizingPrompt: '最佳化中...' },
+		ko: { optimizePrompt: '최적화', optimizingPrompt: '최적화 중...' },
+		ja: { optimizePrompt: '最適化', optimizingPrompt: '最適化中...' },
+		fr: { optimizePrompt: 'Optimiser', optimizingPrompt: 'Optimisation...' },
+		de: { optimizePrompt: 'Optimieren', optimizingPrompt: 'Optimierung...' },
+	};
 
 	const translations = {
 		'en': {
@@ -158,6 +179,28 @@
 			solutionUseGlobalProvider: 'Use global solution provider ({value})',
 			solutionUseGlobalModel: 'Use global solution model ({value})',
 			solutionModelOverrideHelp: 'Select both provider and model to override the global solution model. Leave either empty to keep using the global solution model.',
+			promptEnhancement: 'Prompt Enhancement',
+			enablePromptEnhancement: 'Enable Prompt Enhancement',
+			promptEnhancementAutoSend: 'Automatically submit optimized prompt',
+			promptEnhancementAutoSendHelp: 'When enabled, the optimized prompt will be inserted and submitted automatically.',
+			promptEnhancementHelp: 'Automatically optimize prompts with a model before requests.',
+			promptEnhancementProvider: 'Prompt Enhancement Provider',
+			promptEnhancementModel: 'Prompt Enhancement Model',
+			promptEnhancementSelectProvider: 'Select provider',
+			promptEnhancementSelectModel: 'Select model',
+			promptEnhancementProjectDescription: 'Configure how this project uses the prompt enhancement model.',
+			promptEnhancementGlobalStatus: 'Global {state}',
+			promptEnhancementUseGlobal: 'Use global',
+			promptEnhancementFollowGlobalState: 'Follow global state: {state}',
+			promptEnhancementForceEnabledDesc: 'Force prompt enhancement on for this project.',
+			promptEnhancementForceDisabledDesc: 'Force prompt enhancement off for this project.',
+			promptEnhancementAutoSendUseGlobal: 'Use global',
+			promptEnhancementAutoSendFollowGlobalState: 'Follow global auto-submit: {state}',
+			promptEnhancementAutoSendForceEnabledDesc: 'Force auto-submit optimized prompts on for this project.',
+			promptEnhancementAutoSendForceDisabledDesc: 'Force auto-submit optimized prompts off for this project.',
+			promptEnhancementUseGlobalProvider: 'Use global prompt enhancement provider ({value})',
+			promptEnhancementUseGlobalModel: 'Use global prompt enhancement model ({value})',
+			promptEnhancementModelOverrideHelp: 'Select both provider and model to override the global prompt enhancement model. Leave either empty to keep using the global prompt enhancement model.',
 			enhancedTodo: 'Enhanced TODO',
 			enableEnhancedTodo: 'Enable Enhanced TODO',
 			enhancedTodoHelp: 'If enabled, will automatically save TODO items to project directory. When creating new TODO, will check for incomplete TODOs.',
@@ -257,6 +300,8 @@
 			defaultSavePathHelp: '默认：Windows: %APPDATA%/LLSOAI，macOS/Linux: ~/.LLSOAI',
 			editSystemPrompt: '编辑系统提示词',
 			globalSystemPrompt: '全局系统提示词',
+			optimizePrompt: '优化',
+			optimizingPrompt: '优化中...',
 			globalSystemPromptPlaceholder: '在此输入全局系统提示词...',
 			globalSystemPromptHelp: '应用于所有工作区，保存在全局设置中。',
 			projectSystemPrompt: '项目系统提示词',
@@ -304,6 +349,28 @@
 			solutionUseGlobalProvider: '使用全局方案提供商（{value}）',
 			solutionUseGlobalModel: '使用全局方案模型（{value}）',
 			solutionModelOverrideHelp: '同时选择提供商和模型即可覆盖全局方案模型；任意一项留空则继续使用全局方案模型。',
+			promptEnhancement: '提示词优化',
+			enablePromptEnhancement: '启用提示词优化',
+			promptEnhancementAutoSend: '自动提交优化后的提示词',
+			promptEnhancementAutoSendHelp: '开启后，优化后的提示词会自动插入并提交。',
+			promptEnhancementHelp: '在请求之前使用模型对提示词进行自动优化。',
+			promptEnhancementProvider: '提示词优化提供商',
+			promptEnhancementModel: '提示词优化模型',
+			promptEnhancementSelectProvider: '选择提供商',
+			promptEnhancementSelectModel: '选择模型',
+			promptEnhancementProjectDescription: '配置当前项目如何使用提示词优化模型。',
+			promptEnhancementGlobalStatus: '全局{state}',
+			promptEnhancementUseGlobal: '使用全局',
+			promptEnhancementFollowGlobalState: '跟随全局状态：{state}',
+			promptEnhancementForceEnabledDesc: '强制当前项目开启提示词优化。',
+			promptEnhancementForceDisabledDesc: '强制当前项目关闭提示词优化。',
+			promptEnhancementAutoSendUseGlobal: '使用全局',
+			promptEnhancementAutoSendFollowGlobalState: '跟随全局自动提交：{state}',
+			promptEnhancementAutoSendForceEnabledDesc: '强制当前项目自动提交优化后的提示词。',
+			promptEnhancementAutoSendForceDisabledDesc: '强制当前项目不自动提交优化后的提示词。',
+			promptEnhancementUseGlobalProvider: '使用全局提示词优化提供商（{value}）',
+			promptEnhancementUseGlobalModel: '使用全局提示词优化模型（{value}）',
+			promptEnhancementModelOverrideHelp: '同时选择提供商和模型即可覆盖全局提示词优化模型；任意一项留空则继续使用全局提示词优化模型。',
 			enhancedTodo: '增强 TODO',
 			enableEnhancedTodo: '启用增强 TODO',
 			enhancedTodoHelp: '启用后会自动将 TODO 保存到项目目录；创建新 TODO 时会检查是否存在未完成 TODO。',
@@ -326,6 +393,13 @@
 
 	translations['zh-tw'] = {
 		...translations['zh-cn'],
+		promptEnhancement: '提示詞最佳化',
+		enablePromptEnhancement: '啟用提示詞最佳化',
+		promptEnhancementHelp: '在請求之前使用模型對提示詞進行自動最佳化。',
+		promptEnhancementProvider: '提示詞最佳化提供商',
+		promptEnhancementModel: '提示詞最佳化模型',
+		promptEnhancementSelectProvider: '選擇提供商',
+		promptEnhancementSelectModel: '選擇模型',
 		importConfiguration: '匯入設定', exportConfiguration: '匯出設定', import: '匯入', export: '匯出', subtitle: 'OpenAPI 相容 Copilot', languageAuto: '自動（跟隨 VS Code）', globalSettings: '全域設定', projectSettings: '專案設定', settingsHint: '系統提示詞、聊天歷史、專家模式、匯入/匯出 Copilot 記錄、增強 TODO 設定', providers: '提供商', noProviders: '尚未設定提供商', addFirstProvider: '新增第一個提供商', enabled: '已啟用', disabled: '已停用', apiType: 'API 類型', configured: '**** 已設定', notSet: '⚠️ 未設定', autoFetchModels: '自動取得模型', autoFetchModelsTitle: '開啟設定時自動從 API 取得模型', models: '模型', fetchingModels: '正在取得模型...', noModels: '⚠️ 無模型（請檢查 API Key）', edit: '編輯', delete: '刪除', fetchModels: '取得模型', loading: '載入中...', addModel: '+ 新增模型', showInChatSelector: '顯示在聊天選擇器中', addProvider: '新增提供商', editProvider: '編輯提供商', providerName: '提供商名稱', providerNamePlaceholder: '例如：MyOpenAI、LocalLLM', providerNameHelp: '用於在 Copilot 中識別此提供商的唯一名稱', apiTypeHelp: '此提供商使用的 API 協定', baseUrlHelp: 'API 端點位址', apiKeyHelp: '編輯時留空表示保留現有金鑰', cancel: '取消', save: '儲存', saveProvider: '儲存提供商', editModel: '編輯模型', modelId: '模型 ID', modelIdPlaceholder: '例如：gpt-4o', displayName: '顯示名稱', displayNamePlaceholder: '例如：GPT-4o', contextLength: '上下文長度', maxTokens: '最大 Token 數', visionSupport: '視覺支援', toolCalling: '工具呼叫', transformThinkTags: '轉換 Think 標籤（<|im_start|>/♩）', preserveReasoningContent: '保留 reasoning_content', preserveReasoningContentHelp: '用於 DeepSeek 思考模式。啟用後會快取並在後續請求中回傳 reasoning_content。', samplingMode: '取樣模式', samplingBoth: '同時傳遞 temperature + top_p', samplingTemperature: '僅傳遞 Temperature', samplingTopP: '僅傳遞 Top P', samplingNone: '不傳遞取樣參數', samplingHelp: '部分模型（例如 Claude）一次只接受一個取樣參數', saveModel: '儲存模型', chatHistorySettings: '聊天歷史設定', autoSaveChatHistory: '自動儲存聊天歷史', chatHistoryHelp: '自動將聊天對話儲存到本機檔案', savePath: '儲存路徑', savePathPlaceholder: '聊天歷史儲存路徑', defaultSavePathHelp: '預設：Windows: %APPDATA%/LLSOAI，macOS/Linux: ~/.LLSOAI', saveChatHistory: '儲存聊天記錄', chatHistorySavePath: '儲存路徑', chatHistorySavePathHelp: '用於儲存聊天記錄的目錄。預設為專案的 .LLSOAI 資料夾。', editSystemPrompt: '編輯系統提示詞', globalSystemPrompt: '全域系統提示詞', globalSystemPromptPlaceholder: '在此輸入全域系統提示詞...', globalSystemPromptHelp: '套用於所有工作區，儲存在全域設定中。', projectSystemPrompt: '專案系統提示詞', projectWorkspaceSystemPrompt: '專案（工作區）系統提示詞', projectSystemPromptPlaceholder: '在此輸入專案專屬系統提示詞...', projectSystemPromptHelp: '僅套用於目前工作區，儲存在工作區設定中。', chatHistory: '聊天歷史', expertMode: '專家模式', enableExpertMode: '啟用專家模式', expertModeHelp: '啟用後，主模型可以將複雜任務委派給所選專家模型。', expertProvider: '專家提供商', expertModel: '專家模型', expertSelectProvider: '選擇提供商', expertSelectModel: '選擇模型', expertProjectDescription: '設定目前專案如何使用 LLSOAI 專家模型。', expertGlobalStatus: '全域{state}', expertUseGlobal: '使用全域', expertFollowGlobalState: '跟隨全域狀態：{state}', expertForceEnabledDesc: '強制目前專案開啟專家模式。', expertForceDisabledDesc: '強制目前專案關閉專家模式。', expertUseGlobalProvider: '使用全域專家提供商（{value}）', expertUseGlobalModel: '使用全域專家模型（{value}）', expertModelOverrideHelp: '同時選擇提供商和模型即可覆蓋全域專家模型；任一項留空則繼續使用全域專家模型。', enhancedTodo: '增強 TODO', enableEnhancedTodo: '啟用增強 TODO', enhancedTodoHelp: '啟用後會自動將 TODO 儲存到專案目錄；建立新 TODO 時會檢查是否存在未完成 TODO。', copilotRecords: 'Copilot 記錄', copilotRecordsHelp: '匯入/匯出 VS Code Copilot 聊天記錄', importRecords: '匯入記錄', exportRecords: '匯出記錄', saveAll: '全部儲存', errorExtensionNotInitialized: '錯誤：擴充功能未初始化', modelIdRequired: '模型 ID 不能為空', enterProviderName: '請輸入提供商名稱', enterBaseUrl: '請輸入 Base URL', enterApiKey: '請為新提供商輸入 API Key', chatHistoryEnabled: '已啟用', chatHistoryDisabled: '已停用', adLabel: '廣告'
 	};
 
@@ -503,6 +577,103 @@
 		apiKeyHelp: 'OpenAI-compatible / v1-response kann für lokale Modelle leer bleiben. Anthropic erfordert einen API Key. Beim Bearbeiten leer lassen, um den vorhandenen Schlüssel beizubehalten.',
 	});
 
+	Object.assign(translations['zh-tw'], {
+		promptEnhancement: '提示詞最佳化',
+		enablePromptEnhancement: '啟用提示詞最佳化',
+		promptEnhancementHelp: '在請求之前使用模型對提示詞進行自動最佳化。',
+		promptEnhancementProvider: '提示詞最佳化提供商',
+		promptEnhancementModel: '提示詞最佳化模型',
+		promptEnhancementSelectProvider: '選擇提供商',
+		promptEnhancementSelectModel: '選擇模型',
+		promptEnhancementProjectDescription: '設定目前專案如何使用提示詞最佳化模型。',
+		promptEnhancementGlobalStatus: '全域{state}',
+		promptEnhancementUseGlobal: '使用全域',
+		promptEnhancementFollowGlobalState: '跟隨全域狀態：{state}',
+		promptEnhancementForceEnabledDesc: '強制目前專案開啟提示詞最佳化。',
+		promptEnhancementForceDisabledDesc: '強制目前專案關閉提示詞最佳化。',
+		promptEnhancementUseGlobalProvider: '使用全域提示詞最佳化提供商（{value}）',
+		promptEnhancementUseGlobalModel: '使用全域提示詞最佳化模型（{value}）',
+		promptEnhancementModelOverrideHelp: '同時選擇提供商和模型即可覆蓋全域提示詞最佳化模型；任一項留空則繼續使用全域提示詞最佳化模型。',
+	});
+
+	Object.assign(translations.ko, {
+		promptEnhancement: '프롬프트 향상',
+		enablePromptEnhancement: '프롬프트 향상 활성화',
+		promptEnhancementHelp: '요청 전에 모델을 사용하여 프롬프트를 자동으로 최적화합니다.',
+		promptEnhancementProvider: '프롬프트 향상 공급자',
+		promptEnhancementModel: '프롬프트 향상 모델',
+		promptEnhancementSelectProvider: '공급자 선택',
+		promptEnhancementSelectModel: '모델 선택',
+		promptEnhancementProjectDescription: '이 프로젝트에서 프롬프트 향상 모델을 사용하는 방식을 구성합니다.',
+		promptEnhancementGlobalStatus: '전역 {state}',
+		promptEnhancementUseGlobal: '전역 사용',
+		promptEnhancementFollowGlobalState: '전역 상태 따르기: {state}',
+		promptEnhancementForceEnabledDesc: '이 프로젝트에서 프롬프트 향상을 강제로 켭니다.',
+		promptEnhancementForceDisabledDesc: '이 프로젝트에서 프롬프트 향상을 강제로 끕니다.',
+		promptEnhancementUseGlobalProvider: '전역 프롬프트 향상 공급자 사용({value})',
+		promptEnhancementUseGlobalModel: '전역 프롬프트 향상 모델 사용({value})',
+		promptEnhancementModelOverrideHelp: '전역 프롬프트 향상 모델을 재정의하려면 공급자와 모델을 모두 선택하세요. 둘 중 하나라도 비워 두면 전역 프롬프트 향상 모델을 계속 사용합니다.',
+	});
+
+	Object.assign(translations.ja, {
+		promptEnhancement: 'プロンプト強化',
+		enablePromptEnhancement: 'プロンプト強化を有効化',
+		promptEnhancementHelp: 'リクエスト前にモデルを使用してプロンプトを自動的に最適化します。',
+		promptEnhancementProvider: 'プロンプト強化プロバイダー',
+		promptEnhancementModel: 'プロンプト強化モデル',
+		promptEnhancementSelectProvider: 'プロバイダーを選択',
+		promptEnhancementSelectModel: 'モデルを選択',
+		promptEnhancementProjectDescription: 'このプロジェクトでプロンプト強化モデルを使用する方法を設定します。',
+		promptEnhancementGlobalStatus: 'グローバル {state}',
+		promptEnhancementUseGlobal: 'グローバルを使用',
+		promptEnhancementFollowGlobalState: 'グローバル状態に従う: {state}',
+		promptEnhancementForceEnabledDesc: 'このプロジェクトでプロンプト強化を強制的にオンにします。',
+		promptEnhancementForceDisabledDesc: 'このプロジェクトでプロンプト強化を強制的にオフにします。',
+		promptEnhancementUseGlobalProvider: 'グローバルプロンプト強化プロバイダーを使用（{value}）',
+		promptEnhancementUseGlobalModel: 'グローバルプロンプト強化モデルを使用（{value}）',
+		promptEnhancementModelOverrideHelp: 'グローバルプロンプト強化モデルを上書きするには、プロバイダーとモデルの両方を選択してください。どちらかが空の場合はグローバルプロンプト強化モデルを引き続き使用します。',
+	});
+
+	Object.assign(translations.fr, {
+		promptEnhancement: 'Amélioration des prompts',
+		enablePromptEnhancement: 'Activer l’amélioration des prompts',
+		promptEnhancementHelp: 'Optimise automatiquement les prompts avec un modèle avant les requêtes.',
+		promptEnhancementProvider: 'Fournisseur d’amélioration des prompts',
+		promptEnhancementModel: 'Modèle d’amélioration des prompts',
+		promptEnhancementSelectProvider: 'Sélectionner un fournisseur',
+		promptEnhancementSelectModel: 'Sélectionner un modèle',
+		promptEnhancementProjectDescription: 'Configure la façon dont ce projet utilise le modèle d’amélioration des prompts.',
+		promptEnhancementGlobalStatus: 'Global {state}',
+		promptEnhancementUseGlobal: 'Utiliser le global',
+		promptEnhancementFollowGlobalState: 'Suivre l’état global : {state}',
+		promptEnhancementForceEnabledDesc: 'Forcer l’activation de l’amélioration des prompts pour ce projet.',
+		promptEnhancementForceDisabledDesc: 'Forcer la désactivation de l’amélioration des prompts pour ce projet.',
+		promptEnhancementUseGlobalProvider: 'Utiliser le fournisseur global d’amélioration des prompts ({value})',
+		promptEnhancementUseGlobalModel: 'Utiliser le modèle global d’amélioration des prompts ({value})',
+		promptEnhancementModelOverrideHelp: 'Sélectionnez à la fois un fournisseur et un modèle pour remplacer le modèle global d’amélioration des prompts. Laissez l’un des deux vide pour continuer à utiliser le modèle global.',
+	});
+
+	Object.assign(translations.de, {
+		promptEnhancement: 'Prompt-Verbesserung',
+		enablePromptEnhancement: 'Prompt-Verbesserung aktivieren',
+		promptEnhancementHelp: 'Optimiert Prompts vor Anfragen automatisch mit einem Modell.',
+		promptEnhancementProvider: 'Prompt-Verbesserungsanbieter',
+		promptEnhancementModel: 'Prompt-Verbesserungsmodell',
+		promptEnhancementSelectProvider: 'Anbieter auswählen',
+		promptEnhancementSelectModel: 'Modell auswählen',
+		promptEnhancementProjectDescription: 'Konfiguriert, wie dieses Projekt das Prompt-Verbesserungsmodell verwendet.',
+		promptEnhancementGlobalStatus: 'Global {state}',
+		promptEnhancementUseGlobal: 'Global verwenden',
+		promptEnhancementFollowGlobalState: 'Globalem Status folgen: {state}',
+		promptEnhancementForceEnabledDesc: 'Prompt-Verbesserung für dieses Projekt erzwingen.',
+		promptEnhancementForceDisabledDesc: 'Prompt-Verbesserung für dieses Projekt deaktivieren.',
+		promptEnhancementUseGlobalProvider: 'Globalen Prompt-Verbesserungsanbieter verwenden ({value})',
+		promptEnhancementUseGlobalModel: 'Globales Prompt-Verbesserungsmodell verwenden ({value})',
+		promptEnhancementModelOverrideHelp: 'Wählen Sie sowohl Anbieter als auch Modell aus, um das globale Prompt-Verbesserungsmodell zu überschreiben. Lassen Sie eines von beiden leer, um weiterhin das globale Modell zu verwenden.',
+	});
+
+	Object.keys(translations).forEach(lang => Object.assign(translations[lang], autoSendTranslationsFallback, translations[lang], promptOptimizeTranslations[lang] || promptOptimizeTranslations.en));
+
 	function t(key) {
 		return translations[currentLanguage]?.[key] || translations.en[key] || key;
 	}
@@ -593,6 +764,7 @@
 	const cancelGlobalSettingsBtn = document.getElementById('cancelGlobalSettingsBtn');
 	const saveGlobalSettingsBtn = document.getElementById('saveGlobalSettingsBtn');
 	const modalGlobalSystemPrompt = document.getElementById('modalGlobalSystemPrompt');
+	const modalOptimizeGlobalSystemPromptBtn = document.getElementById('modalOptimizeGlobalSystemPromptBtn');
 	const modalChatHistoryEnabled = document.getElementById('modalChatHistoryEnabled');
 	const modalChatHistorySavePath = document.getElementById('modalChatHistorySavePath');
 	const modalExpertModeEnabled = document.getElementById('modalExpertModeEnabled');
@@ -611,6 +783,47 @@
 	const cancelProjectSettingsBtn = document.getElementById('cancelProjectSettingsBtn');
 	const saveProjectSettingsBtn = document.getElementById('saveProjectSettingsBtn');
 	const modalProjectSystemPrompt = document.getElementById('modalProjectSystemPrompt');
+	const modalOptimizeProjectSystemPromptBtn = document.getElementById('modalOptimizeProjectSystemPromptBtn');
+
+	function getCurrentPromptEnhancementSelection() {
+		const provider = document.getElementById('panelPromptEnhancementProvider') || document.getElementById('modalPromptEnhancementProvider');
+		const model = document.getElementById('panelPromptEnhancementModel') || document.getElementById('modalPromptEnhancementModel');
+		return {
+			providerId: provider?.value || '',
+			modelId: model?.value || ''
+		};
+	}
+
+	function requestSystemPromptOptimization(target, textarea, button) {
+		const prompt = textarea?.value || '';
+		if (!textarea || !prompt.trim()) {
+			return;
+		}
+		const { providerId, modelId } = getCurrentPromptEnhancementSelection();
+		if (button) {
+			button.disabled = true;
+			button.dataset.originalText = t('optimizePrompt');
+			button.textContent = t('optimizingPrompt');
+		}
+		vscode.postMessage({
+			command: 'optimizeSystemPrompt',
+			panelMode: true,
+			data: { target, prompt, providerId, modelId }
+		});
+	}
+
+	function bindSystemPromptOptimizeButton(buttonId, textareaId, target) {
+		const button = document.getElementById(buttonId);
+		const textarea = document.getElementById(textareaId);
+		button?.addEventListener('click', () => requestSystemPromptOptimization(target, textarea, button));
+	}
+
+	function restoreSystemPromptOptimizeButtons() {
+		document.querySelectorAll('[id*="Optimize"][id*="SystemPromptBtn"]').forEach(button => {
+			button.disabled = false;
+			button.textContent = t('optimizePrompt');
+		});
+	}
 
 	// Collapsible sections
 	const globalSettingsHeader = document.getElementById('globalSettingsHeader');
@@ -867,6 +1080,10 @@
 		const panelExpertModeModel = document.getElementById('panelExpertModeModel');
 		const panelSolutionProviderProvider = document.getElementById('panelSolutionProviderProvider');
 		const panelSolutionProviderModel = document.getElementById('panelSolutionProviderModel');
+		const panelPromptEnhancementProvider = document.getElementById('panelPromptEnhancementProvider');
+		const panelPromptEnhancementModel = document.getElementById('panelPromptEnhancementModel');
+		bindSystemPromptOptimizeButton('panelOptimizeGlobalSystemPromptBtn', 'panelGlobalSystemPrompt', 'panelGlobalSystemPrompt');
+		bindSystemPromptOptimizeButton('panelOptimizeProjectSystemPromptBtn', 'panelProjectSystemPrompt', 'panelProjectSystemPrompt');
 
 		if (window.panelProviders) {
 			providers = window.panelProviders;
@@ -876,10 +1093,15 @@
 			if (window.panelSolutionProviderSettings) {
 				solutionProviderSettings = window.panelSolutionProviderSettings;
 			}
+			if (window.panelPromptEnhancementSettings) {
+				promptEnhancementSettings = window.panelPromptEnhancementSettings;
+			}
 			populateExpertModeProviders(panelExpertModeProvider, expertModeSettings.providerId || '');
 			populateExpertModeModels(panelExpertModeProvider, panelExpertModeModel, expertModeSettings.modelId || '');
 			populateSolutionProviderProviders(panelSolutionProviderProvider, solutionProviderSettings.providerId || '');
 			populateSolutionProviderModels(panelSolutionProviderProvider, panelSolutionProviderModel, solutionProviderSettings.modelId || '');
+			populatePromptEnhancementProviders(panelPromptEnhancementProvider, promptEnhancementSettings.providerId || '');
+			populatePromptEnhancementModels(panelPromptEnhancementProvider, panelPromptEnhancementModel, promptEnhancementSettings.modelId || '');
 		}
 
 		panelCancelBtn?.addEventListener('click', () => {
@@ -900,6 +1122,10 @@
 				const solutionProviderProviderId = document.getElementById('panelSolutionProviderProvider')?.value || '';
 				const solutionProviderModelId = document.getElementById('panelSolutionProviderModel')?.value || '';
 				const solutionProviderReviewWithExpert = document.getElementById('panelSolutionProviderReviewWithExpert')?.checked || false;
+				const promptEnhancementEnabled = document.getElementById('panelPromptEnhancementEnabled')?.checked || false;
+				const promptEnhancementAutoSend = document.getElementById('panelPromptEnhancementAutoSend')?.checked || false;
+				const promptEnhancementProviderId = document.getElementById('panelPromptEnhancementProvider')?.value || '';
+				const promptEnhancementModelId = document.getElementById('panelPromptEnhancementModel')?.value || '';
 				vscode.postMessage({
 					command: 'saveGlobalSettings',
 					panelMode: true,
@@ -914,6 +1140,10 @@
 						solutionProviderProviderId,
 						solutionProviderModelId,
 						solutionProviderReviewWithExpert,
+						promptEnhancementEnabled,
+						promptEnhancementAutoSend,
+						promptEnhancementProviderId,
+						promptEnhancementModelId,
 						forceTodoEnabled
 					}
 				});
@@ -929,10 +1159,14 @@
 				const solutionProviderProviderId = document.getElementById('panelSolutionProviderProvider')?.value || '';
 				const solutionProviderModelId = document.getElementById('panelSolutionProviderModel')?.value || '';
 				const solutionProviderReviewWithExpertState = document.querySelector('input[name="panelSolutionProviderReviewWithExpertState"]:checked')?.value || 'global';
+				const promptEnhancementEnabledState = document.querySelector('input[name="panelPromptEnhancementEnabledState"]:checked')?.value || 'global';
+				const promptEnhancementAutoSendState = document.querySelector('input[name="panelPromptEnhancementAutoSendState"]:checked')?.value || 'global';
+				const promptEnhancementProviderId = document.getElementById('panelPromptEnhancementProvider')?.value || '';
+				const promptEnhancementModelId = document.getElementById('panelPromptEnhancementModel')?.value || '';
 				vscode.postMessage({
 					command: 'saveProjectSettings',
 					panelMode: true,
-					data: { projectSystemPrompt, projectChatHistoryEnabled, projectChatHistorySavePath, forceTodoEnabled, expertModeEnabledState, expertModeProviderId, expertModeModelId, solutionProviderEnabledState, solutionProviderProviderId, solutionProviderModelId, solutionProviderReviewWithExpertState }
+					data: { projectSystemPrompt, projectChatHistoryEnabled, projectChatHistorySavePath, forceTodoEnabled, expertModeEnabledState, expertModeProviderId, expertModeModelId, solutionProviderEnabledState, solutionProviderProviderId, solutionProviderModelId, solutionProviderReviewWithExpertState, promptEnhancementEnabledState, promptEnhancementAutoSendState, promptEnhancementProviderId, promptEnhancementModelId }
 				});
 			}
 		});
@@ -951,7 +1185,15 @@
 		panelSolutionProviderProvider?.addEventListener('change', () => {
 			populateSolutionProviderModels(panelSolutionProviderProvider, panelSolutionProviderModel, '');
 		});
+		panelPromptEnhancementProvider?.addEventListener('change', () => {
+			populatePromptEnhancementModels(panelPromptEnhancementProvider, panelPromptEnhancementModel, '');
+		});
 	}
+
+	bindSystemPromptOptimizeButton('optimizeGlobalSystemPromptBtn', 'globalSystemPromptTextarea', 'globalSystemPromptTextarea');
+	bindSystemPromptOptimizeButton('optimizeWorkspaceSystemPromptBtn', 'workspaceSystemPromptTextarea', 'workspaceSystemPromptTextarea');
+	modalOptimizeGlobalSystemPromptBtn?.addEventListener('click', () => requestSystemPromptOptimization('modalGlobalSystemPrompt', modalGlobalSystemPrompt, modalOptimizeGlobalSystemPromptBtn));
+	modalOptimizeProjectSystemPromptBtn?.addEventListener('click', () => requestSystemPromptOptimization('modalProjectSystemPrompt', modalProjectSystemPrompt, modalOptimizeProjectSystemPromptBtn));
 
 	// Handle messages from extension
 	window.addEventListener('message', (event) => {
@@ -1106,6 +1348,17 @@
 				}
 				if (modalProjectSystemPrompt) {
 					modalProjectSystemPrompt.value = message.data.workspacePrompt || '';
+				}
+			}
+			break;
+
+		case 'systemPromptOptimized':
+			restoreSystemPromptOptimizeButtons();
+			if (message.success && message.data?.target) {
+				const textarea = document.getElementById(message.data.target);
+				if (textarea) {
+					textarea.value = message.data.prompt || '';
+					textarea.dispatchEvent(new Event('input', { bubbles: true }));
 				}
 			}
 			break;
@@ -1603,6 +1856,43 @@
 		const placeholder = modelSelect.dataset.placeholderKey
 			? formatTranslation(t(modelSelect.dataset.placeholderKey), { value: modelSelect.dataset.placeholderValue || '' })
 			: (modelSelect.dataset.placeholder || t('solutionProviderModel'));
+		modelSelect.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` + models.map(model => `
+			<option value="${escapeHtml(model.modelId)}" ${model.modelId === selectedModelId ? 'selected' : ''}>${escapeHtml(model.displayName || model.modelId)}</option>
+		`).join('');
+		const placeholderOption = modelSelect.querySelector('option[value=""]');
+		if (placeholderOption && modelSelect.dataset.placeholderKey) {
+			placeholderOption.setAttribute('data-i18n-template', modelSelect.dataset.placeholderKey);
+			placeholderOption.setAttribute('data-i18n-value-value', modelSelect.dataset.placeholderValue || '');
+		}
+		applyI18n();
+	}
+
+	function populatePromptEnhancementProviders(providerSelect, selectedProviderId) {
+		if (!providerSelect) return;
+		const placeholder = providerSelect.dataset.placeholderKey
+			? formatTranslation(t(providerSelect.dataset.placeholderKey), { value: providerSelect.dataset.placeholderValue || '' })
+			: (providerSelect.dataset.placeholder || t('promptEnhancementProvider'));
+		const selectableProviders = providers.length > 0
+			? getExpertSelectableProviders()
+			: (promptEnhancementSelectableProviders.length > 0 ? promptEnhancementSelectableProviders : expertSelectableProviders);
+		providerSelect.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` + selectableProviders.map(provider => `
+			<option value="${escapeHtml(provider.id)}" ${provider.id === selectedProviderId ? 'selected' : ''}>${escapeHtml(provider.name)}</option>
+		`).join('');
+		const placeholderOption = providerSelect.querySelector('option[value=""]');
+		if (placeholderOption && providerSelect.dataset.placeholderKey) {
+			placeholderOption.setAttribute('data-i18n-template', providerSelect.dataset.placeholderKey);
+			placeholderOption.setAttribute('data-i18n-value-value', providerSelect.dataset.placeholderValue || '');
+		}
+		applyI18n();
+	}
+
+	function populatePromptEnhancementModels(providerSelect, modelSelect, selectedModelId) {
+		if (!modelSelect) return;
+		const providerId = providerSelect?.value || '';
+		const models = getProviderModels(providerId);
+		const placeholder = modelSelect.dataset.placeholderKey
+			? formatTranslation(t(modelSelect.dataset.placeholderKey), { value: modelSelect.dataset.placeholderValue || '' })
+			: (modelSelect.dataset.placeholder || t('promptEnhancementModel'));
 		modelSelect.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` + models.map(model => `
 			<option value="${escapeHtml(model.modelId)}" ${model.modelId === selectedModelId ? 'selected' : ''}>${escapeHtml(model.displayName || model.modelId)}</option>
 		`).join('');

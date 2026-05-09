@@ -18,8 +18,32 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - ✅ **Enhanced TODO Settings** - When enabled, the model is strongly instructed to create, track, and update all tasks through the TODO tool before taking any action
 - 🎯 **Expert Mode** - Use mid/low-tier models for development tasks and high-tier models as expert reviewers for supplementation and quality assurance
 - 🧭 **Solution Provider** - Delegate solution design, implementation planning, and architecture proposals to a dedicated solution model, with optional expert review before finalizing
+- ✨ **Prompt Enhancement** - Optimize prompts with a dedicated provider/model before sending or saving them. Supports global and workspace configuration, provider/model overrides, auto-submit behavior, and system prompt optimization buttons
 - 🖼️ **Vision/Multimodal Input Support** - Supports image input forwarding across OpenAI-compatible Chat Completions, Responses API, and Anthropic Messages API providers
 - 🧠 **Strict Reasoning Compatibility** - Preserves and replays `reasoning_content` for tool-call turns, improving compatibility with DeepSeek Reasoner and other strict OpenAI-compatible providers
+
+## ✨ Prompt Enhancement
+
+Prompt Enhancement lets you use a selected model to rewrite, clarify, and structure prompts before they are used. It is useful when you want a lightweight or specialized model to turn a rough request into a more precise instruction for Copilot Chat or for your custom system prompts.
+
+### Key Features
+
+- **Dedicated Optimization Model** — Choose a Prompt Enhancement provider and model independently from your normal chat model.
+- **Global and Workspace Settings** — Enable Prompt Enhancement globally, or use workspace-level `Use global` / `Enabled` / `Disabled` controls for project-specific behavior.
+- **Provider/Model Overrides** — Workspace settings can override the global Prompt Enhancement provider/model when both values are selected.
+- **System Prompt Optimization** — Global and project system prompt editors include an Optimize button that rewrites the current prompt using the selected Prompt Enhancement model.
+- **Uses Current Dropdown Selection** — System prompt optimization uses the provider/model currently selected in the settings dropdowns, even before you save the settings.
+- **Optional Auto-submit** — Prompt Enhancement can insert the optimized prompt into Chat as a draft or submit it automatically, depending on your configuration.
+- **Localized UI** — Prompt Enhancement controls are localized across English, Simplified Chinese, Traditional Chinese, Korean, Japanese, French, and German.
+
+### Configuration
+
+Prompt Enhancement is configured in the settings UI:
+
+- **Global Settings** — Enable/disable Prompt Enhancement, select the optimization provider/model, and configure auto-submit behavior.
+- **Project Settings** — Follow global settings or force Prompt Enhancement on/off for the current workspace. You can also override the optimization provider/model for that project.
+
+If a project provider/model override is incomplete, the extension falls back to the global Prompt Enhancement provider/model.
 
 ## 🧠 Strict Reasoning Content Compatibility
 

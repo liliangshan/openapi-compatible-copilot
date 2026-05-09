@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.6.0
+
+### Added
+
+- **Prompt Enhancement** — Added configurable prompt optimization powered by a selected provider/model. Prompt Enhancement can be enabled globally or controlled per workspace, with optional provider/model overrides for project-specific optimization workflows.
+- **Prompt Enhancement UI** — Added Prompt Enhancement settings to both Global Settings and Project Settings, including provider/model selectors, auto-submit behavior, and workspace-level `Use global` / `Enabled` / `Disabled` controls.
+- **System Prompt Optimization** — Added optimization buttons for global and workspace system prompts. The optimizer now uses the currently selected Prompt Enhancement provider/model from the settings dropdowns, even before the settings are saved.
+- **Localized Optimization Controls** — Added multilingual UI strings for prompt optimization buttons and running states across English, Simplified Chinese, Traditional Chinese, Korean, Japanese, French, and German.
+
+### Changed
+
+- **Prompt Enhancement Request Handling** — Prompt optimization requests can now explicitly use the provider/model selected in the active settings UI, falling back to the saved effective Prompt Enhancement configuration only when no current selection is provided.
+
 ## 2.5.4
 
 ### Added
