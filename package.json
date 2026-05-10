@@ -5,7 +5,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.6.0",
+	"version": "2.6.1",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -232,6 +232,14 @@
 					"type": "string",
 					"default": "",
 					"description": "Model ID used by prompt enhancement.",
+					"scope": "machine-overridable"
+				},
+				"openapicopilot.promptEnhancement.contextMessageLimit": {
+					"type": "integer",
+					"default": 20,
+					"minimum": 0,
+					"maximum": 200,
+					"description": "Maximum number of recent messages cached per session for prompt enhancement context. 0 means unlimited by message count.",
 					"scope": "machine-overridable"
 				}
 			}

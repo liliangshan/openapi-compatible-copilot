@@ -127,6 +127,22 @@ export interface PromptEnhancementConfig {
 	modelId: string;
 }
 
+/**
+ * Prompt enhancement context cache settings
+ */
+export interface PromptEnhancementContextCacheConfig {
+	/** Maximum number of recent messages cached per session. 0 means unlimited by message count. */
+	contextMessageLimit: number;
+}
+
+/**
+ * Workspace overrides for prompt enhancement context cache settings
+ */
+export interface WorkspacePromptEnhancementContextCacheConfig {
+	/** Maximum number of recent messages cached per session. undefined means using global setting. */
+	contextMessageLimit?: number;
+}
+
 export type WorkspacePromptEnhancementEnabledState = 'global' | 'enabled' | 'disabled';
 export type WorkspacePromptEnhancementAutoSendState = 'global' | 'enabled' | 'disabled';
 

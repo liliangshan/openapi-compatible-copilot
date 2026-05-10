@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { ExpertModeConfig, PromptEnhancementConfig, ProviderConfig, ProviderConfigWithoutSecrets, SolutionProviderConfig, WorkspaceExpertModeConfig, WorkspaceExpertModeEnabledState, WorkspacePromptEnhancementAutoSendState, WorkspacePromptEnhancementConfig, WorkspacePromptEnhancementEnabledState, WorkspaceSolutionProviderConfig, WorkspaceSolutionProviderEnabledState, WorkspaceSolutionProviderReviewWithExpertState } from './types';
+import { ExpertModeConfig, PromptEnhancementConfig, PromptEnhancementContextCacheConfig, ProviderConfig, ProviderConfigWithoutSecrets, SolutionProviderConfig, WorkspaceExpertModeConfig, WorkspaceExpertModeEnabledState, WorkspacePromptEnhancementAutoSendState, WorkspacePromptEnhancementConfig, WorkspacePromptEnhancementContextCacheConfig, WorkspacePromptEnhancementEnabledState, WorkspaceSolutionProviderConfig, WorkspaceSolutionProviderEnabledState, WorkspaceSolutionProviderReviewWithExpertState } from './types';
 
 /**
  * Generate a unique ID
@@ -28,6 +28,24 @@ const SUPPORTED_APP_LANGUAGES: readonly ResolvedAppLanguage[] = ['en', 'zh-cn', 
 
 function getWorkspaceInspectValue<T>(inspect: { workspaceValue?: T; workspaceFolderValue?: T } | undefined): T | undefined {
 	return inspect?.workspaceFolderValue ?? inspect?.workspaceValue;
+}
+
+function normalizePromptContextMessageLimit(value: unknown): number {
+	if (typeof value !== 'number' || !Number.isFinite(value)) {
+		return 20;
+	}
+	const integer = Math.floor(value);
+	if (integer < 0) {
+		return 0;
+	}
+	if (integer > 200) {
+		return 200;
+	}
+	return integer;
+}
+
+function normalizeOptionalPromptContextMessageLimit(value: unknown): number | undefined {
+	return value === undefined ? undefined : normalizePromptContextMessageLimit(value);
 }
 
 /**
@@ -83,6 +101,7 @@ export class ConfigManager {
 	private static readonly PROMPT_ENHANCEMENT_AUTO_SEND_CONFIG_KEY = 'promptEnhancement.autoSend';
 	private static readonly PROMPT_ENHANCEMENT_PROVIDER_CONFIG_KEY = 'promptEnhancement.providerId';
 	private static readonly PROMPT_ENHANCEMENT_MODEL_CONFIG_KEY = 'promptEnhancement.modelId';
+	private static readonly PROMPT_ENHANCEMENT_CONTEXT_MESSAGE_LIMIT_CONFIG_KEY = 'promptEnhancement.contextMessageLimit';
 	private static readonly WORKSPACE_PROMPT_ENHANCEMENT_ENABLED_STATE_CONFIG_KEY = 'promptEnhancement.enabledState';
 	private static readonly WORKSPACE_PROMPT_ENHANCEMENT_AUTO_SEND_STATE_CONFIG_KEY = 'promptEnhancement.autoSendState';
 	private static readonly GLOBAL_FORCE_TODO_KEY = 'openapicopilot.globalForceTodoEnabled';
@@ -548,6 +567,67 @@ export class ConfigManager {
 		await config.update(ConfigManager.PROMPT_ENHANCEMENT_PROVIDER_CONFIG_KEY, updated.providerId, vscode.ConfigurationTarget.Workspace);
 		await config.update(ConfigManager.PROMPT_ENHANCEMENT_MODEL_CONFIG_KEY, updated.modelId, vscode.ConfigurationTarget.Workspace);
 		return { ...updated, enabled: enabledState === 'enabled', enabledState, autoSend: autoSendState === 'enabled', autoSendState };
+	}
+
+	/**
+	 * Get global prompt enhancement context cache settings.
+	 */
+	getGlobalPromptEnhancementContextCacheConfig(): PromptEnhancementContextCacheConfig {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		const contextLimitInspect = config.inspect<number>(ConfigManager.PROMPT_ENHANCEMENT_CONTEXT_MESSAGE_LIMIT_CONFIG_KEY);
+		return {
+			contextMessageLimit: normalizePromptContextMessageLimit(contextLimitInspect?.globalValue ?? contextLimitInspect?.defaultValue ?? 20),
+		};
+	}
+
+	/**
+	 * Get workspace overrides for prompt enhancement context cache settings.
+	 */
+	getWorkspacePromptEnhancementContextCacheConfig(resource?: vscode.Uri): WorkspacePromptEnhancementContextCacheConfig {
+		const config = vscode.workspace.getConfiguration('openapicopilot', resource);
+		const contextLimitInspect = config.inspect<number>(ConfigManager.PROMPT_ENHANCEMENT_CONTEXT_MESSAGE_LIMIT_CONFIG_KEY);
+		return {
+			contextMessageLimit: normalizeOptionalPromptContextMessageLimit(getWorkspaceInspectValue(contextLimitInspect)),
+		};
+	}
+
+	/**
+	 * Get effective prompt enhancement context cache settings.
+	 */
+	getEffectivePromptEnhancementContextCacheConfig(resource?: vscode.Uri): PromptEnhancementContextCacheConfig {
+		const globalConfig = this.getGlobalPromptEnhancementContextCacheConfig();
+		const workspaceConfig = this.getWorkspacePromptEnhancementContextCacheConfig(resource);
+		return {
+			contextMessageLimit: workspaceConfig.contextMessageLimit !== undefined ? workspaceConfig.contextMessageLimit : globalConfig.contextMessageLimit,
+		};
+	}
+
+	/**
+	 * Update global prompt enhancement context cache settings.
+	 */
+	async updateGlobalPromptEnhancementContextCacheConfig(settings: Partial<PromptEnhancementContextCacheConfig>): Promise<PromptEnhancementContextCacheConfig> {
+		const current = this.getGlobalPromptEnhancementContextCacheConfig();
+		const updated: PromptEnhancementContextCacheConfig = {
+			contextMessageLimit: normalizePromptContextMessageLimit(settings.contextMessageLimit ?? current.contextMessageLimit),
+		};
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update(ConfigManager.PROMPT_ENHANCEMENT_CONTEXT_MESSAGE_LIMIT_CONFIG_KEY, updated.contextMessageLimit, vscode.ConfigurationTarget.Global);
+		return updated;
+	}
+
+	/**
+	 * Update workspace prompt enhancement context cache settings. undefined clears workspace override.
+	 */
+	async updateWorkspacePromptEnhancementContextCacheConfig(settings: WorkspacePromptEnhancementContextCacheConfig, resource?: vscode.Uri): Promise<WorkspacePromptEnhancementContextCacheConfig> {
+		const config = vscode.workspace.getConfiguration('openapicopilot', resource);
+		const target = resource && vscode.workspace.getWorkspaceFolder(resource)
+			? vscode.ConfigurationTarget.WorkspaceFolder
+			: vscode.ConfigurationTarget.Workspace;
+		const normalizedLimit = settings.contextMessageLimit === undefined ? undefined : normalizePromptContextMessageLimit(settings.contextMessageLimit);
+		await config.update(ConfigManager.PROMPT_ENHANCEMENT_CONTEXT_MESSAGE_LIMIT_CONFIG_KEY, normalizedLimit, target);
+		return {
+			contextMessageLimit: normalizedLimit,
+		};
 	}
 
 	/**

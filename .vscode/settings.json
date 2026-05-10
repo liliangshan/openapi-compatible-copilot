@@ -1,0 +1,10 @@
+{
+    "openapicopilot.systemPrompt": "",
+    "openapicopilot.expertMode.enabledState": "global",
+    "openapicopilot.expertMode.providerId": "",
+    "openapicopilot.expertMode.modelId": "",
+    "openapicopilot.solutionProvider.enabledState": "disabled",
+    "openapicopilot.solutionProvider.providerId": "",
+    "openapicopilot.solutionProvider.modelId": "",
+    "openapicopilot.solutionProvider.reviewWithExpertState": "disabled"
+}

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConfigManager, ResolvedAppLanguage } from './configManager';
 import { convertOpenAIRequestToAnthropic } from './utils/anthropicConverter';
 import { convertChatCompletionsToResponsesAPI } from './utils/v1ResponseConverter';
+import { buildPromptEnhancementContextInput, readPromptEnhancementContextCache } from './promptContextCache';
 
 const PROMPT_ENHANCEMENT_STATUS_TEXT: Record<ResolvedAppLanguage, string> = {
 	'en': 'Prompt Enhancement',
@@ -12,6 +13,16 @@ const PROMPT_ENHANCEMENT_STATUS_TEXT: Record<ResolvedAppLanguage, string> = {
 	fr: 'Amélioration des prompts',
 	de: 'Prompt-Verbesserung',
 };
+
+/**
+ * Result from prompt enhancement model.
+ * status: true if optimization is needed and performed, false if prompt is already good.
+ * prompt: the optimized prompt text (only meaningful when status is true).
+ */
+export interface PromptEnhancementResult {
+	status: boolean;
+	prompt: string;
+}
 
 const PROMPT_ENHANCEMENT_STATUS_TOOLTIP: Record<ResolvedAppLanguage, string> = {
 	'en': 'Automatically optimize prompts with a model before requests',
@@ -146,10 +157,15 @@ export function initPromptEnhancementStatusBar(context: vscode.ExtensionContext,
 
 	const refresh = () => {
 		const language = configManager.getResolvedLanguage();
-		const settings = configManager.getPromptEnhancementConfig();
+		const settings = configManager.getEffectivePromptEnhancementConfig();
 		item.text = PROMPT_ENHANCEMENT_STATUS_TEXT[language];
 		item.tooltip = PROMPT_ENHANCEMENT_STATUS_TOOLTIP[language];
-		if (settings.enabled) {
+
+		// Show status bar if a prompt enhancement model is selected (providerId and modelId are both set)
+		// Note: 'enabled' only controls auto prompt enhancement, not the status bar visibility
+		const hasSelectedModel = !!settings.providerId?.trim() && !!settings.modelId?.trim();
+
+		if (hasSelectedModel) {
 			item.show();
 		} else {
 			item.hide();
@@ -213,9 +229,10 @@ async function openPromptEnhancementInputDialog(context: vscode.ExtensionContext
 
 			void panel.webview.postMessage({ command: 'busy', message: text.optimizing });
 			const language = configManager.getResolvedLanguage();
-			let optimizedPrompt = prompt;
+			let finalPrompt = prompt;
 			try {
-				optimizedPrompt = await optimizePrompt(configManager, prompt, language);
+				const result = await optimizePrompt(configManager, prompt, language);
+				finalPrompt = result.prompt;
 			} catch (error) {
 				console.error('Prompt enhancement failed:', error);
 				void vscode.window.showWarningMessage(text.failed);
@@ -223,7 +240,7 @@ async function openPromptEnhancementInputDialog(context: vscode.ExtensionContext
 				void panel.webview.postMessage({ command: 'idle' });
 			}
 
-			await insertIntoChatInput(`${OPTIMIZED_PROMPT_PREFIX[language]}\n${optimizedPrompt}`, autoSend);
+			await insertIntoChatInput(`${OPTIMIZED_PROMPT_PREFIX[language]}\n${finalPrompt}`, autoSend);
 			void panel.webview.postMessage({ command: 'success', message: text.success });
 		}
 	}, undefined, context.subscriptions);
@@ -240,12 +257,35 @@ export async function insertIntoChatInput(prompt: string, autoSend: boolean): Pr
 	}
 }
 
+const MIN_PROMPT_ENHANCEMENT_GRAPHEMES = 3;
+
+function countGraphemes(text: string): number {
+	// Intl.Segmenter is available in Node.js 16+ and modern browsers
+	// TypeScript doesn't have built-in types for it, so we use any cast
+	const intl = Intl as any;
+	if (intl && typeof intl.Segmenter === 'function') {
+		const segmenter = new intl.Segmenter(undefined, { granularity: 'grapheme' });
+		return Array.from(segmenter.segment(text)).length;
+	}
+	return Array.from(text).length;
+}
+
+function shouldSkipPromptEnhancement(rawPrompt: string): boolean {
+	const trimmed = rawPrompt.trim();
+	if (!trimmed) return true;
+	return countGraphemes(trimmed) < MIN_PROMPT_ENHANCEMENT_GRAPHEMES;
+}
+
 export async function optimizePrompt(
 	configManager: ConfigManager,
 	rawPrompt: string,
 	language: ResolvedAppLanguage,
-	overrideModel?: { providerId?: string; modelId?: string }
-): Promise<string> {
+	overrideModel?: { providerId?: string; modelId?: string },
+	options?: { sessionId?: string; includeContext?: boolean }
+): Promise<PromptEnhancementResult> {
+	if (shouldSkipPromptEnhancement(rawPrompt)) {
+		return { status: false, prompt: rawPrompt };
+	}
 	const effectiveConfig = configManager.getEffectivePromptEnhancementConfig();
 	const config = {
 		...effectiveConfig,
@@ -263,11 +303,18 @@ export async function optimizePrompt(
 		throw new Error('Prompt enhancement provider requires an API key.');
 	}
 
+	const cachedMessages = options?.includeContext === false
+		? []
+		: await readPromptEnhancementContextCache(options?.sessionId);
+	const promptInput = cachedMessages.length > 0
+		? buildPromptEnhancementContextInput(rawPrompt, cachedMessages)
+		: rawPrompt;
+
 	const requestBody = {
 		model: model.modelId,
 		messages: [
 			{ role: 'system', content: buildPromptEnhancementSystemPrompt(language) },
-			{ role: 'user', content: rawPrompt },
+			{ role: 'user', content: promptInput },
 		],
 		stream: false,
 		temperature: model.temperature,
@@ -276,23 +323,151 @@ export async function optimizePrompt(
 	};
 
 	const responseJson = await requestPromptEnhancementModel(provider.baseUrl, provider.apiType, apiKey, requestBody);
-	const text = extractPromptEnhancementText(responseJson, provider.apiType).trim();
-	return text || rawPrompt;
+	const result = parsePromptEnhancementResult(responseJson, provider.apiType);
+	if (!result.status) {
+		// No optimization needed, return original prompt with status=false
+		return { status: false, prompt: rawPrompt };
+	}
+	return {
+		status: true,
+		prompt: result.prompt.trim() || rawPrompt,
+	};
 }
 
 function buildPromptEnhancementSystemPrompt(language: ResolvedAppLanguage): string {
 	const outputLanguage = PROMPT_ENHANCEMENT_STATUS_TEXT[language];
-	return `You are an expert prompt optimization specialist.
-Your task is to optimize the user's prompt so that it becomes clearer, more complete, more specific, and easier for another AI model to execute accurately.
+	return `You are an expert prompt optimization specialist with the ability to determine if a user's input needs prompt optimization.
 
-Optimization requirements:
+Your task is to analyze the user's input and decide whether optimization is necessary.
+
+Output format: You MUST output a valid JSON object with the following structure:
+{
+  "status": true or false,
+  "prompt": "the optimized prompt text (only needed when status is true)"
+}
+
+Do not output any explanations, comments, Markdown, or extra text outside the JSON object.
+
+Decision criteria for status:
+
+Set "status" to false when the user's input does NOT need prompt optimization.
+
+This includes, but is not limited to, the following cases:
+
+1. The input is already clear and specific about what it asks.
+2. The input contains sufficient context and constraints for the task.
+3. The input has a well-defined expected output format.
+4. The input does not contradict itself or contain logical errors.
+5. The input is appropriately concise for the task complexity.
+6. The input is understandable and workable, even if it is not perfectly written.
+
+IMPORTANT: CRITICAL - Operational Commands MUST NOT Be Optimized
+
+The following types of inputs are operational commands and MUST NOT be optimized. For these inputs, ALWAYS set "status" to false:
+
+**A. Shell Commands (English)**:
+- git commands: git commit -m "fix: bug", git push origin main, git pull, git checkout main, git status, git merge, git rebase, git stash, git fetch, git clone, git branch, git diff, git log, git show
+- docker commands: docker ps, docker build ., docker compose up, docker run, docker stop, docker rm, docker images, docker exec
+- npm/yarn/pnpm commands: npm install, npm run build, npm start, npm test, npm dev, yarn add, yarn build, pnpm install, pnpm dev
+- file system commands: ls -la, cd src, mkdir test, rm -rf dist, cp a.txt b.txt, mv old new, cat file.txt, grep "text" file.txt, chmod +x script.sh
+- network commands: curl https://example.com, wget https://example.com/file.zip, ssh user@host, scp file user@host:/path
+- system commands: ps aux, kill -9 1234, export NODE_ENV=production, sudo apt install nginx
+
+**B. Intent-Based Operational Commands (Any Language)**:
+These are natural language descriptions of operations that should be executed, not prompts to improve:
+
+English patterns:
+- "commit this to the repository"
+- "push to remote"
+- "create a PR"
+- "submit my changes"
+- "deploy this"
+- "run the build"
+- "execute the script"
+- "check git status"
+- "make a pull request"
+- "open a merge request"
+
+Chinese patterns:
+- "commit to repository" or "commit to remote repository" or "commit code"
+- "push to remote" or "push to repository" or "push to main branch"
+- "create PR" or "create pull request" or "initiate PR"
+- "create branch" or "switch branch" or "delete branch"
+- "deploy code" or "release version"
+- "run script" or "execute command"
+- "check status" or "view logs"
+- "stop service" or "restart service"
+- "commit changes" or "submit changes"
+- "pull code" or "pull updates"
+- "merge branch" or "merge code"
+- "publish version" or "publish to npm"
+- "build project" or "compile code"
+- "install dependencies" or "update dependencies"
+- "clean cache" or "clear build artifacts"
+- "sync code" or "update code"
+- "create release" or "initiate release"
+- "commit to git" or "git commit"
+
+Other language patterns:
+- French: "soumettre au depot", "creer une pull request", "pousser vers le distant"
+- German: "in das Repository einchecken", "einen PR erstellen", "zum Remote pushen"
+- Japanese: "commit to repository", "create PR", "push to remote"
+- Korean: "commit to repository", "PR create", "push to remote"
+- Spanish: "commit to repository", "create a PR", "send to remote"
+- Portuguese: "commit to repository", "create a PR", "send to remote"
+- Russian: "commit to repository", "create PR", "send to remote"
+
+**C. Command Keywords (Regardless of Language)**:
+Any input containing these keywords followed by an action intent should be treated as an operational command:
+- git, github, repository, repo, commit, push, pull, merge, branch, checkout, clone, fetch, stash, rebase
+- docker, container, image, compose, dockerfile, build, run, stop, rm, exec
+- npm, yarn, pnpm, install, build, test, dev, start, publish
+- deploy, deployment, release, version, publish
+- execute, run, script, bash, shell, command, cli
+- ssh, scp, ftp, wget, curl, network, remote, server
+- crontab, schedule, cron, job, task, automation
+- backup, restore, snapshot, checkpoint
+- init, setup, configure, config, settings
+- install, uninstall, update, upgrade, add, remove, delete
+
+**D. General Patterns for Operational Intents**:
+If the user's input describes an action to be performed rather than a question or task to be completed, it is likely an operational command and should NOT be optimized.
+
+Examples of operational intents:
+- "help me commit" - operational
+- "commit code to repository" - operational
+- "push to github" - operational
+- "create pull request" - operational
+- "release version 1.0" - operational
+
+Examples of prompts that SHOULD be optimized:
+- "I want to understand how git works" - genuine question, optimize OK
+- "explain the difference between docker and containers" - genuine question, optimize OK
+- "help me write an npm package publish script" - task request, optimize OK
+
+Set "status" to true only when the user's input is a PROMPT that genuinely needs improvement.
+
+Set "status" to true when the prompt:
+1. Is vague, ambiguous, or incomplete.
+2. Lacks sufficient context or constraints.
+3. Has an unclear or missing expected output format.
+4. Contains contradictions or logical errors.
+5. Could benefit significantly from better structure or organization.
+6. Is overly verbose without improving clarity.
+7. Asks a genuine question or requests an explanation (not an action to execute)
+
+IMPORTANT RULES:
+- If the input describes an action to be performed (especially on git, docker, npm, deployment, etc.), ALWAYS set "status" to false.
+- If the input contains keywords like "commit", "push", "pull", "PR", "deploy", "run", "execute", "submit", "create", "release", "publish", "build" in an operational context, ALWAYS set "status" to false.
+- Only set "status" to true if the prompt genuinely needs improvement and is NOT an operational command.
+- When "status" is false, you MUST still output the "prompt" field with the original input: {"status": false, "prompt": "the original input"}
+
+When "status" is true:
 1. Preserve the user's original intent and do not change the goal.
-2. Improve the prompt structure, wording, constraints, context, and expected output format.
-3. Add reasonable missing details only when they help the model understand the task better.
-4. Do not answer or solve the user's prompt yourself.
-5. Do not explain your changes.
-6. Output only the optimized prompt text.
-7. Write the optimized prompt in the same language as the user's original prompt. If the language is unclear, use ${outputLanguage}.`;
+2. Improve the prompt's structure, wording, constraints, context, and expected output format.
+3. Make the optimized prompt clear, actionable, and concise.
+4. Do not add unnecessary requirements that were not implied by the original prompt.
+5. Do not change the language of the original prompt unless doing so is necessary for clarity.`;
 }
 
 async function requestPromptEnhancementModel(baseUrl: string, apiType: string, apiKey: string, requestBody: any): Promise<any> {
@@ -323,22 +498,48 @@ async function requestPromptEnhancementModel(baseUrl: string, apiType: string, a
 	return response.json();
 }
 
-function extractPromptEnhancementText(response: any, apiType: string): string {
+function parsePromptEnhancementResult(response: any, apiType: string): PromptEnhancementResult {
+	let rawText: string;
 	if (apiType === 'anthropic') {
-		return (response.content || [])
+		rawText = (response.content || [])
 			.map((part: any) => part?.type === 'text' ? part.text : '')
 			.join('');
-	}
-	if (apiType === 'v1-response') {
+	} else if (apiType === 'v1-response') {
 		if (typeof response.output_text === 'string') {
-			return response.output_text;
+			rawText = response.output_text;
+		} else {
+			rawText = (response.output || [])
+				.flatMap((item: any) => item?.content || [])
+				.map((part: any) => part?.text || part?.value || '')
+				.join('');
 		}
-		return (response.output || [])
-			.flatMap((item: any) => item?.content || [])
-			.map((part: any) => part?.text || part?.value || '')
-			.join('');
+	} else {
+		rawText = response.choices?.[0]?.message?.content || '';
 	}
-	return response.choices?.[0]?.message?.content || '';
+
+	// Try to parse as JSON
+	try {
+		// Extract JSON object from the text (handle potential markdown code blocks)
+		const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+		if (jsonMatch) {
+			const parsed = JSON.parse(jsonMatch[0]);
+			if (typeof parsed.status === 'boolean' && (parsed.status === false || typeof parsed.prompt === 'string')) {
+				return {
+					status: parsed.status,
+					prompt: parsed.prompt || '',
+				};
+			}
+		}
+	} catch {
+		// Failed to parse JSON, fall through
+	}
+
+	// If JSON parsing fails, treat as no optimization needed (status=false)
+	// This is safer than blocking the request with an empty/garbage prompt.
+	return {
+		status: false,
+		prompt: '',
+	};
 }
 
 function getPromptEnhancementInputHtml(

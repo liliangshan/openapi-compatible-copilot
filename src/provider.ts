@@ -4,7 +4,13 @@ import {
 	OPTIMIZED_PROMPT_PREFIX,
 	optimizePrompt,
 	insertIntoChatInput,
+	type PromptEnhancementResult,
 } from './promptEnhancementStatusBar';
+import {
+	promptContextMessagesFromOpenAIMessages,
+	promptContextMessagesFromVSCodeMessages,
+	savePromptEnhancementContextCache,
+} from './promptContextCache';
 import { updateContextStatusBar, resetStatusBar } from './statusBar';
 import {
 	convertOpenAIRequestToAnthropic,
@@ -651,21 +657,27 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const lastMsg = messages[messages.length - 1];
 			const isLastUser = lastMsg?.role === vscode.LanguageModelChatMessageRole.User;
 			if (isLastUser && promptTextForEnhancement) {
-				if (!this._hasOptimizedPromptPrefix(promptTextForEnhancement)) {
-					// No prefix → optimize and insert into chat, then return early.
+				if (!this._hasOptimizedPromptPrefix(promptTextForEnhancement) && !promptTextForEnhancement.includes('creating a comprehensive')) {
+					// No prefix → ask model if optimization is needed (skip if compressed context).
 					const language = this._configManager.getResolvedLanguage();
 					if (autoEnhanceConfig.providerId && autoEnhanceConfig.modelId) {
-						let optimizedPrompt = promptTextForEnhancement;
+						let optimizationResult: PromptEnhancementResult = { status: false, prompt: promptTextForEnhancement };
 						try {
-							optimizedPrompt = await optimizePrompt(this._configManager, promptTextForEnhancement, language);
+							await this._savePromptContextCacheFromVSCodeMessages(currentSessionId, messages);
+							optimizationResult = await optimizePrompt(this._configManager, promptTextForEnhancement, language, undefined, { sessionId: currentSessionId });
 						} catch (err) {
 							console.error('[Auto Prompt Enhancement] Failed:', err);
 						}
-						const prefixed = `${OPTIMIZED_PROMPT_PREFIX[language]}\n${optimizedPrompt}`;
-						await insertIntoChatInput(prefixed, autoEnhanceConfig.autoSend);
-						progress.report(new vscode.LanguageModelTextPart(AUTO_PROMPT_ENHANCEMENT_DONE_MESSAGE[language]));
+
+						if (optimizationResult.status && optimizationResult.prompt?.trim()) {
+							// Optimization needed and has valid prompt → insert optimized prompt and return.
+							const prefixed = `${OPTIMIZED_PROMPT_PREFIX[language]}\n${optimizationResult.prompt}`;
+							await insertIntoChatInput(prefixed, autoEnhanceConfig.autoSend);
+							progress.report(new vscode.LanguageModelTextPart(AUTO_PROMPT_ENHANCEMENT_DONE_MESSAGE[language]));
+							return;
+						}
+						// else: status is false OR prompt is empty → skip optimization, continue to main model request below.
 					}
-					return;
 				} else {
 					// Has prefix → will strip it below after message conversion.
 				}
@@ -748,6 +760,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		if (autoEnhanceConfig.enabled && this._hasOptimizedPromptPrefix(promptTextForEnhancement)) {
 			this._stripOptimizedPromptPrefixFromMessages(convertedMessages);
 		}
+
+		await this._savePromptContextCacheFromOpenAIMessages(currentSessionId, convertedMessages);
 
 		const requestBody: any = {
 			model: modelId,
@@ -870,6 +884,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		if (result.text) {
 			const chatMessages = this._buildChatMessages(messages, result.text);
 			await this._configManager.saveChatHistory(chatMessages, modelId, options.tools ? [...options.tools] : undefined);
+			await this._savePromptContextCacheFromOpenAIMessages(currentSessionId, requestBody.messages, result.text);
 		}
 	}
 
@@ -1038,6 +1053,39 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			await this._configManager.saveChatHistory(chatMessages, modelId, tools ? [...tools] : undefined);
 		} catch (error) {
 			console.error('Failed to save main chat history:', error);
+		}
+	}
+
+	private async _savePromptContextCacheFromVSCodeMessages(
+		sessionId: string,
+		messages: readonly vscode.LanguageModelChatRequestMessage[]
+	): Promise<void> {
+		try {
+			const config = this._configManager.getEffectivePromptEnhancementContextCacheConfig();
+			await savePromptEnhancementContextCache(
+				sessionId,
+				promptContextMessagesFromVSCodeMessages(messages),
+				config
+			);
+		} catch (error) {
+			console.error('Failed to save prompt context cache from VS Code messages:', error);
+		}
+	}
+
+	private async _savePromptContextCacheFromOpenAIMessages(
+		sessionId: string,
+		messages: any[],
+		assistantResponse?: string
+	): Promise<void> {
+		try {
+			const config = this._configManager.getEffectivePromptEnhancementContextCacheConfig();
+			await savePromptEnhancementContextCache(
+				sessionId,
+				promptContextMessagesFromOpenAIMessages(messages, assistantResponse),
+				config
+			);
+		} catch (error) {
+			console.error('Failed to save prompt context cache from OpenAI messages:', error);
 		}
 	}
 
@@ -3117,7 +3165,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 		const normalizedText = text.normalize('NFKC');
 		return Object.values(OPTIMIZED_PROMPT_PREFIX)
-			.some(prefix => normalizedText.includes(prefix.normalize('NFKC')));
+			.some(prefix => normalizedText.startsWith(prefix.normalize('NFKC')));
 	}
 
 	/**
@@ -3140,14 +3188,18 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	}
 
 	/**
-	 * Strip the optimized prompt prefix from all user message contents in the converted array.
+	 * Strip the optimized prompt prefix from the last user message content in the converted array.
+	 * Only the last user message is processed since that's where the auto-enhancement result is inserted.
 	 * The array may contain strings or multimodal content arrays.
 	 */
 	private _stripOptimizedPromptPrefixFromMessages(convertedMessages: Array<{ role: string; content: any }>): void {
-		for (const msg of convertedMessages) {
+		// Find the last user message (working backwards from the end)
+		for (let i = convertedMessages.length - 1; i >= 0; i--) {
+			const msg = convertedMessages[i];
 			if (msg.role !== 'user') {
 				continue;
 			}
+			// Found the last user message, strip prefix and stop
 			if (typeof msg.content === 'string') {
 				msg.content = this._stripOptimizedPromptPrefix(msg.content);
 			} else if (Array.isArray(msg.content)) {
@@ -3157,6 +3209,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					}
 				}
 			}
+			break;
 		}
 	}
 

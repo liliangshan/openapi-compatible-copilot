@@ -33,12 +33,6 @@
 	const autoSendTranslationsFallback = {
 		optimizePrompt: 'Optimize',
 		optimizingPrompt: 'Optimizing...',
-		promptEnhancementAutoSend: 'Automatically submit optimized prompt',
-		promptEnhancementAutoSendHelp: 'When enabled, the optimized prompt will be inserted and submitted automatically.',
-		promptEnhancementAutoSendUseGlobal: 'Use global',
-		promptEnhancementAutoSendFollowGlobalState: 'Follow global auto-submit: {state}',
-		promptEnhancementAutoSendForceEnabledDesc: 'Force auto-submit optimized prompts on for this project.',
-		promptEnhancementAutoSendForceDisabledDesc: 'Force auto-submit optimized prompts off for this project.',
 	};
 	const promptOptimizeTranslations = {
 		'en': { optimizePrompt: 'Optimize', optimizingPrompt: 'Optimizing...' },
@@ -198,6 +192,9 @@
 			promptEnhancementAutoSendFollowGlobalState: 'Follow global auto-submit: {state}',
 			promptEnhancementAutoSendForceEnabledDesc: 'Force auto-submit optimized prompts on for this project.',
 			promptEnhancementAutoSendForceDisabledDesc: 'Force auto-submit optimized prompts off for this project.',
+			promptEnhancementContextCacheMessages: 'Context Cache Messages',
+			promptEnhancementContextCacheMessagesHelp: 'Number of recent messages saved to .LLSOAI/prompts for prompt optimization. 0 means unlimited by message count.',
+			promptEnhancementContextUseGlobal: 'Use global ({value})',
 			promptEnhancementUseGlobalProvider: 'Use global prompt enhancement provider ({value})',
 			promptEnhancementUseGlobalModel: 'Use global prompt enhancement model ({value})',
 			promptEnhancementModelOverrideHelp: 'Select both provider and model to override the global prompt enhancement model. Leave either empty to keep using the global prompt enhancement model.',
@@ -368,6 +365,9 @@
 			promptEnhancementAutoSendFollowGlobalState: '跟随全局自动提交：{state}',
 			promptEnhancementAutoSendForceEnabledDesc: '强制当前项目自动提交优化后的提示词。',
 			promptEnhancementAutoSendForceDisabledDesc: '强制当前项目不自动提交优化后的提示词。',
+			promptEnhancementContextCacheMessages: '上下文缓存消息数',
+			promptEnhancementContextCacheMessagesHelp: '保存到 .LLSOAI/prompts 用于提示词优化的最近消息数量。0 表示不按消息数限制。',
+			promptEnhancementContextUseGlobal: '使用全局（{value}）',
 			promptEnhancementUseGlobalProvider: '使用全局提示词优化提供商（{value}）',
 			promptEnhancementUseGlobalModel: '使用全局提示词优化模型（{value}）',
 			promptEnhancementModelOverrideHelp: '同时选择提供商和模型即可覆盖全局提示词优化模型；任意一项留空则继续使用全局提示词优化模型。',
@@ -591,9 +591,18 @@
 		promptEnhancementFollowGlobalState: '跟隨全域狀態：{state}',
 		promptEnhancementForceEnabledDesc: '強制目前專案開啟提示詞最佳化。',
 		promptEnhancementForceDisabledDesc: '強制目前專案關閉提示詞最佳化。',
+		promptEnhancementAutoSend: '自動提交最佳化後的提示詞',
+		promptEnhancementAutoSendHelp: '開啟後，最佳化後的提示詞會自動插入並提交。',
+		promptEnhancementAutoSendUseGlobal: '使用全域',
+		promptEnhancementAutoSendFollowGlobalState: '跟隨全域自動提交：{state}',
+		promptEnhancementAutoSendForceEnabledDesc: '強制目前專案自動提交最佳化後的提示詞。',
+		promptEnhancementAutoSendForceDisabledDesc: '強制目前專案不自動提交最佳化後的提示詞。',
 		promptEnhancementUseGlobalProvider: '使用全域提示詞最佳化提供商（{value}）',
 		promptEnhancementUseGlobalModel: '使用全域提示詞最佳化模型（{value}）',
 		promptEnhancementModelOverrideHelp: '同時選擇提供商和模型即可覆蓋全域提示詞最佳化模型；任一項留空則繼續使用全域提示詞最佳化模型。',
+		promptEnhancementContextCacheMessages: '上下文快取訊息數',
+		promptEnhancementContextCacheMessagesHelp: '儲存到 .LLSOAI/prompts 用於提示詞最佳化的最近訊息數量。0 表示不按訊息數限制。',
+		promptEnhancementContextUseGlobal: '使用全域（{value}）',
 	});
 
 	Object.assign(translations.ko, {
@@ -610,9 +619,18 @@
 		promptEnhancementFollowGlobalState: '전역 상태 따르기: {state}',
 		promptEnhancementForceEnabledDesc: '이 프로젝트에서 프롬프트 향상을 강제로 켭니다.',
 		promptEnhancementForceDisabledDesc: '이 프로젝트에서 프롬프트 향상을 강제로 끕니다.',
+		promptEnhancementAutoSend: '최적화된 프롬프트 자동 제출',
+		promptEnhancementAutoSendHelp: '활성화하면 최적화된 프롬프트가 자동으로 삽입되고 제출됩니다.',
+		promptEnhancementAutoSendUseGlobal: '전역 사용',
+		promptEnhancementAutoSendFollowGlobalState: '전역 자동 제출 따르기: {state}',
+		promptEnhancementAutoSendForceEnabledDesc: '이 프로젝트에서 최적화된 프롬프트 자동 제출을 강제로 켭니다.',
+		promptEnhancementAutoSendForceDisabledDesc: '이 프로젝트에서 최적화된 프롬프트 자동 제출을 강제로 끕니다.',
 		promptEnhancementUseGlobalProvider: '전역 프롬프트 향상 공급자 사용({value})',
 		promptEnhancementUseGlobalModel: '전역 프롬프트 향상 모델 사용({value})',
 		promptEnhancementModelOverrideHelp: '전역 프롬프트 향상 모델을 재정의하려면 공급자와 모델을 모두 선택하세요. 둘 중 하나라도 비워 두면 전역 프롬프트 향상 모델을 계속 사용합니다.',
+		promptEnhancementContextCacheMessages: '컨텍스트 캐시 메시지 수',
+		promptEnhancementContextCacheMessagesHelp: '프롬프트 최적화를 위해 .LLSOAI/prompts 에 저장할 최근 메시지 수입니다. 0은 메시지 수 제한 없음을 의미합니다.',
+		promptEnhancementContextUseGlobal: '전역 사용({value})',
 	});
 
 	Object.assign(translations.ja, {
@@ -629,9 +647,18 @@
 		promptEnhancementFollowGlobalState: 'グローバル状態に従う: {state}',
 		promptEnhancementForceEnabledDesc: 'このプロジェクトでプロンプト強化を強制的にオンにします。',
 		promptEnhancementForceDisabledDesc: 'このプロジェクトでプロンプト強化を強制的にオフにします。',
+		promptEnhancementAutoSend: '最適化済みプロンプトを自動送信',
+		promptEnhancementAutoSendHelp: '有効にすると、最適化済みプロンプトが自動的に挿入され送信されます。',
+		promptEnhancementAutoSendUseGlobal: 'グローバルを使用',
+		promptEnhancementAutoSendFollowGlobalState: 'グローバル自動送信に従う: {state}',
+		promptEnhancementAutoSendForceEnabledDesc: 'このプロジェクトで最適化済みプロンプトの自動送信を強制的にオンにします。',
+		promptEnhancementAutoSendForceDisabledDesc: 'このプロジェクトで最適化済みプロンプトの自動送信を強制的にオフにします。',
 		promptEnhancementUseGlobalProvider: 'グローバルプロンプト強化プロバイダーを使用（{value}）',
 		promptEnhancementUseGlobalModel: 'グローバルプロンプト強化モデルを使用（{value}）',
 		promptEnhancementModelOverrideHelp: 'グローバルプロンプト強化モデルを上書きするには、プロバイダーとモデルの両方を選択してください。どちらかが空の場合はグローバルプロンプト強化モデルを引き続き使用します。',
+		promptEnhancementContextCacheMessages: 'コンテキストキャッシュメッセージ数',
+		promptEnhancementContextCacheMessagesHelp: 'プロンプト最適化用に .LLSOAI/prompts に保存する最近のメッセージ数です。0 はメッセージ数で制限しないことを意味します。',
+		promptEnhancementContextUseGlobal: 'グローバルを使用（{value}）',
 	});
 
 	Object.assign(translations.fr, {
@@ -648,9 +675,18 @@
 		promptEnhancementFollowGlobalState: 'Suivre l’état global : {state}',
 		promptEnhancementForceEnabledDesc: 'Forcer l’activation de l’amélioration des prompts pour ce projet.',
 		promptEnhancementForceDisabledDesc: 'Forcer la désactivation de l’amélioration des prompts pour ce projet.',
+		promptEnhancementAutoSend: 'Soumettre automatiquement le prompt optimisé',
+		promptEnhancementAutoSendHelp: 'Lorsque cette option est activée, le prompt optimisé est inséré et soumis automatiquement.',
+		promptEnhancementAutoSendUseGlobal: 'Utiliser le global',
+		promptEnhancementAutoSendFollowGlobalState: 'Suivre l’envoi automatique global : {state}',
+		promptEnhancementAutoSendForceEnabledDesc: 'Forcer l’envoi automatique des prompts optimisés pour ce projet.',
+		promptEnhancementAutoSendForceDisabledDesc: 'Désactiver l’envoi automatique des prompts optimisés pour ce projet.',
 		promptEnhancementUseGlobalProvider: 'Utiliser le fournisseur global d’amélioration des prompts ({value})',
 		promptEnhancementUseGlobalModel: 'Utiliser le modèle global d’amélioration des prompts ({value})',
 		promptEnhancementModelOverrideHelp: 'Sélectionnez à la fois un fournisseur et un modèle pour remplacer le modèle global d’amélioration des prompts. Laissez l’un des deux vide pour continuer à utiliser le modèle global.',
+		promptEnhancementContextCacheMessages: 'Messages de cache de contexte',
+		promptEnhancementContextCacheMessagesHelp: 'Nombre de messages récents enregistrés dans .LLSOAI/prompts pour l’optimisation des prompts. 0 signifie sans limite par nombre de messages.',
+		promptEnhancementContextUseGlobal: 'Utiliser le global ({value})',
 	});
 
 	Object.assign(translations.de, {
@@ -667,9 +703,18 @@
 		promptEnhancementFollowGlobalState: 'Globalem Status folgen: {state}',
 		promptEnhancementForceEnabledDesc: 'Prompt-Verbesserung für dieses Projekt erzwingen.',
 		promptEnhancementForceDisabledDesc: 'Prompt-Verbesserung für dieses Projekt deaktivieren.',
+		promptEnhancementAutoSend: 'Optimierten Prompt automatisch senden',
+		promptEnhancementAutoSendHelp: 'Wenn aktiviert, wird der optimierte Prompt automatisch eingefügt und gesendet.',
+		promptEnhancementAutoSendUseGlobal: 'Global verwenden',
+		promptEnhancementAutoSendFollowGlobalState: 'Globalem automatischen Senden folgen: {state}',
+		promptEnhancementAutoSendForceEnabledDesc: 'Automatisches Senden optimierter Prompts für dieses Projekt erzwingen.',
+		promptEnhancementAutoSendForceDisabledDesc: 'Automatisches Senden optimierter Prompts für dieses Projekt deaktivieren.',
 		promptEnhancementUseGlobalProvider: 'Globalen Prompt-Verbesserungsanbieter verwenden ({value})',
 		promptEnhancementUseGlobalModel: 'Globales Prompt-Verbesserungsmodell verwenden ({value})',
 		promptEnhancementModelOverrideHelp: 'Wählen Sie sowohl Anbieter als auch Modell aus, um das globale Prompt-Verbesserungsmodell zu überschreiben. Lassen Sie eines von beiden leer, um weiterhin das globale Modell zu verwenden.',
+		promptEnhancementContextCacheMessages: 'Kontext-Cache-Nachrichten',
+		promptEnhancementContextCacheMessagesHelp: 'Anzahl der letzten Nachrichten, die für die Prompt-Optimierung in .LLSOAI/prompts gespeichert werden. 0 bedeutet keine Begrenzung nach Nachrichtenanzahl.',
+		promptEnhancementContextUseGlobal: 'Global verwenden ({value})',
 	});
 
 	Object.keys(translations).forEach(lang => Object.assign(translations[lang], autoSendTranslationsFallback, translations[lang], promptOptimizeTranslations[lang] || promptOptimizeTranslations.en));
@@ -714,6 +759,9 @@
 		});
 		document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
 			el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
+		});
+		document.querySelectorAll('[data-i18n-placeholder-template]').forEach(el => {
+			el.setAttribute('placeholder', formatTranslation(t(el.dataset.i18nPlaceholderTemplate), getI18nTemplateValues(el)));
 		});
 		document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
 			el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
@@ -858,6 +906,7 @@
 		vscode.postMessage({ command: 'getSystemPrompt' });
 	}
 	setupEventListeners();
+	applyI18n();
 
 	function setupEventListeners() {
 		if (isPanelMode) {
@@ -1126,6 +1175,7 @@
 				const promptEnhancementAutoSend = document.getElementById('panelPromptEnhancementAutoSend')?.checked || false;
 				const promptEnhancementProviderId = document.getElementById('panelPromptEnhancementProvider')?.value || '';
 				const promptEnhancementModelId = document.getElementById('panelPromptEnhancementModel')?.value || '';
+				const promptEnhancementContextMessageLimit = parseInt(document.getElementById('panelPromptEnhancementContextMessageLimit')?.value || '20', 10);
 				vscode.postMessage({
 					command: 'saveGlobalSettings',
 					panelMode: true,
@@ -1144,6 +1194,7 @@
 						promptEnhancementAutoSend,
 						promptEnhancementProviderId,
 						promptEnhancementModelId,
+						promptEnhancementContextMessageLimit,
 						forceTodoEnabled
 					}
 				});
@@ -1163,10 +1214,11 @@
 				const promptEnhancementAutoSendState = document.querySelector('input[name="panelPromptEnhancementAutoSendState"]:checked')?.value || 'global';
 				const promptEnhancementProviderId = document.getElementById('panelPromptEnhancementProvider')?.value || '';
 				const promptEnhancementModelId = document.getElementById('panelPromptEnhancementModel')?.value || '';
+				const promptEnhancementContextMessageLimit = document.getElementById('panelPromptEnhancementContextMessageLimit')?.value || '';
 				vscode.postMessage({
 					command: 'saveProjectSettings',
 					panelMode: true,
-					data: { projectSystemPrompt, projectChatHistoryEnabled, projectChatHistorySavePath, forceTodoEnabled, expertModeEnabledState, expertModeProviderId, expertModeModelId, solutionProviderEnabledState, solutionProviderProviderId, solutionProviderModelId, solutionProviderReviewWithExpertState, promptEnhancementEnabledState, promptEnhancementAutoSendState, promptEnhancementProviderId, promptEnhancementModelId }
+					data: { projectSystemPrompt, projectChatHistoryEnabled, projectChatHistorySavePath, forceTodoEnabled, expertModeEnabledState, expertModeProviderId, expertModeModelId, solutionProviderEnabledState, solutionProviderProviderId, solutionProviderModelId, solutionProviderReviewWithExpertState, promptEnhancementEnabledState, promptEnhancementAutoSendState, promptEnhancementProviderId, promptEnhancementModelId, promptEnhancementContextMessageLimit }
 				});
 			}
 		});

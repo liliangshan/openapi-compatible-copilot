@@ -50,6 +50,15 @@ type ConfigViewMessageKey =
 	| 'projectChatHistorySettingsUpdated' 
 	| 'systemPromptUpdated';
 
+type ConfigViewInitialTextKey =
+	| 'promptEnhancementAutoSend'
+	| 'promptEnhancement'
+	| 'enablePromptEnhancement'
+	| 'promptEnhancementHelp'
+	| 'promptEnhancementAutoSendHelp'
+	| 'promptEnhancementProvider'
+	| 'promptEnhancementModel';
+
 const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>> = {
 	en: {
 		globalSettingsSaved: 'Global settings saved!',
@@ -139,6 +148,76 @@ const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>>
 
 function getConfigViewMessage(language: string, key: ConfigViewMessageKey): string {
 	return CONFIG_VIEW_MESSAGES[language]?.[key] || CONFIG_VIEW_MESSAGES.en[key];
+}
+
+const CONFIG_VIEW_INITIAL_TEXTS: Record<string, Record<ConfigViewInitialTextKey, string>> = {
+	en: {
+		promptEnhancement: 'Prompt Enhancement',
+		enablePromptEnhancement: 'Enable Prompt Enhancement',
+		promptEnhancementHelp: 'Automatically optimize prompts with a model before requests.',
+		promptEnhancementAutoSend: 'Automatically submit optimized prompt',
+		promptEnhancementAutoSendHelp: 'When enabled, the optimized prompt will be inserted and submitted automatically.',
+		promptEnhancementProvider: 'Prompt Enhancement Provider',
+		promptEnhancementModel: 'Prompt Enhancement Model',
+	},
+	'zh-cn': {
+		promptEnhancement: '提示词优化',
+		enablePromptEnhancement: '启用提示词优化',
+		promptEnhancementHelp: '在请求之前使用模型对提示词进行自动优化。',
+		promptEnhancementAutoSend: '自动提交优化后的提示词',
+		promptEnhancementAutoSendHelp: '开启后，优化后的提示词会自动插入并提交。',
+		promptEnhancementProvider: '提示词优化提供商',
+		promptEnhancementModel: '提示词优化模型',
+	},
+	'zh-tw': {
+		promptEnhancement: '提示詞最佳化',
+		enablePromptEnhancement: '啟用提示詞最佳化',
+		promptEnhancementHelp: '在請求之前使用模型自動最佳化提示詞。',
+		promptEnhancementAutoSend: '自動提交最佳化後的提示詞',
+		promptEnhancementAutoSendHelp: '開啟後，最佳化後的提示詞會自動插入並提交。',
+		promptEnhancementProvider: '提示詞最佳化供應商',
+		promptEnhancementModel: '提示詞最佳化模型',
+	},
+	ko: {
+		promptEnhancement: '프롬프트 향상',
+		enablePromptEnhancement: '프롬프트 향상 사용',
+		promptEnhancementHelp: '요청 전에 모델로 프롬프트를 자동 최적화합니다.',
+		promptEnhancementAutoSend: '최적화된 프롬프트 자동 제출',
+		promptEnhancementAutoSendHelp: '사용하면 최적화된 프롬프트가 자동으로 삽입되고 제출됩니다.',
+		promptEnhancementProvider: '프롬프트 향상 공급자',
+		promptEnhancementModel: '프롬프트 향상 모델',
+	},
+	ja: {
+		promptEnhancement: 'プロンプト強化',
+		enablePromptEnhancement: 'プロンプト強化を有効化',
+		promptEnhancementHelp: 'リクエスト前にモデルでプロンプトを自動最適化します。',
+		promptEnhancementAutoSend: '最適化されたプロンプトを自動送信',
+		promptEnhancementAutoSendHelp: '有効にすると、最適化されたプロンプトが自動で挿入され送信されます。',
+		promptEnhancementProvider: 'プロンプト強化プロバイダー',
+		promptEnhancementModel: 'プロンプト強化モデル',
+	},
+	fr: {
+		promptEnhancement: 'Amélioration du prompt',
+		enablePromptEnhancement: 'Activer l’amélioration du prompt',
+		promptEnhancementHelp: 'Optimise automatiquement les prompts avec un modèle avant les requêtes.',
+		promptEnhancementAutoSend: 'Soumettre automatiquement le prompt optimisé',
+		promptEnhancementAutoSendHelp: 'Lorsque cette option est activée, le prompt optimisé sera inséré et soumis automatiquement.',
+		promptEnhancementProvider: 'Fournisseur d’amélioration du prompt',
+		promptEnhancementModel: 'Modèle d’amélioration du prompt',
+	},
+	de: {
+		promptEnhancement: 'Prompt-Optimierung',
+		enablePromptEnhancement: 'Prompt-Optimierung aktivieren',
+		promptEnhancementHelp: 'Optimiert Prompts vor Anfragen automatisch mit einem Modell.',
+		promptEnhancementAutoSend: 'Optimierten Prompt automatisch absenden',
+		promptEnhancementAutoSendHelp: 'Wenn aktiviert, wird der optimierte Prompt automatisch eingefügt und gesendet.',
+		promptEnhancementProvider: 'Prompt-Optimierungsanbieter',
+		promptEnhancementModel: 'Prompt-Optimierungsmodell',
+	},
+};
+
+function getConfigViewInitialText(language: string, key: ConfigViewInitialTextKey): string {
+	return CONFIG_VIEW_INITIAL_TEXTS[language]?.[key] || CONFIG_VIEW_INITIAL_TEXTS.en[key];
 }
 
 /**
@@ -1056,7 +1135,7 @@ After completing the operations, please reply with the following message in both
 		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'assets', 'configView', 'configView.css'));
 		const nonce = this._getNonce();
 		const version = Date.now(); // Force reload
-		const vscodeLocale = vscode.env.language; // e.g. 'zh-cn', 'en'
+		const vscodeLocale = this._configManager.getResolvedLanguage(); // e.g. 'zh-cn', 'en'
 
 		return `<!DOCTYPE html>
 			<html lang="en">
@@ -1078,24 +1157,24 @@ After completing the operations, please reply with the following message in both
 							<div class="header-actions">
 								<button id="importBtn" class="icon-btn" title="Import Configuration" data-i18n-title="importConfiguration">
 									<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M11.5 1h-7l-.5.5v4H1.5l-.5.5v8l.5.5h13l.5-.5v-8l-.5-.5H12V1.5l-.5-.5zM5 5V2h6v3H5zm9 9H2V6h3v1.5l.5.5h5l.5-.5V6h3v8z"/><path d="M6 10h4v1H6v-1z"/></svg>
-									<span data-i18n="import">Import</span>
+									<span data-i18n="import"></span>
 								</button>
 								<button id="exportBtn" class="icon-btn" title="Export Configuration" data-i18n-title="exportConfiguration">
 									<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M11.5 1h-7l-.5.5v4H1.5l-.5.5v8l.5.5h13l.5-.5v-8l-.5-.5H12V1.5l-.5-.5zM5 5V2h6v3H5zm9 9H2V6h3v1.5l.5.5h5l.5-.5V6h3v8z"/><path d="M6 8h1v3h2V8h1L8 5.5 6 8z"/></svg>
-									<span data-i18n="export">Export</span>
+									<span data-i18n="export"></span>
 								</button>
 							</div>
 						</div>
-						<p class="header-subtitle" data-i18n="subtitle">OpenAPI Compatible Copilot</p>
+						<p class="header-subtitle" data-i18n="subtitle"></p>
 					</header>
 
 					<!-- Settings Section (Unified) -->
 					<section class="config-section settings-section">
 						<div class="language-row">
-							<label for="languageSelect" data-i18n="languageLabel">Language</label>
+							<label for="languageSelect" data-i18n="languageLabel"></label>
 							<select id="languageSelect" class="language-select" aria-label="Language" data-i18n-aria-label="languageLabel">
-								<option value="auto" data-i18n="languageAuto">Auto (VS Code)</option>
-								<option value="en" data-i18n="languageEnglish">English</option>
+								<option value="auto" data-i18n="languageAuto"></option>
+								<option value="en" data-i18n="languageEnglish"></option>
 								<option value="zh-cn" data-i18n="languageChinese">简体中文</option>
 								<option value="zh-tw" data-i18n="languageTraditionalChinese">繁體中文</option>
 								<option value="ko" data-i18n="languageKorean">한국어</option>
@@ -1105,22 +1184,22 @@ After completing the operations, please reply with the following message in both
 							</select>
 						</div>
 						<div class="settings-buttons-row">
-							<button id="openGlobalSettingsBtn" class="primary-btn" data-i18n="globalSettings">Global Settings</button>
-							<button id="openProjectSettingsBtn" class="primary-btn" data-i18n="projectSettings">Project Settings</button>
+							<button id="openGlobalSettingsBtn" class="primary-btn" data-i18n="globalSettings"></button>
+							<button id="openProjectSettingsBtn" class="primary-btn" data-i18n="projectSettings"></button>
 						</div>
-						<div class="settings-hint" data-i18n="settingsHint">System Prompt, Chat History, Import/Export Copilot Records, Enhanced TODO Settings</div>
+						<div class="settings-hint" data-i18n="settingsHint"></div>
 					</section>
 
 					<section class="config-section providers-section">
 						<div class="section-header">
 							<div class="section-title-group">
 								<svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.5 1H2.5L2 1.5V5l.5.5h1.639l.138.248 1.14 2.06-.638 2.148L4.5 10.5H3v3l.5.5h9l.5-.5v-3h-1.5l-.279-.544-.638-2.148 1.14-2.06.138-.248H13.5l.5-.5V1.5l-.5-.5zM13 5H3V2h10v3zm-2.621 5H5.621l.579-1.948-.758-1.37L4.5 5h7l-.942 1.682-.758 1.37L10.379 10zM12 13H4v-2h8v2z"/></svg>
-								<h2 data-i18n="providers">Providers</h2>
+								<h2 data-i18n="providers"></h2>
 								<span class="provider-count" id="providerCount"></span>
 							</div>
 							<button id="addProviderBtn" class="primary-btn add-provider-btn">
 								<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 7v1H8v6H7V8H1V7h6V1h1v6h6z"/></svg>
-								<span data-i18n="addProvider">Add Provider</span>
+								<span data-i18n="addProvider"></span>
 							</button>
 						</div>
 						<div id="providersList" class="providers-list">
@@ -1133,18 +1212,18 @@ After completing the operations, please reply with the following message in both
 				<div id="providerModal" class="modal">
 					<div class="modal-content">
 						<div class="modal-header">
-							<h2 id="modalTitle" data-i18n="addProvider">Add Provider</h2>
+							<h2 id="modalTitle" data-i18n="addProvider"></h2>
 							<button id="closeModal" class="close-btn">&times;</button>
 						</div>
 						<form id="providerForm">
 							<input type="hidden" id="providerId" />
 							<div class="form-group">
-								<label for="providerName" data-i18n="providerName">Provider Name</label>
+								<label for="providerName" data-i18n="providerName"></label>
 								<input type="text" id="providerName" placeholder="e.g., MyOpenAI, LocalLLM" data-i18n-placeholder="providerNamePlaceholder" required />
-								<div class="help-text" data-i18n="providerNameHelp">A unique name to identify this provider in Copilot</div>
+								<div class="help-text" data-i18n="providerNameHelp"></div>
 							</div>
 							<div class="form-group">
-								<label for="providerApiType" data-i18n="apiType">API Type</label>
+								<label for="providerApiType" data-i18n="apiType"></label>
 								<select id="providerApiType">
 									<option value="openai-compatible">OpenAI-Compatible</option>
 									<option value="anthropic">Anthropic</option>
@@ -1324,7 +1403,7 @@ After completing the operations, please reply with the following message in both
 				<div id="globalSettingsModal" class="modal">
 					<div class="modal-content modal-large">
 						<div class="modal-header">
-							<h2 data-i18n="globalSettings">Global Settings</h2>
+							<h2 data-i18n="globalSettings"></h2>
 							<button id="closeGlobalSettingsModal" class="close-btn">&times;</button>
 						</div>
 						
@@ -1443,7 +1522,7 @@ After completing the operations, please reply with the following message in both
 				<div id="projectSettingsModal" class="modal">
 					<div class="modal-content">
 						<div class="modal-header">
-							<h2 data-i18n="projectSettings">Project Settings</h2>
+							<h2 data-i18n="projectSettings"></h2>
 							<button id="closeProjectSettingsModal" class="close-btn">&times;</button>
 						</div>
 						<div class="modal-section">
@@ -1597,7 +1676,7 @@ export class ConfigViewPanel {
 		${modalHtml}
 	</div>
 
-	<script nonce="${nonce}">window.VSCODE_LOCALE = '${vscode.env.language}';</script>
+	<script nonce="${nonce}">window.VSCODE_LOCALE = '${this._configManager.getResolvedLanguage()}';</script>
 	<script nonce="${nonce}" src="${scriptUri}?v=${version}"></script>
 </body>
 </html>`;
@@ -1619,6 +1698,9 @@ export class ConfigViewPanel {
 		const promptEnhancementSettings = this._configManager.getPromptEnhancementConfig();
 		const projectPromptEnhancementSettings = this._configManager.getWorkspacePromptEnhancementConfig();
 		const effectivePromptEnhancementSettings = this._configManager.getEffectivePromptEnhancementConfig();
+		const promptEnhancementContextCacheSettings = this._configManager.getGlobalPromptEnhancementContextCacheConfig();
+		const projectPromptEnhancementContextCacheSettings = this._configManager.getWorkspacePromptEnhancementContextCacheConfig();
+		const effectivePromptEnhancementContextCacheSettings = this._configManager.getEffectivePromptEnhancementContextCacheConfig();
 		const providers = await this._configManager.getProviders();
 		const globalSystemPrompt = this._configManager.getGlobalSystemPrompt() || '';
 		const projectSystemPrompt = this._configManager.getWorkspaceSystemPrompt() || '';
@@ -1640,6 +1722,9 @@ export class ConfigViewPanel {
 			promptEnhancementSettings,
 			projectPromptEnhancementSettings,
 			effectivePromptEnhancementSettings,
+			promptEnhancementContextCacheSettings,
+			projectPromptEnhancementContextCacheSettings,
+			effectivePromptEnhancementContextCacheSettings,
 			providers,
 			expertProviders,
 			globalSystemPrompt,
@@ -1680,6 +1765,15 @@ export class ConfigViewPanel {
 		const panelExpertModeSettingsJson = JSON.stringify(settings.expertModeSettings || { enabled: false, providerId: '', modelId: '' }).replace(/</g, '\\u003c');
 		const panelSolutionProviderSettingsJson = JSON.stringify(settings.solutionProviderSettings || { enabled: false, providerId: '', modelId: '', reviewWithExpert: false }).replace(/</g, '\\u003c');
 		const promptEnhancementSettings = settings.promptEnhancementSettings || { enabled: false, autoSend: false, providerId: '', modelId: '' };
+		const promptEnhancementContextCacheSettings = settings.promptEnhancementContextCacheSettings || { contextMessageLimit: 20 };
+		const resolvedLanguage = this._configManager?.getResolvedLanguage() || 'en';
+		const promptEnhancementLabel = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'promptEnhancement'));
+		const enablePromptEnhancementLabel = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'enablePromptEnhancement'));
+		const promptEnhancementHelpText = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'promptEnhancementHelp'));
+		const promptEnhancementAutoSendLabel = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'promptEnhancementAutoSend'));
+		const promptEnhancementAutoSendHelpText = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'promptEnhancementAutoSendHelp'));
+		const promptEnhancementProviderLabel = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'promptEnhancementProvider'));
+		const promptEnhancementModelLabel = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'promptEnhancementModel'));
 		const panelPromptEnhancementSettingsJson = JSON.stringify(promptEnhancementSettings).replace(/</g, '\\u003c');
 		const selectedPromptEnhancementProviderId = promptEnhancementSettings.providerId || '';
 		const selectedPromptEnhancementProvider = selectedPromptEnhancementProviderId
@@ -1697,34 +1791,41 @@ export class ConfigViewPanel {
 
 		return `
 			<div class="settings-panel-header">
-				<h1 data-i18n="globalSettings">Global Settings</h1>
+				<h1 data-i18n="globalSettings"></h1>
 			</div>
 
 			<!-- Prompt Enhancement Section -->
 			<section class="config-section">
-				<h2 data-i18n="promptEnhancement">Prompt Enhancement</h2>
+				<h2 data-i18n="promptEnhancement">${promptEnhancementLabel}</h2>
 				<div class="form-group">
 				<label class="checkbox-label">
 					<input type="checkbox" id="panelPromptEnhancementEnabled" ${promptEnhancementSettings.enabled ? 'checked' : ''} />
-					<span data-i18n="enablePromptEnhancement">Enable Prompt Enhancement</span>
+					<span data-i18n="enablePromptEnhancement">${enablePromptEnhancementLabel}</span>
 				</label>
-				<div class="help-text" data-i18n="promptEnhancementHelp">Automatically optimize prompts with a model before requests.</div>
+				<div class="help-text" data-i18n="promptEnhancementHelp">${promptEnhancementHelpText}</div>
 				</div>
 				<div class="form-group">
 				<label class="checkbox-label">
 					<input type="checkbox" id="panelPromptEnhancementAutoSend" ${promptEnhancementSettings.autoSend ? 'checked' : ''} />
-					<span data-i18n="promptEnhancementAutoSend">Automatically submit optimized prompt</span>
+					<span data-i18n="promptEnhancementAutoSend">${promptEnhancementAutoSendLabel}</span>
 				</label>
-				<div class="help-text" data-i18n="promptEnhancementAutoSendHelp">When enabled, the optimized prompt will be inserted and submitted automatically.</div>
+				<div class="help-text" data-i18n="promptEnhancementAutoSendHelp">${promptEnhancementAutoSendHelpText}</div>
 				</div>
 				<div class="form-row">
 				<div class="form-group">
-					<label for="panelPromptEnhancementProvider" data-i18n="promptEnhancementProvider">Prompt Enhancement Provider</label>
+					<label for="panelPromptEnhancementProvider" data-i18n="promptEnhancementProvider">${promptEnhancementProviderLabel}</label>
 					<select id="panelPromptEnhancementProvider">${promptEnhancementProviderOptions}</select>
 				</div>
 				<div class="form-group">
-					<label for="panelPromptEnhancementModel" data-i18n="promptEnhancementModel">Prompt Enhancement Model</label>
+					<label for="panelPromptEnhancementModel" data-i18n="promptEnhancementModel">${promptEnhancementModelLabel}</label>
 					<select id="panelPromptEnhancementModel">${promptEnhancementModelOptions}</select>
+				</div>
+				</div>
+				<div class="form-row">
+				<div class="form-group">
+					<label for="panelPromptEnhancementContextMessageLimit" data-i18n="promptEnhancementContextCacheMessages">Context Cache Messages</label>
+					<input type="number" id="panelPromptEnhancementContextMessageLimit" min="0" max="200" value="${promptEnhancementContextCacheSettings.contextMessageLimit ?? 20}" />
+					<div class="help-text" data-i18n="promptEnhancementContextCacheMessagesHelp">Number of recent messages saved to .LLSOAI/prompts for prompt optimization. 0 means unlimited by message count.</div>
 				</div>
 				</div>
 			</section>
@@ -1869,6 +1970,8 @@ export class ConfigViewPanel {
 		const effectiveSolutionSettings = settings.effectiveSolutionProviderSettings || settings.solutionProviderSettings || { enabled: false, providerId: '', modelId: '', reviewWithExpert: false };
 		const projectPromptEnhancementSettings = settings.projectPromptEnhancementSettings || { enabled: false, enabledState: 'global', autoSend: false, autoSendState: 'global', providerId: '', modelId: '' };
 		const effectivePromptEnhancementSettings = settings.effectivePromptEnhancementSettings || settings.promptEnhancementSettings || { enabled: false, autoSend: false, providerId: '', modelId: '' };
+		const projectPromptEnhancementContextCacheSettings = settings.projectPromptEnhancementContextCacheSettings || {};
+		const effectivePromptEnhancementContextCacheSettings = settings.effectivePromptEnhancementContextCacheSettings || { contextMessageLimit: 20 };
 		const enabledState = projectExpertSettings.enabledState === 'enabled' || projectExpertSettings.enabledState === 'disabled' ? projectExpertSettings.enabledState : 'global';
 		const solutionEnabledState = projectSolutionSettings.enabledState === 'enabled' || projectSolutionSettings.enabledState === 'disabled' ? projectSolutionSettings.enabledState : 'global';
 		const promptEnhancementEnabledState = projectPromptEnhancementSettings.enabledState === 'enabled' || projectPromptEnhancementSettings.enabledState === 'disabled' ? projectPromptEnhancementSettings.enabledState : 'global';
@@ -1922,10 +2025,11 @@ export class ConfigViewPanel {
 			...((selectedPromptEnhancementProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedPromptEnhancementModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
 		].join('');
 		const panelPromptEnhancementSettingsJson = JSON.stringify(projectPromptEnhancementSettings).replace(/</g, '\\u003c');
+		const projectPromptContextLimitValue = projectPromptEnhancementContextCacheSettings.contextMessageLimit === undefined ? '' : projectPromptEnhancementContextCacheSettings.contextMessageLimit;
 
 		return `
 			<div class="settings-panel-header">
-				<h1 data-i18n="projectSettings">Project Settings</h1>
+				<h1 data-i18n="projectSettings"></h1>
 			</div>
 
 			<!-- Project Prompt Enhancement Section -->
@@ -1981,6 +2085,13 @@ export class ConfigViewPanel {
 						<span class="expert-state-title" data-i18n="disabled">Disabled</span>
 						<span class="expert-state-desc" data-i18n="promptEnhancementAutoSendForceDisabledDesc">Force auto-submit optimized prompts off for this project.</span>
 					</label>
+				</div>
+				<div class="expert-model-grid">
+					<div class="form-group">
+						<label for="panelPromptEnhancementContextMessageLimit" data-i18n="promptEnhancementContextCacheMessages">Context Cache Messages</label>
+						<input type="number" id="panelPromptEnhancementContextMessageLimit" min="0" max="200" value="${projectPromptContextLimitValue}" placeholder="Use global (${effectivePromptEnhancementContextCacheSettings.contextMessageLimit})" data-i18n-placeholder-template="promptEnhancementContextUseGlobal" data-i18n-placeholder-value-value="${effectivePromptEnhancementContextCacheSettings.contextMessageLimit}" />
+						<div class="help-text" data-i18n="promptEnhancementContextCacheMessagesHelp">Number of recent messages saved to .LLSOAI/prompts for prompt optimization. 0 means unlimited by message count.</div>
+					</div>
 				</div>
 			</section>
 
@@ -2281,6 +2392,9 @@ export class ConfigViewPanel {
 					providerId: data.promptEnhancementProviderId || '',
 					modelId: data.promptEnhancementModelId || '',
 				});
+				await this._configManager.updateGlobalPromptEnhancementContextCacheConfig({
+					contextMessageLimit: data.promptEnhancementContextMessageLimit,
+				});
 				await this._configManager.updateGlobalForceTodoEnabled(!!data.forceTodoEnabled);
 				this._currentPanel?.dispose();
 				vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'globalSettingsSaved'));
@@ -2309,6 +2423,11 @@ export class ConfigViewPanel {
 					autoSendState: data.promptEnhancementAutoSendState || 'global',
 					providerId: data.promptEnhancementProviderId || '',
 					modelId: data.promptEnhancementModelId || '',
+				});
+				await this._configManager.updateWorkspacePromptEnhancementContextCacheConfig({
+					contextMessageLimit: data.promptEnhancementContextMessageLimit === '' || data.promptEnhancementContextMessageLimit === undefined
+						? undefined
+						: Number(data.promptEnhancementContextMessageLimit),
 				});
 				this._currentPanel?.dispose();
 				vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'projectSettingsSaved'));
