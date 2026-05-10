@@ -3,6 +3,7 @@ import { ConfigManager, ResolvedAppLanguage } from './configManager';
 import { convertOpenAIRequestToAnthropic } from './utils/anthropicConverter';
 import { convertChatCompletionsToResponsesAPI } from './utils/v1ResponseConverter';
 import { buildPromptEnhancementContextInput, readPromptEnhancementContextCache } from './promptContextCache';
+import { OPTIMIZED_PROMPT_PREFIX } from './promptEnhancementMessages';
 
 const PROMPT_ENHANCEMENT_STATUS_TEXT: Record<ResolvedAppLanguage, string> = {
 	'en': 'Prompt Enhancement',
@@ -138,16 +139,6 @@ const PROMPT_ENHANCEMENT_DIALOG_TEXT: Record<ResolvedAppLanguage, {
 		success: 'Der optimierte Prompt wurde in das Chat-Eingabefeld eingefügt. Klicken Sie im Chatfenster unten rechts auf Senden.',
 		autoSend: 'Automatisch senden',
 	},
-};
-
-export const OPTIMIZED_PROMPT_PREFIX: Record<ResolvedAppLanguage, string> = {
-	'en': '[Optimized Prompt]',
-	'zh-cn': '[已优化提示词]',
-	'zh-tw': '[已最佳化提示詞]',
-	ko: '[최적화된 프롬프트]',
-	ja: '[最適化済みプロンプト]',
-	fr: '[Prompt optimisé]',
-	de: '[Optimierter Prompt]',
 };
 
 export function initPromptEnhancementStatusBar(context: vscode.ExtensionContext, configManager: ConfigManager): vscode.StatusBarItem {
@@ -350,7 +341,13 @@ Do not output any explanations, comments, Markdown, or extra text outside the JS
 
 Decision criteria for status:
 
-Set "status" to false when the user's input does NOT need prompt optimization.
+Default behavior: optimize normal user requests.
+
+In a coding assistant workflow, many valid prompts are action-oriented, such as implementing features, fixing bugs, explaining errors, updating configuration, writing tests, refactoring code, or designing a solution. These are NOT operational commands merely because they contain verbs like create, update, build, run, install, configure, add, remove, or delete.
+
+Set "status" to true for ordinary questions, explanations, coding tasks, debugging requests, design requests, refactoring requests, documentation requests, testing requests, and analysis requests when rewriting can make the prompt clearer, more structured, more contextual, or more actionable.
+
+Set "status" to false only when the user's input does NOT need prompt optimization.
 
 This includes, but is not limited to, the following cases:
 
@@ -360,10 +357,14 @@ This includes, but is not limited to, the following cases:
 4. The input does not contradict itself or contain logical errors.
 5. The input is appropriately concise for the task complexity.
 6. The input is understandable and workable, even if it is not perfectly written.
+7. The input is a direct operational command that should be executed exactly as written.
+8. The input is a very short continuation or confirmation such as "continue", "yes", "ok", "1", "继续", "是", or "确认".
 
 IMPORTANT: CRITICAL - Operational Commands MUST NOT Be Optimized
 
-The following types of inputs are operational commands and MUST NOT be optimized. For these inputs, ALWAYS set "status" to false:
+Only direct execution commands MUST NOT be optimized. A direct execution command is a command or instruction whose main purpose is to make the assistant run an operation exactly as requested, rather than improve or reason about a development task.
+
+The following types of inputs are direct operational commands and MUST NOT be optimized. For these inputs, ALWAYS set "status" to false:
 
 **A. Shell Commands (English)**:
 - git commands: git commit -m "fix: bug", git push origin main, git pull, git checkout main, git status, git merge, git rebase, git stash, git fetch, git clone, git branch, git diff, git log, git show
@@ -374,7 +375,7 @@ The following types of inputs are operational commands and MUST NOT be optimized
 - system commands: ps aux, kill -9 1234, export NODE_ENV=production, sudo apt install nginx
 
 **B. Intent-Based Operational Commands (Any Language)**:
-These are natural language descriptions of operations that should be executed, not prompts to improve:
+These are natural language descriptions of immediate operations that should be executed directly, not prompts to improve:
 
 English patterns:
 - "commit this to the repository"
@@ -387,6 +388,9 @@ English patterns:
 - "check git status"
 - "make a pull request"
 - "open a merge request"
+- "install dependencies"
+- "restart the service"
+- "delete this branch"
 
 Chinese patterns:
 - "commit to repository" or "commit to remote repository" or "commit code"
@@ -418,20 +422,27 @@ Other language patterns:
 - Russian: "commit to repository", "create PR", "send to remote"
 
 **C. Command Keywords (Regardless of Language)**:
-Any input containing these keywords followed by an action intent should be treated as an operational command:
-- git, github, repository, repo, commit, push, pull, merge, branch, checkout, clone, fetch, stash, rebase
-- docker, container, image, compose, dockerfile, build, run, stop, rm, exec
-- npm, yarn, pnpm, install, build, test, dev, start, publish
-- deploy, deployment, release, version, publish
-- execute, run, script, bash, shell, command, cli
-- ssh, scp, ftp, wget, curl, network, remote, server
-- crontab, schedule, cron, job, task, automation
-- backup, restore, snapshot, checkpoint
-- init, setup, configure, config, settings
-- install, uninstall, update, upgrade, add, remove, delete
+Command keywords are only signals. They do NOT automatically mean "status": false.
+
+Treat the input as operational only when the whole input is asking to directly execute an operation, such as committing, pushing, deploying, running a shell command, installing dependencies, restarting a service, or deleting a branch.
+
+Do NOT set "status" to false merely because the input contains words like git, docker, npm, build, run, script, create, setup, configure, config, settings, install, update, add, remove, or delete.
+
+For example, these SHOULD be considered normal prompts and may be optimized:
+- "explain why npm install failed"
+- "help me write an npm package publish script"
+- "build failed, help me analyze it"
+- "create a login page"
+- "update the configuration to support custom timeout"
+- "add tests for this function"
+- "remove the duplicate code"
+- "configure the project to support linting"
+- "help me design a deployment plan"
 
 **D. General Patterns for Operational Intents**:
-If the user's input describes an action to be performed rather than a question or task to be completed, it is likely an operational command and should NOT be optimized.
+If the user's input is a direct operation to execute immediately and exactly, it is likely an operational command and should NOT be optimized.
+
+If the user's input is a development task to be completed by reasoning, editing, explaining, designing, debugging, or implementing, it is a normal prompt and SHOULD be optimized when improvement would help.
 
 Examples of operational intents:
 - "help me commit" - operational
@@ -439,11 +450,18 @@ Examples of operational intents:
 - "push to github" - operational
 - "create pull request" - operational
 - "release version 1.0" - operational
+- "run npm install" - operational
+- "execute this shell command" - operational
 
 Examples of prompts that SHOULD be optimized:
 - "I want to understand how git works" - genuine question, optimize OK
 - "explain the difference between docker and containers" - genuine question, optimize OK
 - "help me write an npm package publish script" - task request, optimize OK
+- "create a login page" - development task, optimize OK
+- "fix this bug" - development task, optimize OK
+- "update config to support timeout" - development task, optimize OK
+- "build failed, help me diagnose it" - debugging task, optimize OK
+- "refactor this function" - coding task, optimize OK
 
 Set "status" to true only when the user's input is a PROMPT that genuinely needs improvement.
 
@@ -454,12 +472,13 @@ Set "status" to true when the prompt:
 4. Contains contradictions or logical errors.
 5. Could benefit significantly from better structure or organization.
 6. Is overly verbose without improving clarity.
-7. Asks a genuine question or requests an explanation (not an action to execute)
+7. Asks a genuine question or requests an explanation.
+8. Requests coding, debugging, analysis, design, documentation, testing, implementation, or refactoring work and would benefit from clearer constraints or expected output.
 
 IMPORTANT RULES:
-- If the input describes an action to be performed (especially on git, docker, npm, deployment, etc.), ALWAYS set "status" to false.
-- If the input contains keywords like "commit", "push", "pull", "PR", "deploy", "run", "execute", "submit", "create", "release", "publish", "build" in an operational context, ALWAYS set "status" to false.
-- Only set "status" to true if the prompt genuinely needs improvement and is NOT an operational command.
+- If the input is a direct operational command to be executed exactly as written, ALWAYS set "status" to false.
+- If the input is a normal development task, question, analysis request, debugging request, or coding request, do NOT reject optimization merely because it contains command-related keywords.
+- Only set "status" to false for operational commands, very short confirmations, or prompts that are already sufficiently clear and complete.
 - When "status" is false, you MUST still output the "prompt" field with the original input: {"status": false, "prompt": "the original input"}
 
 When "status" is true:

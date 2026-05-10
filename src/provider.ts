@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { ConfigManager, type ResolvedAppLanguage } from './configManager.js';
 import {
-	OPTIMIZED_PROMPT_PREFIX,
 	optimizePrompt,
 	insertIntoChatInput,
 	type PromptEnhancementResult,
 } from './promptEnhancementStatusBar';
+import { AUTO_PROMPT_ENHANCEMENT_DONE_MESSAGE, OPTIMIZED_PROMPT_PREFIX } from './promptEnhancementMessages';
 import {
 	promptContextMessagesFromOpenAIMessages,
 	promptContextMessagesFromVSCodeMessages,
@@ -29,16 +29,6 @@ import { TimelineService, timelineErrorToJson } from './timeline/service';
 
 const EXTENSION_LABEL = 'LLS OAI';
 const DEFAULT_CONTEXT_LENGTH = 128000;
-
-const AUTO_PROMPT_ENHANCEMENT_DONE_MESSAGE: Record<ResolvedAppLanguage, string> = {
-	en: 'Prompt optimized. Please submit again, or edit it before submitting.',
-	'zh-cn': '提示词已优化，请再次提交，或者修改后提交。',
-	'zh-tw': '提示詞已最佳化，請再次提交，或修改後再提交。',
-	ko: '프롬프트가 최적화되었습니다. 다시 제출하거나 수정한 후 제출하세요.',
-	ja: 'プロンプトを最適化しました。再度送信するか、編集してから送信してください。',
-	fr: 'Le prompt a été optimisé. Veuillez le soumettre à nouveau, ou le modifier avant de le soumettre.',
-	de: 'Der Prompt wurde optimiert. Bitte erneut senden oder vor dem Senden bearbeiten.',
-};
 const DEFAULT_MAX_TOKENS = 16000;
 const ASK_LLSOAI_TOOL_NAME = 'ask_llsoai';
 const EXPERT_TOOL_CALL_PREFIX = 'llsoai';
@@ -663,7 +653,10 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					if (autoEnhanceConfig.providerId && autoEnhanceConfig.modelId) {
 						let optimizationResult: PromptEnhancementResult = { status: false, prompt: promptTextForEnhancement };
 						try {
-							await this._savePromptContextCacheFromVSCodeMessages(currentSessionId, messages);
+							// Save only historical context before optimizing the current prompt.
+							// The current user message is passed separately as rawPrompt; saving it here would
+							// make it appear twice in the prompt enhancement request context.
+							await this._savePromptContextCacheFromVSCodeMessages(currentSessionId, messages.slice(0, -1));
 							optimizationResult = await optimizePrompt(this._configManager, promptTextForEnhancement, language, undefined, { sessionId: currentSessionId });
 						} catch (err) {
 							console.error('[Auto Prompt Enhancement] Failed:', err);

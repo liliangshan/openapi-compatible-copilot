@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { AUTO_PROMPT_ENHANCEMENT_DONE_PREFIX, OPTIMIZED_PROMPT_PREFIX } from './promptEnhancementMessages';
 import { PromptEnhancementContextCacheConfig } from './types';
 
 export interface PromptContextMessage {
@@ -122,6 +123,59 @@ function applyMessageLimit(messages: PromptContextMessage[], contextMessageLimit
 	return [...messages];
 }
 
+function normalizeComparableText(value: string): string {
+	return value.trim().normalize('NFKC');
+}
+
+function isPromptEnhancementDoneAssistantMessage(message: PromptContextMessage): boolean {
+	if (message.role !== 'assistant') {
+		return false;
+	}
+	const content = normalizeComparableText(message.content);
+	return Object.values(AUTO_PROMPT_ENHANCEMENT_DONE_PREFIX)
+		.map(prefix => normalizeComparableText(prefix))
+		.some(prefix => content.startsWith(prefix));
+}
+
+function filterPromptEnhancementIntermediateMessages(messages: PromptContextMessage[]): PromptContextMessage[] {
+	const removed = new Set<number>();
+	for (let i = 0; i < messages.length; i++) {
+		if (!isPromptEnhancementDoneAssistantMessage(messages[i])) {
+			continue;
+		}
+		removed.add(i);
+		for (let j = i - 1; j >= 0; j--) {
+			if (!removed.has(j) && messages[j].role === 'user') {
+				removed.add(j);
+				break;
+			}
+		}
+	}
+	return messages.filter((_message, index) => !removed.has(index));
+}
+
+function stripOptimizedPromptPrefix(content: string): string {
+	let result = content.trimStart();
+	for (const prefix of Object.values(OPTIMIZED_PROMPT_PREFIX)) {
+		const normalizedContent = normalizeComparableText(result);
+		const normalizedPrefix = normalizeComparableText(prefix);
+		if (normalizedContent.startsWith(normalizedPrefix)) {
+			result = result.slice(prefix.length).replace(/^\s*[:：\-—–]?\s*/, '');
+			break;
+		}
+	}
+	return result;
+}
+
+function stripOptimizedPromptPrefixesFromMessages(messages: PromptContextMessage[]): PromptContextMessage[] {
+	return messages.map(message => {
+		if (message.role !== 'user') {
+			return message;
+		}
+		return { ...message, content: stripOptimizedPromptPrefix(message.content) };
+	});
+}
+
 function serializeCache(data: PromptContextCacheFile): string {
 	return JSON.stringify(data, null, 2);
 }
@@ -155,7 +209,9 @@ export async function savePromptEnhancementContextCache(
 		const dir = getPromptContextCacheDir();
 		const filePath = getPromptContextCachePath(sessionId);
 		const normalized = normalizePromptContextMessages(messages);
-		const limited = applyMessageLimit(normalized, config.contextMessageLimit);
+		const filtered = filterPromptEnhancementIntermediateMessages(normalized);
+		const cleaned = stripOptimizedPromptPrefixesFromMessages(filtered).filter(message => message.content.trim());
+		const limited = applyMessageLimit(cleaned, config.contextMessageLimit);
 		const data: PromptContextCacheFile = {
 			version: CACHE_VERSION,
 			kind: CACHE_KIND,
