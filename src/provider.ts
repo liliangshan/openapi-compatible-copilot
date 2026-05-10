@@ -647,7 +647,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const lastMsg = messages[messages.length - 1];
 			const isLastUser = lastMsg?.role === vscode.LanguageModelChatMessageRole.User;
 			if (isLastUser && promptTextForEnhancement) {
-				if (!this._hasOptimizedPromptPrefix(promptTextForEnhancement) && !promptTextForEnhancement.includes('creating a comprehensive')) {
+				if (
+					!this._hasOptimizedPromptPrefix(promptTextForEnhancement) &&
+					!promptTextForEnhancement.includes('creating a comprehensive') &&
+					!promptTextForEnhancement.includes('Output ONLY the `<summary>` content')
+				) {
 					// No prefix → ask model if optimization is needed (skip if compressed context).
 					const language = this._configManager.getResolvedLanguage();
 					if (autoEnhanceConfig.providerId && autoEnhanceConfig.modelId) {

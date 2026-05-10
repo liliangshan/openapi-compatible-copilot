@@ -827,7 +827,8 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				try {
 					const { target, prompt, providerId, modelId } = message.data as { target: string; prompt: string; providerId?: string; modelId?: string };
 					const language = this._configManager.getResolvedLanguage();
-					const optimizedPrompt = await optimizePrompt(this._configManager, prompt || '', language, { providerId, modelId });
+					const optimizationResult = await optimizePrompt(this._configManager, prompt || '', language, { providerId, modelId });
+					const optimizedPrompt = optimizationResult.prompt || prompt || '';
 					this._getWebview()?.postMessage({
 						command: 'systemPromptOptimized',
 						data: { target, prompt: optimizedPrompt },
@@ -2351,7 +2352,8 @@ export class ConfigViewPanel {
 				const { target, prompt, providerId, modelId } = data as { target: string; prompt: string; providerId?: string; modelId?: string };
 				try {
 					const language = this._configManager.getResolvedLanguage();
-					const optimizedPrompt = await optimizePrompt(this._configManager, prompt || '', language, { providerId, modelId });
+					const optimizationResult = await optimizePrompt(this._configManager, prompt || '', language, { providerId, modelId });
+					const optimizedPrompt = optimizationResult.prompt || prompt || '';
 					this._currentPanel?.webview.postMessage({
 						command: 'systemPromptOptimized',
 						data: { target, prompt: optimizedPrompt },

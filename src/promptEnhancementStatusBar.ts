@@ -359,6 +359,7 @@ This includes, but is not limited to, the following cases:
 6. The input is understandable and workable, even if it is not perfectly written.
 7. The input is a direct operational command that should be executed exactly as written.
 8. The input is a very short continuation or confirmation such as "continue", "yes", "ok", "1", "继续", "是", or "确认".
+9. The input is context compression related content, such as system-generated context summaries, compressed historical messages, conversation context blocks, or auto-generated summary text. These are internal system content and should NOT be optimized.
 
 IMPORTANT: CRITICAL - Operational Commands MUST NOT Be Optimized
 
@@ -479,6 +480,7 @@ IMPORTANT RULES:
 - If the input is a direct operational command to be executed exactly as written, ALWAYS set "status" to false.
 - If the input is a normal development task, question, analysis request, debugging request, or coding request, do NOT reject optimization merely because it contains command-related keywords.
 - Only set "status" to false for operational commands, very short confirmations, or prompts that are already sufficiently clear and complete.
+- If the input is context compression related content, such as system-generated context summaries, compressed historical messages, conversation context blocks, or auto-generated summary text, ALWAYS set "status" to false. These are internal system content and should NOT be optimized.
 - When "status" is false, you MUST still output the "prompt" field with the original input: {"status": false, "prompt": "the original input"}
 
 When "status" is true:
