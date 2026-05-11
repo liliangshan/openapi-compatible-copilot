@@ -38,7 +38,9 @@ const TODO_TOOL_NAME = 'manage_todo_list';
 const TIMELINE_LIST_TOOL_NAME = 'timeline_list_by_file';
 const TIMELINE_RESTORE_TOOL_NAME = 'timeline_restore_snapshot';
 const TIMELINE_READ_LINES_TOOL_NAME = 'timeline_read_snapshot_lines';
-const MAX_TIMELINE_TOOL_ROUNDS = 3;
+const GET_ERRORS_TOOL_NAME = 'get_errors';
+const MAX_AUTO_EXECUTED_TOOL_ROUNDS = 3;
+const MAX_GET_ERRORS_DIAGNOSTICS = 10;
 const MAX_SOLUTION_EXPERT_REVIEW_COUNT = 2;
 const MAX_FORCE_EXPERT_REVIEW_REMINDERS = 2;
 
@@ -78,6 +80,40 @@ interface ModelRequestResult {
 	text: string;
 	reasoningContent: string;
 	toolCalls: CollectedToolCall[];
+}
+
+interface GetErrorsArguments {
+	filePaths?: string[];
+}
+
+interface VscodeDiagnosticItem {
+	uri: string;
+	filePath: string;
+	severity: 'error' | 'warning' | 'information' | 'hint' | 'unknown';
+	message: string;
+	source?: string;
+	code?: string;
+	range: {
+		startLine: number;
+		startCharacter: number;
+		endLine: number;
+		endCharacter: number;
+	};
+}
+
+interface GetErrorsToolResult {
+	ok: boolean;
+	source: 'vscode.languages.getDiagnostics';
+	summary: {
+		total: number;
+		errors: number;
+		warnings: number;
+		information: number;
+		hints: number;
+	};
+	diagnostics: VscodeDiagnosticItem[];
+	message: string;
+	truncated: boolean;
 }
 
 interface ExpertRunState {
@@ -788,6 +824,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		// Handle tool calling if present
 		const builtInTools = [
 			...(this._timelineService ? this._buildTimelineTools() : []),
+			this._buildGetErrorsTool(),
 			...(expertEnabled ? [this._buildAskLlsoaiTool()] : []),
 			...(solutionEnabled ? [this._buildAskSolutionProviderTool()] : []),
 		];
@@ -806,7 +843,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				}));
 		}
 
-		const result = await this._requestModelWithTimelineTools({
+		const result = await this._requestModelWithAutoExecutedTools({
 			...mainContext,
 			requestBody,
 			sessionId: currentSessionId,
@@ -838,6 +875,18 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					} else {
 						await this._continueMainAfterUnavailableSolutionProvider(toolCall, requestBody.messages, mainContext, apiTools, currentSessionId, progress, token);
 					}
+					continue;
+				}
+				if (this._isAutoExecutedTool(toolCall.name)) {
+					const resultText = JSON.stringify({
+						ok: false,
+						error: {
+							code: 'AUTO_EXECUTED_TOOL_LEAK_PREVENTED',
+							message: `Tool ${toolCall.name} is extension-local and must not be forwarded to the external VS Code tool executor. Please retry the request by calling it alone.`,
+							retryable: true,
+						},
+					});
+					progress.report(new vscode.LanguageModelToolResultPart(toolCall.id, [new vscode.LanguageModelTextPart(resultText)]));
 					continue;
 				}
 				let finalArgs = toolCall.input;
@@ -942,7 +991,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const result = await this._requestModel({ ...mainContext, requestBody, requestLabel: `main_after_invalid_internal_tools_${Date.now()}`, progress, token, reportText: true });
 		await this._saveMainChatHistoryFromMessages(requestBody.messages, result.text, mainContext.modelId, mainTools);
 		for (const toolCall of result.toolCalls) {
-			if (toolCall.name === ASK_LLSOAI_TOOL_NAME || toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME) {
+			if (toolCall.name === ASK_LLSOAI_TOOL_NAME || toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME || this._isAutoExecutedTool(toolCall.name)) {
 				continue;
 			}
 			progress.report(new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, toolCall.input));
@@ -1133,6 +1182,24 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		];
 	}
 
+	private _buildGetErrorsTool(): any {
+		return {
+			name: GET_ERRORS_TOOL_NAME,
+			description: 'Get current diagnostics known to VS Code, typically shown in the Problems panel. This tool is executed locally by the extension and returns at most 10 diagnostics sorted by severity.',
+			inputSchema: {
+				type: 'object',
+				additionalProperties: false,
+				properties: {
+					filePaths: {
+						type: 'array',
+						items: { type: 'string' },
+						description: 'Optional file or directory paths used to filter diagnostics. If omitted, diagnostics currently known to VS Code are returned.',
+					},
+				},
+			},
+		};
+	}
+
 	private _mergeToolsWithBuiltIns(externalTools: readonly any[], builtIns: any[]): any[] {
 		if (builtIns.length === 0) {
 			return [...externalTools];
@@ -1148,12 +1215,20 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		return name === TIMELINE_LIST_TOOL_NAME || name === TIMELINE_RESTORE_TOOL_NAME || name === TIMELINE_READ_LINES_TOOL_NAME;
 	}
 
+	private _isGetErrorsTool(name: string): boolean {
+		return name === GET_ERRORS_TOOL_NAME;
+	}
+
+	private _isAutoExecutedTool(name: string): boolean {
+		return this._isTimelineTool(name) || this._isGetErrorsTool(name);
+	}
+
 	private _isInternalDelegationTool(name: string): boolean {
 		return name === ASK_LLSOAI_TOOL_NAME || name === ASK_SOLUTION_PROVIDER_TOOL_NAME;
 	}
 
 	private _isToolHiddenFromChildModel(name: string): boolean {
-		return name === TODO_TOOL_NAME || this._isInternalDelegationTool(name) || this._isTimelineTool(name);
+		return name === TODO_TOOL_NAME || this._isInternalDelegationTool(name) || this._isTimelineTool(name) || this._isGetErrorsTool(name);
 	}
 
 	private _buildSolutionDraftFilePath(runId: string): string {
@@ -1269,6 +1344,180 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 	}
 
+	private _executeGetErrorsToolAsJson(input: any): string {
+		try {
+			return JSON.stringify(this._collectVscodeDiagnostics(this._normalizeGetErrorsArguments(input)));
+		} catch (error) {
+			const result: GetErrorsToolResult = {
+				ok: false,
+				source: 'vscode.languages.getDiagnostics',
+				summary: { total: 0, errors: 0, warnings: 0, information: 0, hints: 0 },
+				diagnostics: [],
+				message: error instanceof Error ? error.message : '读取 VS Code 问题面板失败',
+				truncated: false,
+			};
+			return JSON.stringify(result);
+		}
+	}
+
+	private _normalizeGetErrorsArguments(input: any): GetErrorsArguments {
+		let candidate = input;
+		if (typeof candidate === 'string') {
+			try {
+				candidate = JSON.parse(candidate);
+			} catch {
+				candidate = {};
+			}
+		}
+		const filePaths = Array.isArray(candidate?.filePaths)
+			? candidate.filePaths.filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
+			: undefined;
+		return { filePaths };
+	}
+
+	private _collectVscodeDiagnostics(args: GetErrorsArguments): GetErrorsToolResult {
+		const items: VscodeDiagnosticItem[] = [];
+		for (const [uri, diagnostics] of vscode.languages.getDiagnostics()) {
+			if (!this._matchesGetErrorsFilePaths(uri, args.filePaths)) {
+				continue;
+			}
+			for (const diagnostic of diagnostics) {
+				items.push(this._toVscodeDiagnosticItem(uri, diagnostic));
+			}
+		}
+		items.sort((a, b) => this._compareVscodeDiagnosticItems(a, b));
+		const summary = this._buildGetErrorsSummary(items);
+		const truncated = items.length > MAX_GET_ERRORS_DIAGNOSTICS;
+		const visibleItems = items.slice(0, MAX_GET_ERRORS_DIAGNOSTICS);
+		return {
+			ok: true,
+			source: 'vscode.languages.getDiagnostics',
+			summary,
+			diagnostics: visibleItems,
+			message: items.length === 0
+				? '当前 VS Code 问题面板没有匹配的诊断信息。'
+				: truncated
+					? `当前 VS Code 问题面板共有 ${items.length} 条匹配诊断，已返回前 ${MAX_GET_ERRORS_DIAGNOSTICS} 条。`
+					: `当前 VS Code 问题面板共有 ${items.length} 条匹配诊断。`,
+			truncated,
+		};
+	}
+
+	private _matchesGetErrorsFilePaths(uri: vscode.Uri, filePaths?: string[]): boolean {
+		if (!filePaths || filePaths.length === 0) {
+			return true;
+		}
+		const candidates = [
+			uri.fsPath || '',
+			uri.toString(),
+			vscode.workspace.asRelativePath(uri, false),
+		]
+			.filter(value => typeof value === 'string' && value.length > 0)
+			.map(value => this._normalizeDiagnosticPath(value));
+		return filePaths.some((filePath) => {
+			const target = this._normalizeDiagnosticPath(filePath.trim());
+			if (!target) {
+				return false;
+			}
+			const directoryTarget = target.endsWith('/') ? target : `${target}/`;
+			return candidates.some(candidate => candidate === target
+				|| candidate.endsWith(`/${target}`)
+				|| candidate.startsWith(directoryTarget));
+		});
+	}
+
+	private _normalizeDiagnosticPath(value: string): string {
+		let normalized = value.replace(/\\/g, '/').replace(/^\.\/+/, '');
+		try {
+			normalized = decodeURI(normalized);
+		} catch {
+			// Keep the original normalized value when URI decoding fails.
+		}
+		return normalized;
+	}
+
+	private _toVscodeDiagnosticItem(uri: vscode.Uri, diagnostic: vscode.Diagnostic): VscodeDiagnosticItem {
+		return {
+			uri: uri.toString(),
+			filePath: uri.fsPath || uri.toString(),
+			severity: this._toVscodeDiagnosticSeverityText(diagnostic.severity),
+			message: diagnostic.message,
+			source: diagnostic.source,
+			code: this._normalizeDiagnosticCode(diagnostic.code),
+			range: {
+				startLine: diagnostic.range.start.line + 1,
+				startCharacter: diagnostic.range.start.character + 1,
+				endLine: diagnostic.range.end.line + 1,
+				endCharacter: diagnostic.range.end.character + 1,
+			},
+		};
+	}
+
+	private _toVscodeDiagnosticSeverityText(severity: vscode.DiagnosticSeverity): VscodeDiagnosticItem['severity'] {
+		switch (severity) {
+			case vscode.DiagnosticSeverity.Error:
+				return 'error';
+			case vscode.DiagnosticSeverity.Warning:
+				return 'warning';
+			case vscode.DiagnosticSeverity.Information:
+				return 'information';
+			case vscode.DiagnosticSeverity.Hint:
+				return 'hint';
+			default:
+				return 'unknown';
+		}
+	}
+
+	private _normalizeDiagnosticCode(code: vscode.Diagnostic['code']): string | undefined {
+		if (code === undefined) {
+			return undefined;
+		}
+		if (typeof code === 'string' || typeof code === 'number') {
+			return String(code);
+		}
+		return String(code.value);
+	}
+
+	private _buildGetErrorsSummary(items: VscodeDiagnosticItem[]): GetErrorsToolResult['summary'] {
+		const summary = { total: items.length, errors: 0, warnings: 0, information: 0, hints: 0 };
+		for (const item of items) {
+			if (item.severity === 'error') {
+				summary.errors += 1;
+			} else if (item.severity === 'warning') {
+				summary.warnings += 1;
+			} else if (item.severity === 'information') {
+				summary.information += 1;
+			} else if (item.severity === 'hint') {
+				summary.hints += 1;
+			}
+		}
+		return summary;
+	}
+
+	private _compareVscodeDiagnosticItems(a: VscodeDiagnosticItem, b: VscodeDiagnosticItem): number {
+		const weight: Record<VscodeDiagnosticItem['severity'], number> = {
+			error: 1,
+			warning: 2,
+			information: 3,
+			hint: 4,
+			unknown: 5,
+		};
+		const severityDiff = weight[a.severity] - weight[b.severity];
+		if (severityDiff !== 0) {
+			return severityDiff;
+		}
+		const fileDiff = a.filePath.localeCompare(b.filePath);
+		if (fileDiff !== 0) {
+			return fileDiff;
+		}
+		return a.range.startLine - b.range.startLine
+			|| a.range.startCharacter - b.range.startCharacter
+			|| a.range.endLine - b.range.endLine
+			|| a.range.endCharacter - b.range.endCharacter
+			|| a.message.localeCompare(b.message)
+			|| (a.source ?? '').localeCompare(b.source ?? '');
+	}
+
 	private _toOpenAIToolCall(toolCall: CollectedToolCall): any {
 		return {
 			id: toolCall.id,
@@ -1280,23 +1529,52 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		};
 	}
 
-	private async _requestModelWithTimelineTools(params: ModelRequestParams): Promise<ModelRequestResult> {
+	private async _executeAutoToolAsJson(call: CollectedToolCall): Promise<string> {
+		if (this._isTimelineTool(call.name)) {
+			return this._executeTimelineToolAsJson(call.name, call.input);
+		}
+		if (this._isGetErrorsTool(call.name)) {
+			return this._executeGetErrorsToolAsJson(call.input ?? call.arguments);
+		}
+		return JSON.stringify({ ok: false, error: { code: 'UNKNOWN_INTERNAL_TOOL', message: `Unknown auto executed tool: ${call.name}`, retryable: false } });
+	}
+
+	private _buildMixedAutoAndOrdinaryToolResult(call: CollectedToolCall, autoExecutedCalls: CollectedToolCall[], ordinaryCalls: CollectedToolCall[]): string {
+		return JSON.stringify({
+			ok: false,
+			error: {
+				code: 'MIXED_AUTO_EXECUTED_AND_ORDINARY_TOOLS',
+				message: [
+					'This assistant message mixed extension-local auto-executed tools with ordinary external VS Code tools.',
+					'Ordinary external tools were not executed in this round to keep tool result pairing valid and to prevent get_errors from being forwarded externally.',
+					'Please retry by calling either only get_errors/timeline tools, or only ordinary external tools in the next assistant message.',
+				].join(' '),
+				retryable: true,
+			},
+			tool: { id: call.id, name: call.name },
+			autoExecutedTools: autoExecutedCalls.map(toolCall => ({ id: toolCall.id, name: toolCall.name })),
+			ordinaryTools: ordinaryCalls.map(toolCall => ({ id: toolCall.id, name: toolCall.name })),
+		});
+	}
+
+	private async _requestModelWithAutoExecutedTools(params: ModelRequestParams): Promise<ModelRequestResult> {
 		let requestBody = params.requestBody;
-		for (let round = 0; round <= MAX_TIMELINE_TOOL_ROUNDS; round++) {
+		for (let round = 0; round <= MAX_AUTO_EXECUTED_TOOL_ROUNDS; round++) {
 			const result = await this._requestModel({
 				...params,
 				requestBody,
-				requestLabel: round === 0 ? params.requestLabel : `${params.requestLabel ?? 'main'}_timeline_${round}`,
+				requestLabel: round === 0 ? params.requestLabel : `${params.requestLabel ?? 'main'}_internal_tools_${round}`,
 			});
-			const timelineCalls = result.toolCalls.filter(call => this._isTimelineTool(call.name));
-			if (timelineCalls.length === 0) {
+			const autoExecutedCalls = result.toolCalls.filter(call => this._isAutoExecutedTool(call.name));
+			if (autoExecutedCalls.length === 0) {
 				return result;
 			}
-			if (round === MAX_TIMELINE_TOOL_ROUNDS) {
+			const ordinaryCalls = result.toolCalls.filter(call => !this._isAutoExecutedTool(call.name));
+			if (round === MAX_AUTO_EXECUTED_TOOL_ROUNDS) {
 				return {
-					text: `${result.text}\n${JSON.stringify({ ok: false, error: { code: 'TOO_MANY_INTERNAL_TOOL_ROUNDS', message: 'Timeline tool call loop exceeded the maximum number of rounds.', retryable: false } })}`,
+					text: `${result.text}\n${JSON.stringify({ ok: false, error: { code: 'TOO_MANY_INTERNAL_TOOL_ROUNDS', message: 'Internal tool call loop exceeded the maximum number of rounds.', retryable: false } })}`,
 					reasoningContent: result.reasoningContent,
-					toolCalls: result.toolCalls.filter(call => !this._isTimelineTool(call.name)),
+					toolCalls: result.toolCalls.filter(call => !this._isAutoExecutedTool(call.name)),
 				};
 			}
 
@@ -1304,10 +1582,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			nextMessages.push({
 				role: 'assistant',
 				content: result.text || null,
-				tool_calls: timelineCalls.map(call => this._toOpenAIToolCall(call)),
+				tool_calls: result.toolCalls.map(call => this._toOpenAIToolCall(call)),
 			});
-			for (const call of timelineCalls) {
-				const resultText = await this._executeTimelineToolAsJson(call.name, call.input);
+			for (const call of result.toolCalls) {
+				const resultText = this._isAutoExecutedTool(call.name)
+					? await this._executeAutoToolAsJson(call)
+					: this._buildMixedAutoAndOrdinaryToolResult(call, autoExecutedCalls, ordinaryCalls);
 				params.progress?.report(new vscode.LanguageModelToolResultPart(call.id, [new vscode.LanguageModelTextPart(resultText)]));
 				nextMessages.push({
 					role: 'tool',

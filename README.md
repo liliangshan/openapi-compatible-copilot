@@ -21,6 +21,7 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - ✨ **Prompt Enhancement** - Optimize prompts with a dedicated provider/model before sending or saving them. Supports global and workspace configuration, provider/model overrides, auto-submit behavior, and system prompt optimization buttons
 - 🖼️ **Vision/Multimodal Input Support** - Supports image input forwarding across OpenAI-compatible Chat Completions, Responses API, and Anthropic Messages API providers
 - 🧠 **Strict Reasoning Compatibility** - Preserves and replays `reasoning_content` for tool-call turns, improving compatibility with DeepSeek Reasoner and other strict OpenAI-compatible providers
+- 🛠️ **VS Code Problems Diagnostics Fix** - The `get_errors` tool is handled locally so models can reliably receive VS Code Problems diagnostics, including warnings, with up to 10 sorted diagnostics returned per call
 
 ## ✨ Prompt Enhancement
 

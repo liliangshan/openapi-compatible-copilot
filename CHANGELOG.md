@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.6
+
+### Fixed
+
+- **VS Code Problems Diagnostics** — Fixed an issue where the model could fail to obtain warnings from the VS Code Problems panel through the `get_errors` tool. The extension now handles `get_errors` locally with VS Code diagnostics and returns up to 10 sorted diagnostics directly to the model.
+
 ## 2.6.0
 
 ### Added
