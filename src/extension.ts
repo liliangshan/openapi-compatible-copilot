@@ -5,6 +5,8 @@ import { ConfigViewProvider, ConfigViewPanel } from './views/configView';
 import { initStatusBar } from './statusBar';
 import { initPromptEnhancementStatusBar } from './promptEnhancementStatusBar';
 import { TimelineService } from './timeline/service';
+import { RemoteNotificationEventBus } from './remoteNotification/eventBus';
+import { RemoteNotificationService } from './remoteNotification/service';
 
 export function activate(context: vscode.ExtensionContext) {
 	console.log('LLS OAI is now active!');
@@ -21,8 +23,16 @@ export function activate(context: vscode.ExtensionContext) {
 	const timelineService = new TimelineService(context, timelineOutput);
 	context.subscriptions.push(timelineOutput, timelineService.register());
 
+	// Initialize remote notification service
+	const remoteNotificationEventBus = new RemoteNotificationEventBus();
+	const remoteNotificationService = new RemoteNotificationService(context, remoteNotificationEventBus, configManager);
+	remoteNotificationService.registerStatusBar('openapicopilot.remoteNotification.openSettings');
+	context.subscriptions.push(remoteNotificationEventBus, remoteNotificationService);
+
 	// Register the chat provider
-	const chatProvider = new OpenAPIChatModelProvider(configManager, statusBarItem, timelineService);
+	const chatProvider = new OpenAPIChatModelProvider(configManager, statusBarItem, timelineService, remoteNotificationService);
+	remoteNotificationService.setPromptBypassMarker((prompt: string, requestId?: string) => chatProvider.markRemoteInboundPromptBypass(prompt, requestId));
+	remoteNotificationService.start();
 	const providerRegistration = vscode.lm.registerLanguageModelChatProvider('openapicopilot', chatProvider);
 	context.subscriptions.push(providerRegistration);
 
@@ -61,6 +71,18 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('openapicopilot.openProjectSettingsTab', async () => {
 			await ConfigViewPanel.openPanel(context.extensionUri, configManager, chatProvider, 'project');
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('openapicopilot.remoteNotification.openSettings', async () => {
+			await remoteNotificationService.openSettings();
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('openapicopilot.remoteNotification.reconnect', () => {
+			remoteNotificationService.reconnect();
 		})
 	);
 }

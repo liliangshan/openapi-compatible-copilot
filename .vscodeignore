@@ -1,20 +1,26 @@
 .vscode/**
 .vscode-test/**
 .LLSOAI/**
+.git/**
+.gitignore
 *.vsix
 
 # Development sources/config not required at runtime
 src/**
 tsconfig.json
-
-# Dependency folders are restored by VS Code Marketplace packaging flow when needed
-node_modules/**.vscode/**
-.git/**
-.gitignore
-node_modules/**
-.vscode-test/**
-src/**
-tsconfig.json
 package-lock.json
-.LLSOAI/**
-*.vsix
+
+# 忽略所有 node_modules，但显式保留运行时依赖 ws
+node_modules/**
+!node_modules/ws/**
+node_modules/ws/test/**
+node_modules/ws/*.md
+node_modules/ws/*.ts
+node_modules/ws/*.map
+
+# 文档与计划文件
+*_PLAN.md
+*_DESIGN.md
+*_PROMO*.md
+PROJECT_OVERALL_CODE_REVIEW.md
+VISION_FORWARDING_ISSUES.md

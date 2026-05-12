@@ -1,17 +1,14 @@
 {
 	"name": "openapi-compatible-copilot",
-
 	"publisher": "liliangshan",
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.6.7",
+	"version": "2.7.1",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
-	"extensionDependencies": [
-		
-	],
+	"extensionDependencies": [],
 	"categories": [
 		"AI",
 		"Chat"
@@ -51,6 +48,11 @@
 				"command": "openapicopilot.openProjectSettingsTab",
 				"category": "LLS OAI",
 				"title": "Open Project Settings"
+			},
+			{
+				"command": "openapicopilot.remoteNotification.openSettings",
+				"category": "LLS OAI",
+				"title": "Open Remote Notification Settings"
 			}
 		],
 		"menus": {
@@ -66,6 +68,9 @@
 				},
 				{
 					"command": "openapicopilot.openProjectSettingsTab"
+				},
+				{
+					"command": "openapicopilot.remoteNotification.openSettings"
 				}
 			]
 		},
@@ -241,13 +246,143 @@
 					"maximum": 200,
 					"description": "Maximum number of recent messages cached per session for prompt enhancement context. 0 means unlimited by message count.",
 					"scope": "machine-overridable"
+				},
+				"openapicopilot.remoteNotification.enabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable remote notification forwarding.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.websocketEnabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable WebSocket remote notification channel.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.websocketUrl": {
+					"type": "string",
+					"default": "",
+					"description": "WebSocket URL. Put the connection token in this URL if required by the remote server.",
+					"scope": "machine-overridable"
+				},
+				"openapicopilot.remoteNotification.webhookEnabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable webhook remote notification channel.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.webhookUrl": {
+					"type": "string",
+					"default": "",
+					"description": "Webhook URL used to receive final assistant messages without tool calls.",
+					"scope": "machine-overridable"
+				},
+				"openapicopilot.remoteNotification.inboundMaxTextLength": {
+					"type": "integer",
+					"default": 20000,
+					"minimum": 1,
+					"maximum": 200000,
+					"description": "Maximum length of inbound remote chat messages.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.inboundDedupeWindowMs": {
+					"type": "integer",
+					"default": 300000,
+					"minimum": 1000,
+					"maximum": 3600000,
+					"description": "Deduplication window for inbound remote chat messages in milliseconds.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.allowHistoryRequest": {
+					"type": "boolean",
+					"default": false,
+					"description": "Allow the remote WebSocket server to request project chat history from the current workspace .LLSOAI directory.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.historyRequestRateLimitPerMinute": {
+					"type": "integer",
+					"default": 6,
+					"minimum": 1,
+					"maximum": 60,
+					"description": "Maximum number of remote chat history requests allowed per minute.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.historyMessageLimit": {
+					"type": "integer",
+					"default": 100,
+					"minimum": 1,
+					"maximum": 100,
+					"description": "Maximum number of project chat history messages returned to the remote server.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.historyMaxMessageLength": {
+					"type": "integer",
+					"default": 20000,
+					"minimum": 100,
+					"maximum": 200000,
+					"description": "Maximum length of each chat history message returned to the remote server.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.historyMaxResponseBytes": {
+					"type": "integer",
+					"default": 1000000,
+					"minimum": 10000,
+					"maximum": 10000000,
+					"description": "Maximum response size in bytes for remote chat history responses.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.globalCacheEnabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Use remote notification caches so model forwarding only writes to local caches.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.websocketCacheLimit": {
+					"type": "integer",
+					"default": 1000,
+					"minimum": 10,
+					"maximum": 10000,
+					"description": "Maximum number of queued WebSocket notification events.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.webhookCacheLimit": {
+					"type": "integer",
+					"default": 100,
+					"minimum": 10,
+					"maximum": 1000,
+					"description": "Maximum number of queued webhook notification events.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.heartbeatIntervalMs": {
+					"type": "integer",
+					"default": 30000,
+					"minimum": 5000,
+					"maximum": 300000,
+					"description": "WebSocket heartbeat interval in milliseconds.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.webhookTimeoutMs": {
+					"type": "integer",
+					"default": 10000,
+					"minimum": 1000,
+					"maximum": 120000,
+					"description": "Webhook request timeout in milliseconds.",
+					"scope": "application"
+				},
+				"openapicopilot.remoteNotification.webhookRetryCount": {
+					"type": "integer",
+					"default": 2,
+					"minimum": 0,
+					"maximum": 10,
+					"description": "Maximum webhook retry count.",
+					"scope": "application"
 				}
 			}
 		}
 	},
 	"main": "./out/extension.js",
 	"activationEvents": [
-	
+		"onStartupFinished"
 	],
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
@@ -257,9 +392,13 @@
 		"package": "vsce package"
 	},
 	"devDependencies": {
-		"@types/vscode": "^1.104.0",
 		"@types/node": "^20.0.0",
-		"typescript": "^5.6.0",
-		"@vscode/vsce": "^3.0.0"
+		"@types/vscode": "^1.104.0",
+		"@types/ws": "^8.18.1",
+		"@vscode/vsce": "^3.0.0",
+		"typescript": "^5.6.0"
+	},
+	"dependencies": {
+		"ws": "^8.20.0"
 	}
 }

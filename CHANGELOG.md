@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.7.1
+
+### Fixed
+
+- **Packaging — Missing runtime dependency** — Fixed an issue where `.vscodeignore` excluded the entire `node_modules/` directory, causing the packaged `.vsix` to ship without the `ws` module. After installation, `require('ws')` in the Remote Work service failed at activation time, which silently aborted `activate()` and left the configuration webview stuck on its initial state. The packaging rules now explicitly include `node_modules/ws/**` while still stripping its test/markdown/typings files.
+- **Remote Work — Multi-window kick loop** — Fixed an issue where opening two VS Code windows (e.g. project A and project B) on the same machine caused the remote WebSocket to flap forever. The client `instanceId` was persisted via `context.globalState`, so all windows shared the same id; the server treats a duplicate `instanceId` as a stale client and kicks the previous connection, which in turn triggered reconnects and kicked the other side. `instanceId` is now generated per window in memory only, and the historical persisted value is cleared on startup. The persistent `workspaceSalt` (used to derive a stable `workspaceId` per project) is unchanged.
+
+## 2.7.0
+
+### Added
+
+- **Remote Work** — Introduced a new Remote Work module that connects the extension to a remote server through WebSocket and/or Webhook channels, enabling team members and external systems to drive Copilot Chat conversations remotely.
+- **WebSocket Inbound Channel** — When connected, the extension can receive `server.chat_message` events from the remote server and automatically inject the incoming text into the active Chat Input and submit it, removing the need for any local confirmation step.
+- **Per-Request Correlation ID** — The extension now preserves the server-issued `requestId` from `server.chat_message` and tags every outgoing `model.*` event (request, delta, tool result, completion, error) with the same `requestId`, fully complying with the `protocol.Envelope.RequestID` request-response pairing semantics.
+- **WebSocket Outbound Forwarding** — Model lifecycle events (request, streamed deltas, tool calls, completion, errors) are forwarded to the remote WebSocket endpoint in real time, gated only by Remote Work enable / WebSocket enable / WebSocket online status — fully decoupled from the Webhook channel.
+- **Webhook Callback Channel** — Independent Webhook forwarding for model events, gated by Webhook enable, Webhook URL, the global cache toggle, and message candidate rules. WebSocket and Webhook channels are now fully independent and can be enabled separately.
+- **Chat History Request Handling** — Added optional support for remote chat history requests so authorized remote clients can fetch session history through the connected channel.
+- **Settings Panel** — Added a dedicated Remote Work settings panel with a redesigned, theme-aware Usage section featuring two cards:
+  - **Self-hosted Deployment** — Repository: <https://github.com/liliangshan/llsoai-websocket>
+  - **Use Our Service** — Mainland China: <https://oai.hlwidc.com> · Overseas: <https://oai.zhineng.dev> (each link automatically appends the current UI language as a `lang` query parameter, and includes a privacy notice: *We do not store or back up any of your data.*)
+- **Diagnostic Logging** — Added `[websocket-queued]` and `[websocket-sent]` diagnostics to the `LLS OAI Remote Work` output channel to make outbound forwarding easy to trace.
+- **Multilingual UI** — Remote Work settings, including the Usage section, are fully localized across English, Simplified Chinese, Traditional Chinese, Korean, Japanese, French, and German.
+
+### Changed
+
+- **Simplified Configuration** — Removed the `inboundEnabled` and `inboundAutoSend` settings. Inbound messages from the connected WebSocket are now always received and auto-submitted, which matches the intended Remote Work workflow.
+- **Decoupled Forwarding Logic** — WebSocket forwarding no longer depends on Webhook or global cache settings; each channel is evaluated independently against its own toggles.
+- **Connect Button Behavior** — The settings panel `Connect` action now updates only WebSocket-related configuration and no longer accidentally toggles the Webhook channel.
+
 ## 2.6.7
 
 ### Fixed

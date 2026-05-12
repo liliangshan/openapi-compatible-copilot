@@ -284,7 +284,15 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			if (this._adCache) {
 				data = this._adCache;
 			} else {
-				const response = await fetch('https://ads-starmodel.oss-cn-shenzhen.aliyuncs.com/data2.json');
+				// Add timeout to prevent blocking webview loading
+				const controller = new AbortController();
+				const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+
+				const response = await fetch('https://ads-starmodel.oss-cn-shenzhen.aliyuncs.com/data2.json', {
+					signal: controller.signal
+				});
+				clearTimeout(timeoutId);
+
 				if (!response.ok) return;
 				const fetched = await response.json();
 				if (!Array.isArray(fetched) || fetched.length === 0) return;
@@ -295,7 +303,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			const randomAd = data[Math.floor(Math.random() * data.length)];
 			this._getWebview()?.postMessage({ command: 'loadAd', data: randomAd });
 		} catch (error) {
-			// Ignore ad fetch errors
+			// Ignore ad fetch errors (including timeout)
 		}
 	}
 

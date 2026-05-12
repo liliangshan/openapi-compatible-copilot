@@ -23,8 +23,22 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 🛡️ **Hardened Multimodal Conversion** - Validates model vision capability, supported image MIME types, mixed text/image message merging, Anthropic tool results, Responses API image conversion, and safe placeholders for unsupported binary content
 - 🧠 **Strict Reasoning Compatibility** - Preserves and replays `reasoning_content` for tool-call turns, improving compatibility with DeepSeek Reasoner and other strict OpenAI-compatible providers
 - 🛠️ **VS Code Problems Diagnostics Fix** - The `get_errors` tool is handled locally so models can reliably receive VS Code Problems diagnostics, including warnings, with up to 10 sorted diagnostics returned per call
+- 📡 **Remote Work** - Connect the extension to a remote server via WebSocket and/or Webhook to receive `server.chat_message` events that are automatically injected into the active Chat Input and submitted, and to forward all `model.*` lifecycle events (request, deltas, tool results, completion, errors) back to the server with the original server-issued `requestId` preserved for request-response correlation. WebSocket and Webhook channels are fully decoupled and can be enabled independently. Includes a localized settings panel with a Usage section covering self-hosted deployment (<https://github.com/liliangshan/llsoai-websocket>) and our hosted services (Mainland China / Overseas), plus a clear privacy notice that we do not store or back up your data
 
 ## Latest Updates
+
+### 2.7.0
+
+- **Remote Work module** — New WebSocket + Webhook integration. Connect VS Code to a remote server to receive chat messages and forward all model lifecycle events back in real time.
+- **Server-issued `requestId` preserved end-to-end** — All `model.*` events emitted for a given inbound `server.chat_message` reuse the original `requestId`, matching `protocol.Envelope.RequestID` request-response semantics.
+- **Auto inbound submission** — Incoming chat messages from the connected WebSocket are automatically injected into the active Chat Input and submitted; the prior `inboundEnabled` / `inboundAutoSend` settings have been removed for a simpler workflow.
+- **Independent channels** — WebSocket forwarding is gated only by Remote Work / WebSocket toggles and online status; Webhook forwarding is gated by its own toggles and the global cache, so each channel can be enabled separately.
+- **Localized settings panel** — Added a fully localized Remote Work settings panel (EN / 简中 / 繁中 / 한국어 / 日本語 / Français / Deutsch) with a redesigned card-style Usage section.
+- **Usage entries** — The Usage section documents two ways to use Remote Work:
+  - Self-hosted deployment: <https://github.com/liliangshan/llsoai-websocket>
+  - Use our service: Mainland China <https://oai.hlwidc.com> · Overseas <https://oai.zhineng.dev> (`lang` is auto-filled from the active UI language)
+  - Privacy notice: *We do not store or back up any of your data.*
+- **Diagnostic logs** — Added `[websocket-queued]` and `[websocket-sent]` entries to the `LLS OAI Remote Work` output channel for easier troubleshooting.
 
 ### 2.6.7
 
@@ -34,6 +48,48 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - Improved Responses API image conversion for OpenAI-style `image_url` parts and Anthropic-style image blocks.
 - Replaced unsupported binary tool result content with compact placeholders instead of serializing raw data into prompts.
 - Added safer request diagnostics by masking URL query values and sanitizing session-derived cache/TODO filenames.
+
+## 📡 Remote Work
+
+The Remote Work module lets you drive Copilot Chat from a remote server, and stream the resulting model activity back. It is designed for team automation, monitoring dashboards, agent orchestrators, and custom front-ends that need bidirectional integration with VS Code.
+
+### How It Works
+
+1. The extension opens a WebSocket connection to your configured server (and optionally a Webhook URL).
+2. The server sends a `server.chat_message` envelope containing the prompt text and a `requestId`.
+3. The extension automatically injects the prompt into the active Chat Input and submits it.
+4. As the model runs, the extension emits `model.*` events (request started, streamed deltas, tool calls and results, completion, errors) back over WebSocket and/or Webhook.
+5. Every emitted event reuses the original server-issued `requestId`, matching `protocol.Envelope.RequestID` so the server can correlate the full lifecycle of each request.
+
+### Key Features
+
+- **Two Independent Channels** — WebSocket (real-time, bidirectional) and Webhook (HTTP callback). Each is enabled separately and gated by its own toggle.
+- **Auto Inbound Submission** — Inbound messages are always submitted into Chat automatically; no extra confirmation is required.
+- **Request-Response Correlation** — The server's `requestId` is preserved across every related outbound `model.*` event for the entire request lifecycle, including tool calls and final completion.
+- **Optional Chat History Requests** — When `Allow remote history requests` is enabled, authorized remote clients can request session history through the connected channel.
+- **Diagnostic Logging** — Outbound traffic is logged to the `LLS OAI Remote Work` output channel with `[websocket-queued]` and `[websocket-sent]` markers.
+- **Localized Settings UI** — Fully localized panel with a card-style Usage section linking to self-hosted and hosted options.
+
+### Settings
+
+Open the **Remote Work Settings** panel from the status bar or command palette:
+
+- **Enable Remote Work** — Master toggle for the module.
+- **WebSocket** — Enable WebSocket, set the WebSocket URL (e.g. `wss://example.com/ws?token=...`), and use the **Connect** button to (re)connect.
+- **Webhook** — Enable the Webhook callback channel and set the Webhook URL.
+- **Chat History Request** — Toggle whether remote clients can request chat history.
+
+### Usage Options
+
+The Usage section in the Remote Work settings panel offers two ways to get started:
+
+1. **Self-hosted Deployment** — Run your own server using the open-source reference implementation:
+   <https://github.com/liliangshan/llsoai-websocket>
+2. **Use Our Service** — Use the hosted endpoints. The current UI language is automatically appended as a `lang` query parameter:
+   - Mainland China: <https://oai.hlwidc.com>
+   - Overseas: <https://oai.zhineng.dev>
+
+> 🔒 **Privacy Notice** — When using our hosted service, we do not store or back up any of your data.
 
 ## ✨ Prompt Enhancement
 

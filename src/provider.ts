@@ -27,6 +27,8 @@ import {
 } from './utils/v1ResponseConverter';
 import { isSupportedImageType, normalizeImageMediaType } from './utils/visionContent';
 import { TimelineService, timelineErrorToJson } from './timeline/service';
+import { RemoteNotificationService } from './remoteNotification/service';
+import { hashText } from './remoteNotification/types';
 
 const EXTENSION_LABEL = 'LLS OAI';
 const DEFAULT_CONTEXT_LENGTH = 128000;
@@ -70,6 +72,7 @@ interface ModelRequestParams {
 	apiKey: string;
 	requestBody: any;
 	sessionId?: string;
+	remoteRequestId?: string;
 	requestLabel?: string;
 	transformThink?: boolean;
 	progress?: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>;
@@ -81,6 +84,10 @@ interface ModelRequestResult {
 	text: string;
 	reasoningContent: string;
 	toolCalls: CollectedToolCall[];
+	remoteRequestId?: string;
+	remoteMessageId?: string;
+	providerId?: string;
+	modelId?: string;
 }
 
 interface GetErrorsArguments {
@@ -569,6 +576,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	private _solutionRuns: Map<string, SolutionRunState> = new Map();
 	private _activeSolutionRunId?: string;
 	private _activeSolutionRunBySession: Map<string, string> = new Map();
+	private _promptEnhancementBypassHashes: Map<string, number> = new Map();
+	private _remoteInboundRequestIds: Map<string, { requestId: string; expiresAt: number }> = new Map();
 
 	/**
 	 * Event fired when the available set of language models changes.
@@ -579,7 +588,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	constructor(
 		private readonly _configManager: ConfigManager,
 		statusBarItem: vscode.StatusBarItem,
-		private readonly _timelineService?: TimelineService
+		private readonly _timelineService?: TimelineService,
+		private readonly _remoteNotificationService?: RemoteNotificationService
 	) {
 		this._statusBarItem = statusBarItem;
 	}
@@ -590,6 +600,58 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	 */
 	notifyModelsChanged(): void {
 		this._onDidChangeModels.fire();
+	}
+
+	markRemoteInboundPromptBypass(prompt: string, requestId?: string): void {
+		const normalized = prompt.trim();
+		if (!normalized) {
+			return;
+		}
+		const bypassKey = hashText(normalized);
+		this._promptEnhancementBypassHashes.set(bypassKey, Date.now() + 60000);
+		const normalizedRequestId = typeof requestId === 'string' ? requestId.trim() : '';
+		if (normalizedRequestId) {
+			this._remoteInboundRequestIds.set(bypassKey, { requestId: normalizedRequestId, expiresAt: Date.now() + 60000 });
+		}
+	}
+
+	private _consumeRemoteInboundPromptBypass(prompt: string): boolean {
+		const normalized = prompt.trim();
+		const now = Date.now();
+		if (!normalized) {
+			return false;
+		}
+		for (const [key, expiresAt] of this._promptEnhancementBypassHashes) {
+			if (expiresAt <= now) {
+				this._promptEnhancementBypassHashes.delete(key);
+			}
+		}
+		const bypassKey = hashText(normalized);
+		if (!this._promptEnhancementBypassHashes.has(bypassKey)) {
+			return false;
+		}
+		this._promptEnhancementBypassHashes.delete(bypassKey);
+		return true;
+	}
+
+	private _consumeRemoteInboundRequestId(prompt: string): string | undefined {
+		const normalized = prompt.trim();
+		const now = Date.now();
+		if (!normalized) {
+			return undefined;
+		}
+		for (const [key, state] of this._remoteInboundRequestIds) {
+			if (state.expiresAt <= now) {
+				this._remoteInboundRequestIds.delete(key);
+			}
+		}
+		const requestKey = hashText(normalized);
+		const state = this._remoteInboundRequestIds.get(requestKey);
+		if (!state) {
+			return undefined;
+		}
+		this._remoteInboundRequestIds.delete(requestKey);
+		return state.requestId;
 	}
 
 	/**
@@ -738,10 +800,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const latestUserText = this._getLatestUserText(messages);
 		const latestUserRequestText = this._extractUserRequestText(latestUserText);
 		const promptTextForEnhancement = latestUserRequestText || latestUserText;
+		const remoteInboundRequestId = this._consumeRemoteInboundRequestId(promptTextForEnhancement);
 
 		// ── Auto prompt enhancement interception ─────────────────────────────────
 		const autoEnhanceConfig = this._configManager.getEffectivePromptEnhancementConfig();
-		if (autoEnhanceConfig.enabled) {
+		const skipPromptEnhancementForRemoteInbound = this._consumeRemoteInboundPromptBypass(promptTextForEnhancement);
+		if (autoEnhanceConfig.enabled && !skipPromptEnhancementForRemoteInbound) {
 			const lastMsg = messages[messages.length - 1];
 			const isLastUser = lastMsg?.role === vscode.LanguageModelChatMessageRole.User;
 			if (isLastUser && promptTextForEnhancement) {
@@ -909,6 +973,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			...mainContext,
 			requestBody,
 			sessionId: currentSessionId,
+			remoteRequestId: remoteInboundRequestId,
 			requestLabel: 'main',
 			progress,
 			token,
@@ -946,6 +1011,21 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 							code: 'AUTO_EXECUTED_TOOL_LEAK_PREVENTED',
 							message: `Tool ${toolCall.name} is extension-local and must not be forwarded to the external VS Code tool executor. Please retry the request by calling it alone.`,
 							retryable: true,
+						},
+					});
+					this._remoteNotificationService?.publishModelEvent({
+						type: 'model.tool_result',
+						sessionId: currentSessionId,
+						requestId: `tool_result_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+						payload: {
+							messageId: `assistant_${currentSessionId}`,
+							toolCallId: toolCall.id,
+							toolName: toolCall.name,
+							status: 'error',
+							success: false,
+							resultText,
+							truncated: false,
+							errorMessage: 'AUTO_EXECUTED_TOOL_LEAK_PREVENTED',
 						},
 					});
 					progress.report(new vscode.LanguageModelToolResultPart(toolCall.id, [new vscode.LanguageModelTextPart(resultText)]));
@@ -990,10 +1070,36 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 
 		if (result.text) {
+			this._publishRemoteAssistantFinal(currentSessionId, result, result.toolCalls.length > 0);
 			const chatMessages = this._buildChatMessages(messages, result.text);
 			await this._configManager.saveChatHistory(chatMessages, modelId, options.tools ? [...options.tools] : undefined);
 			await this._savePromptContextCacheFromOpenAIMessages(currentSessionId, requestBody.messages, result.text);
 		}
+	}
+
+	private _publishRemoteAssistantFinal(sessionId: string, result: ModelRequestResult, hasToolCalls: boolean): void {
+		if (!result.text) {
+			return;
+		}
+		const requestId = result.remoteRequestId || `final_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+		const messageId = result.remoteMessageId || `assistant_${requestId}`;
+		this._remoteNotificationService?.publishModelEvent({
+			type: 'model.assistant_final',
+			sessionId,
+			requestId,
+			payload: {
+				messageId,
+				role: 'assistant',
+				providerId: result.providerId || '',
+				modelId: result.modelId || '',
+				text: result.text,
+				textLength: result.text.length,
+				textHash: hashText(result.text),
+				hasToolCalls,
+				toolCallCount: result.toolCalls.length,
+				finishReason: 'stop',
+			},
+		});
 	}
 
 	private async _continueMainAfterInvalidInternalToolCalls(
@@ -1051,6 +1157,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				}));
 		}
 		const result = await this._requestModel({ ...mainContext, requestBody, requestLabel: `main_after_invalid_internal_tools_${Date.now()}`, progress, token, reportText: true });
+		this._publishRemoteAssistantFinal(sessionId, result, result.toolCalls.length > 0);
 		await this._saveMainChatHistoryFromMessages(requestBody.messages, result.text, mainContext.modelId, mainTools);
 		for (const toolCall of result.toolCalls) {
 			if (toolCall.name === ASK_LLSOAI_TOOL_NAME || toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME || this._isAutoExecutedTool(toolCall.name)) {
@@ -1625,6 +1732,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const result = await this._requestModel({
 				...params,
 				requestBody,
+				remoteRequestId: params.remoteRequestId,
 				requestLabel: round === 0 ? params.requestLabel : `${params.requestLabel ?? 'main'}_internal_tools_${round}`,
 			});
 			const autoExecutedCalls = result.toolCalls.filter(call => this._isAutoExecutedTool(call.name));
@@ -1637,6 +1745,10 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					text: `${result.text}\n${JSON.stringify({ ok: false, error: { code: 'TOO_MANY_INTERNAL_TOOL_ROUNDS', message: 'Internal tool call loop exceeded the maximum number of rounds.', retryable: false } })}`,
 					reasoningContent: result.reasoningContent,
 					toolCalls: result.toolCalls.filter(call => !this._isAutoExecutedTool(call.name)),
+					remoteRequestId: result.remoteRequestId,
+					remoteMessageId: result.remoteMessageId,
+					providerId: result.providerId,
+					modelId: result.modelId,
 				};
 			}
 
@@ -1650,6 +1762,21 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				const resultText = this._isAutoExecutedTool(call.name)
 					? await this._executeAutoToolAsJson(call)
 					: this._buildMixedAutoAndOrdinaryToolResult(call, autoExecutedCalls, ordinaryCalls);
+				this._remoteNotificationService?.publishModelEvent({
+					type: 'model.tool_result',
+					sessionId: params.sessionId || 'unknown',
+					requestId: params.remoteRequestId || `${params.requestLabel ?? 'main'}_tool_result_${round}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+					payload: {
+						messageId: `assistant_${params.sessionId || 'unknown'}`,
+						toolCallId: call.id,
+						toolName: call.name,
+						status: this._isAutoExecutedTool(call.name) ? 'success' : 'error',
+						success: this._isAutoExecutedTool(call.name),
+						resultText,
+						truncated: false,
+						errorMessage: this._isAutoExecutedTool(call.name) ? '' : 'Mixed auto and ordinary tool result',
+					},
+				});
 				params.progress?.report(new vscode.LanguageModelToolResultPart(call.id, [new vscode.LanguageModelTextPart(resultText)]));
 				nextMessages.push({
 					role: 'tool',
@@ -1682,7 +1809,24 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		this._abortControllers.set(providerId, providerAbortControllers);
 		let assistantResponse = '';
 		let assistantReasoningContent = '';
+		let textDeltaIndex = 0;
+		let reasoningDeltaIndex = 0;
 		const collectedToolCalls: CollectedToolCall[] = [];
+		const remoteSessionId = params.sessionId || 'unknown';
+		const remoteRequestId = params.remoteRequestId || `${requestLabel}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+		const remoteMessageId = `assistant_${remoteRequestId}`;
+		this._remoteNotificationService?.publishModelEvent({
+			type: 'model.request_started',
+			sessionId: remoteSessionId,
+			requestId: remoteRequestId,
+			payload: {
+				providerId,
+				modelId,
+				apiType,
+				stream: true,
+				toolCallingEnabled: Array.isArray(requestBody?.tools) && requestBody.tools.length > 0,
+			},
+		});
 		const cancellationSubscription = token.onCancellationRequested(() => {
 			abortController.abort();
 		});
@@ -1794,11 +1938,41 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				if ('reasoning_content' in delta) {
 					if (typeof delta.reasoning_content === 'string') {
 						assistantReasoningContent += delta.reasoning_content;
+						reasoningDeltaIndex++;
+						this._remoteNotificationService?.publishModelEvent({
+							type: 'model.reasoning_delta',
+							sessionId: remoteSessionId,
+							requestId: remoteRequestId,
+							payload: {
+								messageId: remoteMessageId,
+								role: 'assistant',
+								channel: 'reasoning',
+								delta: delta.reasoning_content,
+								deltaIndex: reasoningDeltaIndex,
+								cumulativeLength: assistantReasoningContent.length,
+								cumulativeHash: hashText(assistantReasoningContent),
+							},
+						});
 					}
 				}
 				const content: string | undefined = delta.content ?? undefined;
 				if (typeof content === 'string' && content.length > 0) {
 					assistantResponse += content;
+					textDeltaIndex++;
+					this._remoteNotificationService?.publishModelEvent({
+						type: 'model.text_delta',
+						sessionId: remoteSessionId,
+						requestId: remoteRequestId,
+						payload: {
+							messageId: remoteMessageId,
+							role: 'assistant',
+							channel: 'text',
+							delta: content,
+							deltaIndex: textDeltaIndex,
+							cumulativeLength: assistantResponse.length,
+							cumulativeHash: hashText(assistantResponse),
+						},
+					});
 					if (reportText && progress) {
 						if (transformThink) {
 							this._processThinkTags(content, (text) => {
@@ -1815,9 +1989,39 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					for (const tc of toolCalls) {
 						const index = tc.index;
 						const existing = pendingToolCalls.get(index) || { arguments: '' };
+						const wasStarted = !!existing.name || !!existing.id;
 						if (tc.id) existing.id = tc.id;
 						if (tc.function?.name) existing.name = tc.function.name;
-						if (tc.function?.arguments !== undefined) existing.arguments += tc.function.arguments;
+						if (!wasStarted && (existing.id || existing.name)) {
+							this._remoteNotificationService?.publishModelEvent({
+								type: 'model.tool_call_started',
+								sessionId: remoteSessionId,
+								requestId: remoteRequestId,
+								payload: {
+									messageId: remoteMessageId,
+									toolCallId: existing.id || `call_${index}`,
+									toolName: existing.name || '',
+									toolIndex: index,
+								},
+							});
+						}
+						if (tc.function?.arguments !== undefined) {
+							existing.arguments += tc.function.arguments;
+							this._remoteNotificationService?.publishModelEvent({
+								type: 'model.tool_call_delta',
+								sessionId: remoteSessionId,
+								requestId: remoteRequestId,
+								payload: {
+									messageId: remoteMessageId,
+									toolCallId: existing.id || `call_${index}`,
+									toolName: existing.name || '',
+									toolIndex: index,
+									argumentsDelta: tc.function.arguments,
+									argumentsCumulativeLength: existing.arguments.length,
+									argumentsCumulativeHash: hashText(existing.arguments),
+								},
+							});
+						}
 						pendingToolCalls.set(index, existing);
 					}
 				}
@@ -1906,6 +2110,19 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					try {
 						const argsStr = tc.arguments.trim();
 						const parsedArgs = argsStr === '' ? {} : JSON.parse(argsStr);
+						this._remoteNotificationService?.publishModelEvent({
+							type: 'model.tool_call_completed',
+							sessionId: remoteSessionId,
+							requestId: remoteRequestId,
+							payload: {
+								messageId: remoteMessageId,
+								toolCallId: tc.id || `call_${index}`,
+								toolName: tc.name,
+								toolIndex: index,
+								argumentsText: argsStr,
+								argumentsHash: hashText(argsStr),
+							},
+						});
 						collectedToolCalls.push({
 							id: tc.id || `call_${index}`,
 							name: tc.name,
@@ -1999,12 +2216,45 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			}
 			collectPendingToolCalls();
 			saveReasoningContentForToolCalls(params.sessionId, collectedToolCalls, assistantReasoningContent);
-			return { text: assistantResponse, reasoningContent: assistantReasoningContent, toolCalls: collectedToolCalls };
+			this._remoteNotificationService?.publishModelEvent({
+				type: 'model.request_completed',
+				sessionId: remoteSessionId,
+				requestId: remoteRequestId,
+				payload: {
+					messageId: remoteMessageId,
+					finishReason: 'stop',
+					hasError: false,
+					cancelled: false,
+					hasToolCalls: collectedToolCalls.length > 0,
+				},
+			});
+			return { text: assistantResponse, reasoningContent: assistantReasoningContent, toolCalls: collectedToolCalls, remoteRequestId, remoteMessageId, providerId, modelId };
 		} catch (error) {
 			if (error instanceof Error && error.name === 'AbortError') {
 				saveReasoningContentForToolCalls(params.sessionId, collectedToolCalls, assistantReasoningContent);
-				return { text: assistantResponse, reasoningContent: assistantReasoningContent, toolCalls: collectedToolCalls };
+				this._remoteNotificationService?.publishModelEvent({
+					type: 'model.request_cancelled',
+					sessionId: remoteSessionId,
+					requestId: remoteRequestId,
+					payload: {
+						messageId: remoteMessageId,
+						reason: '用户取消或请求中止',
+					},
+				});
+				return { text: assistantResponse, reasoningContent: assistantReasoningContent, toolCalls: collectedToolCalls, remoteRequestId, remoteMessageId, providerId, modelId };
 			}
+			this._remoteNotificationService?.publishModelEvent({
+				type: 'model.request_error',
+				sessionId: remoteSessionId,
+				requestId: remoteRequestId,
+				payload: {
+					messageId: remoteMessageId,
+					errorCode: error instanceof Error ? error.name || 'Error' : 'UnknownError',
+					errorMessage: error instanceof Error ? error.message : String(error),
+					retryable: false,
+					stage: 'request_model',
+				},
+			});
 			throw error;
 		} finally {
 			cancellationSubscription.dispose();
@@ -2532,6 +2782,21 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 		const expertContext = await this._getExpertContextFromState(state);
 		state.consumedToolResultCallIds.add(prefixedCallId);
+		this._remoteNotificationService?.publishModelEvent({
+			type: 'model.tool_result',
+			sessionId: state.sessionId,
+			requestId: `expert_tool_result_${state.runId}`,
+			payload: {
+				messageId: `assistant_${state.runId}`,
+				toolCallId: originCallId,
+				toolName: state.pendingExpertToolCalls.find(call => call.id === originCallId)?.name || '',
+				status: 'success',
+				success: true,
+				resultText: text,
+				truncated: false,
+				errorMessage: '',
+			},
+		});
 		this._appendExpertContextRecord(state, {
 			type: 'tool_result',
 			callId: originCallId,
@@ -3159,6 +3424,21 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			return;
 		}
 		state.consumedToolResultCallIds.add(prefixedCallId);
+		this._remoteNotificationService?.publishModelEvent({
+			type: 'model.tool_result',
+			sessionId: state.sessionId,
+			requestId: `solution_tool_result_${state.runId}`,
+			payload: {
+				messageId: `assistant_${state.runId}`,
+				toolCallId: originCallId,
+				toolName: state.pendingSolutionToolCalls.find(call => call.id === originCallId)?.name || '',
+				status: 'success',
+				success: true,
+				resultText: text,
+				truncated: false,
+				errorMessage: '',
+			},
+		});
 		this._appendSolutionContextRecord(state, { type: 'tool_result', callId: originCallId, prefixedCallId, content: text });
 		if (state.pendingSolutionToolCallIds.length === 0) {
 			state.solutionMessages.push({ role: 'tool', tool_call_id: originCallId, content: text });
