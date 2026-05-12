@@ -25,6 +25,7 @@ import {
 	convertV1ResponseEventToOpenAIChunks,
 	type V1ResponseStreamState,
 } from './utils/v1ResponseConverter';
+import { isSupportedImageType, normalizeImageMediaType } from './utils/visionContent';
 import { TimelineService, timelineErrorToJson } from './timeline/service';
 
 const EXTENSION_LABEL = 'LLS OAI';
@@ -186,6 +187,22 @@ const FORCE_TODO_PROMPT = 'If there is no todo list, create one before making ch
 const TODO_STATUS_UPDATE_PROMPT = 'If an existing todo item is solved during this conversation, update the todo status when it is completed.';
 const MANDATORY_TODO_PROMPT = 'You MUST use the TODO tool before taking any action. All TODO items must be clear, specific, and detailed with actionable steps. Do not execute any task without first creating or updating a TODO item. All work must be tracked through the TODO tool.';
 
+function toSafeFileName(input: string): string {
+	return String(input || 'unknown').replace(/[^a-zA-Z0-9._-]/g, '_') || 'unknown';
+}
+
+function maskUrlForError(rawUrl: string): string {
+	try {
+		const parsed = new URL(rawUrl);
+		for (const key of Array.from(parsed.searchParams.keys())) {
+			parsed.searchParams.set(key, '****');
+		}
+		return parsed.toString();
+	} catch {
+		return rawUrl.replace(/([?&][^=&#]+)=([^&#]*)/g, '$1=****');
+	}
+}
+
 function getCurrentTodoTaskContent(sessionId: string): string | null {
 	try {
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -195,7 +212,7 @@ function getCurrentTodoTaskContent(sessionId: string): string | null {
 
 		const fs = require('fs');
 		const path = require('path');
-		const currentTaskPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO', `task_${sessionId}.json`);
+		const currentTaskPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO', `task_${toSafeFileName(sessionId)}.json`);
 		if (!fs.existsSync(currentTaskPath)) {
 			return null;
 		}
@@ -227,7 +244,7 @@ function saveTodoToolState(todoData: any, forceTodoEnabled: boolean, sessionId: 
 
 		const todoList = Array.isArray(todoData?.todoList) ? todoData.todoList : [];
 		const allCompleted = todoList.length > 0 && todoList.every((item: any) => item?.status === 'completed');
-		const currentTaskPath = path.join(todoDir, `task_${sessionId}.json`);
+		const currentTaskPath = path.join(todoDir, `task_${toSafeFileName(sessionId)}.json`);
 
 		if (allCompleted) {
 			// Append completed tasks to a daily archive file: task_YYYY-MM-DD.json
@@ -299,7 +316,7 @@ function getMergedTodoInputForConflict(todoData: any, sessionId: string): any | 
 
 		const fs = require('fs');
 		const path = require('path');
-		const currentTaskPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO', `task_${sessionId}.json`);
+		const currentTaskPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'TODO', `task_${toSafeFileName(sessionId)}.json`);
 		if (!fs.existsSync(currentTaskPath)) {
 			return null;
 		}
@@ -345,9 +362,16 @@ function isToolResultPart(value: unknown): value is { callId: string; content: u
 		return false;
 	}
 	const obj = value as { callId?: string; content?: unknown };
-	const hasCallId = typeof obj.callId === 'string';
-	const hasContent = 'content' in obj;
+	const hasCallId = typeof obj.callId === 'string' && obj.callId.trim().length > 0;
+	const hasContent = Array.isArray(obj.content);
 	return hasCallId && hasContent;
+}
+
+function getUnknownToolResultPlaceholder(value: unknown): string {
+	if (value instanceof vscode.LanguageModelDataPart) {
+		return `[tool returned data: ${value.mimeType || 'unknown'}, ${value.data?.byteLength ?? (value.data as any)?.length ?? 0} bytes; omitted]`;
+	}
+	return '[tool returned unsupported content; omitted]';
 }
 
 /**
@@ -362,21 +386,59 @@ function collectToolResultText(pr: { content?: unknown[] }): string {
 			text += c;
 		} else if (c instanceof vscode.LanguageModelDataPart && c.mimeType === 'cache_control') {
 			/* ignore cache_control markers */
+		} else if (c instanceof vscode.LanguageModelDataPart) {
+			text += getUnknownToolResultPlaceholder(c);
 		} else {
-			try {
-				text += JSON.stringify(c);
-			} catch {
-				/* ignore */
-			}
+			text += getUnknownToolResultPlaceholder(c);
 		}
 	}
 	return text;
 }
 
+type OpenAIContentPart = { type: string; text?: string; image_url?: { url: string } };
+
+function toOpenAIContentParts(content: unknown): OpenAIContentPart[] {
+	if (typeof content === 'string') {
+		return content ? [{ type: 'text', text: content }] : [];
+	}
+	if (Array.isArray(content)) {
+		return content as OpenAIContentPart[];
+	}
+	return [];
+}
+
+function compactOpenAIContent(parts: OpenAIContentPart[]): string | OpenAIContentPart[] {
+	const compacted: OpenAIContentPart[] = [];
+	for (const part of parts) {
+		if (part.type === 'text') {
+			const text = part.text ?? '';
+			if (!text) {
+				continue;
+			}
+			const previous = compacted[compacted.length - 1];
+			if (previous?.type === 'text') {
+				previous.text = [previous.text ?? '', text].filter(Boolean).join('\n');
+			} else {
+				compacted.push({ ...part, text });
+			}
+			continue;
+		}
+		compacted.push(part);
+	}
+
+	if (compacted.length === 0) {
+		return '';
+	}
+	if (compacted.every(part => part.type === 'text')) {
+		return compacted.map(part => part.text ?? '').filter(Boolean).join('\n');
+	}
+	return compacted;
+}
+
 function getReasoningCacheFilePath(sessionId: string): string {
 	const os = require('os');
 	const path = require('path');
-	const safeSessionId = String(sessionId || 'unknown').replace(/[^a-zA-Z0-9._-]/g, '_') || 'unknown';
+	const safeSessionId = toSafeFileName(sessionId);
 	return path.join(os.homedir(), '.LLSOAI', 'reasoning', `${safeSessionId}.json`);
 }
 
@@ -1621,7 +1683,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		let assistantResponse = '';
 		let assistantReasoningContent = '';
 		const collectedToolCalls: CollectedToolCall[] = [];
-		token.onCancellationRequested(() => {
+		const cancellationSubscription = token.onCancellationRequested(() => {
 			abortController.abort();
 		});
 
@@ -1685,7 +1747,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			} catch (fetchError) {
 				// fetch 失败时的详细错误信息
 				const errorDetails = [
-					`请求地址: ${url}`,
+					`请求地址: ${maskUrlForError(url)}`,
 					`请求头:`,
 					formatHeadersForError(headers),
 					'',
@@ -1698,7 +1760,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			if (!response.ok) {
 				const errorText = await response.text();
 				const errorDetails = [
-					`请求地址: ${url}`,
+					`请求地址: ${maskUrlForError(url)}`,
 					`请求头:`,
 					formatHeadersForError(headers),
 					'',
@@ -1709,7 +1771,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			}
 
 			if (!response.body) {
-				throw new Error('No response body');
+				throw new Error(`No response body\n\n请求地址: ${maskUrlForError(url)}\nHTTP 状态: ${response.status} ${response.statusText}`);
 			}
 
 			const reader = response.body.getReader();
@@ -1945,6 +2007,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			}
 			throw error;
 		} finally {
+			cancellationSubscription.dispose();
 			const providerAbortControllers = this._abortControllers.get(providerId);
 			if (providerAbortControllers) {
 				providerAbortControllers.delete(abortController);
@@ -3561,7 +3624,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const role = this._mapRole(message);
 			
 			if (role === 'user') {
-				const { textParts, toolResults } = this._extractUserContent(message);
+				const { textParts, toolResults } = this._extractUserContent(message, model);
 				
 				// If there are tool results, emit them as separate "tool" role messages FIRST
 				for (const tr of toolResults) {
@@ -3600,12 +3663,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					}
 					
 					if (canMerge) {
-						// Merge with previous user message
-						if (typeof lastMsg.content === 'string' && typeof content === 'string') {
-							lastMsg.content += '\n' + content;
-						} else if (Array.isArray(lastMsg.content) && Array.isArray(content)) {
-							lastMsg.content = [...lastMsg.content, ...content];
-						}
+						const merged = [...toOpenAIContentParts(lastMsg.content), ...toOpenAIContentParts(content)];
+						lastMsg.content = compactOpenAIContent(merged);
 					} else {
 						result.push({ role: 'user', content });
 					}
@@ -3669,17 +3728,15 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					const appendixText = hasCurrentTodoTask
 						? `${promptText}\n\nUSER MESSAGE BELOW (process only after all active TODOs are completed):\n\n`
 						: `\n\n${promptText}`;
+					const appendixPartText = promptText;
 					if (typeof lastMsg.content === 'string') {
 						lastMsg.content = hasCurrentTodoTask
 							? appendixText + lastMsg.content
 							: lastMsg.content + appendixText;
 					} else if (Array.isArray(lastMsg.content)) {
-						// If content is an array (multimodal), prepend TODO-LOCK or append normal prompts as a text part
-						if (hasCurrentTodoTask) {
-							lastMsg.content.unshift({ type: 'text', text: appendixText });
-						} else {
-							lastMsg.content.push({ type: 'text', text: appendixText });
-						}
+						// If content is an array (multimodal), append prompts as a separate text part
+						// to preserve the user's original image/text ordering.
+						lastMsg.content.push({ type: 'text', text: appendixPartText });
 					}
 				}
 			}
@@ -3726,17 +3783,27 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		return content;
 	}
 
-	private _extractUserContent(message: vscode.LanguageModelChatRequestMessage): { textParts: Array<{ type: string; text?: string; image_url?: { url: string } }>; toolResults: Array<{ tool_call_id: string; text: string }> } {
-		const textParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+	private _extractUserContent(message: vscode.LanguageModelChatRequestMessage, model: vscode.LanguageModelChatInformation): { textParts: OpenAIContentPart[]; toolResults: Array<{ tool_call_id: string; text: string }> } {
+		const textParts: OpenAIContentPart[] = [];
 		const toolResults: Array<{ tool_call_id: string; text: string }> = [];
+		const allowImages = !!model.capabilities?.imageInput;
 		
 		for (const part of message.content) {
 			if (part instanceof vscode.LanguageModelTextPart) {
 				textParts.push({ type: 'text', text: part.value });
 			} else if (part instanceof vscode.LanguageModelDataPart && part.mimeType.startsWith('image/')) {
+				const mediaType = normalizeImageMediaType(part.mimeType);
+				if (!allowImages) {
+					textParts.push({ type: 'text', text: '[image omitted: current model does not support image input]' });
+					continue;
+				}
+				if (!isSupportedImageType(mediaType)) {
+					textParts.push({ type: 'text', text: `[image omitted: unsupported type ${mediaType}]` });
+					continue;
+				}
 				// Handle image data parts
 				const base64 = Buffer.from(part.data).toString('base64');
-				textParts.push({ type: 'image_url', image_url: { url: `data:${part.mimeType};base64,${base64}` } });
+				textParts.push({ type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}` } });
 			} else if (isToolResultPart(part)) {
 				if (this._parseExpertCallId(part.callId) || this._parseSolutionCallId(part.callId)) {
 					continue;
@@ -3744,6 +3811,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				// Handle tool results using unified type guard (reference project approach)
 				const text = collectToolResultText(part);
 				toolResults.push({ tool_call_id: part.callId, text });
+			} else if (part instanceof vscode.LanguageModelDataPart) {
+				textParts.push({
+					type: 'text',
+					text: `[unsupported data part omitted: ${part.mimeType || 'unknown'}, ${part.data?.byteLength ?? (part.data as any)?.length ?? 0} bytes]`,
+				});
 			}
 		}
 

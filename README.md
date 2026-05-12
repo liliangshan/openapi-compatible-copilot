@@ -20,8 +20,20 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 🧭 **Solution Provider** - Delegate solution design, implementation planning, and architecture proposals to a dedicated solution model, with optional expert review before finalizing
 - ✨ **Prompt Enhancement** - Optimize prompts with a dedicated provider/model before sending or saving them. Supports global and workspace configuration, provider/model overrides, auto-submit behavior, and system prompt optimization buttons
 - 🖼️ **Vision/Multimodal Input Support** - Supports image input forwarding across OpenAI-compatible Chat Completions, Responses API, and Anthropic Messages API providers
+- 🛡️ **Hardened Multimodal Conversion** - Validates model vision capability, supported image MIME types, mixed text/image message merging, Anthropic tool results, Responses API image conversion, and safe placeholders for unsupported binary content
 - 🧠 **Strict Reasoning Compatibility** - Preserves and replays `reasoning_content` for tool-call turns, improving compatibility with DeepSeek Reasoner and other strict OpenAI-compatible providers
 - 🛠️ **VS Code Problems Diagnostics Fix** - The `get_errors` tool is handled locally so models can reliably receive VS Code Problems diagnostics, including warnings, with up to 10 sorted diagnostics returned per call
+
+## Latest Updates
+
+### 2.6.7
+
+- Hardened multimodal and vision forwarding across OpenAI-compatible Chat Completions, Responses API, and Anthropic Messages API providers.
+- Fixed mixed text/image user message merging so multimodal content is preserved during request construction.
+- Improved Anthropic `tool_result` conversion with strict text/image block handling, safe consecutive tool-result merging, and readable placeholders for unsupported tool output.
+- Improved Responses API image conversion for OpenAI-style `image_url` parts and Anthropic-style image blocks.
+- Replaced unsupported binary tool result content with compact placeholders instead of serializing raw data into prompts.
+- Added safer request diagnostics by masking URL query values and sanitizing session-derived cache/TODO filenames.
 
 ## ✨ Prompt Enhancement
 

@@ -10,6 +10,12 @@ export interface ParsedDataImageUrl {
 	data: string;
 }
 
+export type DataImageParseResult =
+	| { kind: 'ok'; mediaType: string; data: string }
+	| { kind: 'not_data_url' }
+	| { kind: 'invalid_data_url'; reason: string; mediaType?: string }
+	| { kind: 'unsupported_media_type'; mediaType: string };
+
 /**
  * Supported MIME types for vision input.
  * Used for validation in converters.
@@ -73,9 +79,19 @@ export function getImageUrlFromPart(part: unknown): string | undefined {
 
 	const obj = part as {
 		image_url?: string | { url?: unknown };
-		source?: { url?: unknown };
+		source?: { type?: unknown; url?: unknown; media_type?: unknown; data?: unknown };
 		url?: unknown;
 	};
+
+	// Handle Anthropic native base64 form:
+	// { type: 'image', source: { type: 'base64', media_type: 'image/png', data: '...' } }
+	if (obj.source?.type === 'base64' && typeof obj.source.media_type === 'string' && typeof obj.source.data === 'string') {
+		const mediaType = normalizeImageMediaType(obj.source.media_type);
+		const data = normalizeUrl(obj.source.data);
+		if (data) {
+			return `data:${mediaType};base64,${data}`;
+		}
+	}
 
 	// Handle string form: { type: 'image_url', image_url: 'data:...' }
 	if (typeof obj.image_url === 'string') {
@@ -112,18 +128,25 @@ export function getImageUrlFromPart(part: unknown): string | undefined {
  * @returns An object with mediaType (normalized) and data properties, or undefined if not a valid data URL
  */
 export function parseDataImageUrl(url: unknown): ParsedDataImageUrl | undefined {
+	const result = parseDataImageUrlDetailed(url);
+	return result.kind === 'ok'
+		? { mediaType: result.mediaType, data: result.data }
+		: undefined;
+}
+
+export function parseDataImageUrlDetailed(url: unknown): DataImageParseResult {
 	if (typeof url !== 'string') {
-		return undefined;
+		return { kind: 'not_data_url' };
 	}
 
 	const trimmed = url.trim();
 	if (!trimmed.toLowerCase().startsWith('data:')) {
-		return undefined;
+		return { kind: 'not_data_url' };
 	}
 
 	const commaIndex = trimmed.indexOf(',');
 	if (commaIndex === -1) {
-		return undefined;
+		return { kind: 'invalid_data_url', reason: 'missing comma separator' };
 	}
 
 	// Extract metadata (between 'data:' and ',') and data (after ',')
@@ -132,7 +155,7 @@ export function parseDataImageUrl(url: unknown): ParsedDataImageUrl | undefined 
 
 	// Empty base64 data is invalid
 	if (!data) {
-		return undefined;
+		return { kind: 'invalid_data_url', reason: 'empty data' };
 	}
 
 	// Parse metadata parts (split by ';')
@@ -143,17 +166,23 @@ export function parseDataImageUrl(url: unknown): ParsedDataImageUrl | undefined 
 
 	const mediaType = metadataParts[0];
 	if (!mediaType) {
-		return undefined;
+		return { kind: 'invalid_data_url', reason: 'missing media type' };
 	}
+	const normalizedMediaType = normalizeImageMediaType(mediaType);
 
 	// Check for base64 encoding marker (case-insensitive)
 	const isBase64 = metadataParts.some((part) => part.toLowerCase() === 'base64');
 	if (!isBase64) {
-		return undefined;
+		return { kind: 'invalid_data_url', reason: 'missing base64 marker', mediaType: normalizedMediaType };
+	}
+
+	if (!isSupportedImageType(normalizedMediaType)) {
+		return { kind: 'unsupported_media_type', mediaType: normalizedMediaType };
 	}
 
 	return {
-		mediaType: normalizeImageMediaType(mediaType),
+		kind: 'ok',
+		mediaType: normalizedMediaType,
 		data,
 	};
 }

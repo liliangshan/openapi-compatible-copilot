@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.6.7
+
+### Fixed
+
+- **Vision Forwarding Reliability** — Hardened image forwarding across OpenAI-compatible Chat Completions, Responses API, and Anthropic Messages API. The extension now respects model vision capability, normalizes supported image MIME types, preserves mixed text/image user message merges, and avoids silently dropping mixed multimodal content.
+- **Anthropic Tool Result Compatibility** — Improved Anthropic `tool_result` conversion so tool outputs are emitted with valid text/image content blocks, consecutive tool results are merged safely, invalid tool-result images are omitted with readable placeholders, and missing tool IDs are skipped instead of producing invalid requests.
+- **Responses API Multimodal Conversion** — Improved Responses API conversion for both OpenAI-style `image_url` parts and Anthropic-style image blocks, while ensuring assistant/tool images are represented as safe text placeholders instead of leaking raw data URLs.
+- **Tool Result Data Safety** — Binary and unsupported tool result content is now replaced with compact readable placeholders instead of being serialized into prompt text.
+- **Request Error Privacy** — Request error messages now mask query-string values in API URLs and include more useful diagnostics for empty response bodies without exposing secrets.
+- **Session File Safety** — Session-derived TODO and reasoning cache filenames are now sanitized before being used on disk.
+
+### Changed
+
+- **Multimodal Prompt Handling** — Custom prompt appendices are appended as separate text parts for multimodal user messages to preserve the original image/text ordering.
+
+### Documentation
+
+- Added detailed internal review documents for the vision forwarding audit and overall project code review.
+
 ## 2.6.6
 
 ### Fixed

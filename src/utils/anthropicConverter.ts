@@ -11,7 +11,7 @@
  */
 
 import type { OpenAIChunk } from './openaiChunk';
-import { getImageUrlFromPart, parseDataImageUrl, isSupportedImageType } from './visionContent';
+import { getImageUrlFromPart, parseDataImageUrlDetailed } from './visionContent';
 
 type AnyObj = Record<string, any>;
 
@@ -99,9 +99,12 @@ export function convertMessagesToAnthropic(messages: AnyObj[]): { messages: AnyO
 
 		// tool result messages become user messages with a tool_result content block
 		if (role === 'tool') {
-			const toolResult: AnyObj = { type: 'tool_result' };
-			if (msg.tool_call_id) toolResult.tool_use_id = msg.tool_call_id;
-			toolResult.content = typeof msg.content === 'string' ? msg.content : msg.content;
+			const toolUseId = typeof msg.tool_call_id === 'string' ? msg.tool_call_id.trim() : '';
+			if (!toolUseId) {
+				continue;
+			}
+			const toolResult: AnyObj = { type: 'tool_result', tool_use_id: toolUseId };
+			toolResult.content = convertToolResultContentBlocks(msg.content);
 			anthropic.push({ role: 'user', content: [toolResult] });
 			continue;
 		}
@@ -111,7 +114,7 @@ export function convertMessagesToAnthropic(messages: AnyObj[]): { messages: AnyO
 		}
 
 		// user / assistant
-		let contentBlocks = convertContentBlocks(msg.content);
+		let contentBlocks = convertContentBlocks(msg.content, role === 'assistant' ? 'assistant' : 'user');
 		let hasToolUse = false;
 
 		// Filter out empty text blocks for all messages (Anthropic / Bedrock disallow them)
@@ -164,7 +167,7 @@ export function convertMessagesToAnthropic(messages: AnyObj[]): { messages: AnyO
 /**
  * Convert an OpenAI message content (string | array) to Anthropic content blocks.
  */
-function convertContentBlocks(content: any): AnyObj[] {
+function convertContentBlocks(content: any, role: 'user' | 'assistant' | 'tool'): AnyObj[] {
 	if (content === null || content === undefined || content === '') {
 		return [];
 	}
@@ -178,17 +181,16 @@ function convertContentBlocks(content: any): AnyObj[] {
 			if (part.type === 'text' && typeof part.text === 'string') {
 				blocks.push({ type: 'text', text: part.text });
 			} else if (part.type === 'image_url') {
+				if (role === 'assistant') {
+					blocks.push({ type: 'text', text: '[assistant image omitted]' });
+					continue;
+				}
 				// Use shared utility for consistent URL extraction
 				const url = getImageUrlFromPart(part);
 				if (!url) continue;
 
-				const dataImage = parseDataImageUrl(url);
-				if (dataImage) {
-					// Validate MIME type before converting to base64 image
-					if (!isSupportedImageType(dataImage.mediaType)) {
-						// Skip unsupported image types (e.g., text/html, application/pdf)
-						continue;
-					}
+				const dataImage = parseDataImageUrlDetailed(url);
+				if (dataImage.kind === 'ok') {
 					blocks.push({
 						type: 'image',
 						source: {
@@ -197,8 +199,16 @@ function convertContentBlocks(content: any): AnyObj[] {
 							data: dataImage.data,
 						},
 					});
+				} else if (dataImage.kind === 'unsupported_media_type') {
+					blocks.push({ type: 'text', text: `[unsupported image omitted: ${dataImage.mediaType}]` });
+				} else if (dataImage.kind === 'invalid_data_url') {
+					blocks.push({ type: 'text', text: '[invalid data image omitted]' });
 				} else {
-					blocks.push({ type: 'image', source: { type: 'url', url } });
+					if (/^https?:\/\//i.test(url)) {
+						blocks.push({ type: 'image', source: { type: 'url', url } });
+					} else {
+						blocks.push({ type: 'text', text: '[unsupported image url omitted]' });
+					}
 				}
 			} else {
 				// Pass through unknown blocks unchanged
@@ -224,6 +234,48 @@ function stringifyContent(content: any): string {
 	return String(content);
 }
 
+function convertToolResultContentBlocks(content: any): AnyObj[] {
+	const blocks: AnyObj[] = [];
+	for (const block of convertContentBlocks(content, 'tool')) {
+		if (!block || typeof block !== 'object') {
+			continue;
+		}
+		if (block.type === 'text' && typeof block.text === 'string') {
+			if (block.text.length > 0) {
+				blocks.push({ type: 'text', text: block.text });
+			}
+			continue;
+		}
+		if (block.type === 'image') {
+			if (isValidAnthropicImageSource(block.source)) {
+				blocks.push({ type: 'image', source: block.source });
+			} else {
+				blocks.push({ type: 'text', text: '[invalid tool result image omitted]' });
+			}
+			continue;
+		}
+		blocks.push({ type: 'text', text: '[unsupported tool result content omitted]' });
+	}
+
+	return blocks.length > 0 ? blocks : [{ type: 'text', text: '[empty tool result]' }];
+}
+
+function isValidAnthropicImageSource(source: any): boolean {
+	if (!source || typeof source !== 'object') {
+		return false;
+	}
+	if (source.type === 'base64') {
+		return typeof source.media_type === 'string'
+			&& source.media_type.length > 0
+			&& typeof source.data === 'string'
+			&& source.data.length > 0;
+	}
+	if (source.type === 'url') {
+		return typeof source.url === 'string' && /^https?:\/\//i.test(source.url);
+	}
+	return false;
+}
+
 /**
  * Anthropic disallows two consecutive messages with the same role; merge their content arrays.
  */
@@ -233,7 +285,7 @@ function mergeConsecutiveRoles(messages: AnyObj[]): AnyObj[] {
 	for (let i = 1; i < messages.length; i++) {
 		const last = result[result.length - 1];
 		const cur = messages[i];
-		if (last.role === cur.role) {
+		if (last.role === cur.role && canMergeAnthropicMessages(last, cur)) {
 			const lc = Array.isArray(last.content) ? last.content : [];
 			const cc = Array.isArray(cur.content) ? cur.content : [];
 			last.content = [...lc, ...cc];
@@ -242,6 +294,16 @@ function mergeConsecutiveRoles(messages: AnyObj[]): AnyObj[] {
 		}
 	}
 	return result;
+}
+
+function containsToolResult(content: any): boolean {
+	return Array.isArray(content) && content.some((part: any) => part && typeof part === 'object' && part.type === 'tool_result');
+}
+
+function canMergeAnthropicMessages(left: AnyObj, right: AnyObj): boolean {
+	const leftHasToolResult = containsToolResult(left.content);
+	const rightHasToolResult = containsToolResult(right.content);
+	return leftHasToolResult === rightHasToolResult;
 }
 
 /**
@@ -432,7 +494,7 @@ export function convertAnthropicEventToOpenAIChunks(
 			return [];
 		}
 
-		case 'content_block_stop':
+		case 'content_block_stop': {
 			if (state.inThinking && state.convertThink) {
 				state.inThinking = false;
 			}
@@ -453,6 +515,7 @@ export function convertAnthropicEventToOpenAIChunks(
 				}
 			}
 			return [];
+		}
 
 		case 'message_delta': {
 			const delta = event.delta || {};

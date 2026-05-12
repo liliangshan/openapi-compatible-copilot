@@ -42,14 +42,14 @@ export function convertChatCompletionsToResponsesAPI(req: AnyObj): AnyObj {
 				input.push({
 					type: 'function_call_output',
 					call_id: String(callId),
-					output: contentToPlainText(message.content),
+					output: contentToPlainText(message.content, 'tool'),
 				});
 			}
 			continue;
 		}
 
 		if (role === 'assistant' && Array.isArray(message.tool_calls)) {
-			const text = contentToPlainText(message.content);
+			const text = contentToPlainText(message.content, 'assistant');
 			if (text) {
 				input.push({
 					role: 'assistant',
@@ -251,7 +251,11 @@ function convertMessageContentForResponses(content: any, role: string): AnyObj[]
 
 		if (part.type === 'text') {
 			parts.push({ type: textType, text: String(part.text ?? '') });
-		} else if (part.type === 'image_url') {
+		} else if (part.type === 'image_url' || part.type === 'image') {
+			if (role !== 'user') {
+				parts.push({ type: textType, text: role === 'assistant' ? '[assistant image omitted]' : '[image omitted]' });
+				continue;
+			}
 			// Use shared utility for consistent URL extraction
 			const imageUrl = getImageUrlFromPart(part);
 			if (imageUrl) {
@@ -579,7 +583,7 @@ function finishReasonFromResponse(response: AnyObj, state: V1ResponseStreamState
 	return 'stop';
 }
 
-function contentToPlainText(content: any): string {
+function contentToPlainText(content: any, role: string = 'user'): string {
 	if (content === undefined || content === null) {
 		return '';
 	}
@@ -587,12 +591,12 @@ function contentToPlainText(content: any): string {
 		return content;
 	}
 	if (Array.isArray(content)) {
-		return content.map(contentPartToText).filter(Boolean).join('\n');
+		return content.map(part => contentPartToText(part, role)).filter(Boolean).join('\n');
 	}
 	return String(content);
 }
 
-function contentPartToText(part: any): string {
+function contentPartToText(part: any, role: string = 'user'): string {
 	if (part === undefined || part === null) {
 		return '';
 	}
@@ -602,14 +606,18 @@ function contentPartToText(part: any): string {
 	if (typeof part !== 'object') {
 		return String(part);
 	}
+	if (part.type === 'image_url' || part.type === 'image') {
+		return role === 'tool'
+			? '[tool returned image; omitted]'
+			: role === 'assistant'
+				? '[assistant image omitted]'
+				: '[image omitted]';
+	}
 	if (typeof part.text === 'string') {
 		return part.text;
 	}
 	if (typeof part.content === 'string') {
 		return part.content;
-	}
-	if (part.type === 'image_url') {
-		return typeof part.image_url === 'string' ? part.image_url : part.image_url?.url || '';
 	}
 	return '';
 }

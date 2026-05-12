@@ -5,7 +5,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.6.6",
+	"version": "2.6.7",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
