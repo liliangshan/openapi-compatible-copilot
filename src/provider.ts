@@ -78,6 +78,7 @@ interface ModelRequestParams {
 	progress?: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>;
 	token: vscode.CancellationToken;
 	reportText?: boolean;
+	isExpert?: boolean;
 }
 
 interface ModelRequestResult {
@@ -1815,6 +1816,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const remoteSessionId = params.sessionId || 'unknown';
 		const remoteRequestId = params.remoteRequestId || `${requestLabel}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 		const remoteMessageId = `assistant_${remoteRequestId}`;
+		const isExpert = params.isExpert ?? requestLabel.startsWith('expert_');
+		const notificationPayloadBase = isExpert ? { isExpert: true } : {};
 		this._remoteNotificationService?.publishModelEvent({
 			type: 'model.request_started',
 			sessionId: remoteSessionId,
@@ -1825,6 +1828,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				apiType,
 				stream: true,
 				toolCallingEnabled: Array.isArray(requestBody?.tools) && requestBody.tools.length > 0,
+				...notificationPayloadBase,
 			},
 		});
 		const cancellationSubscription = token.onCancellationRequested(() => {
@@ -1951,6 +1955,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 								deltaIndex: reasoningDeltaIndex,
 								cumulativeLength: assistantReasoningContent.length,
 								cumulativeHash: hashText(assistantReasoningContent),
+								...notificationPayloadBase,
 							},
 						});
 					}
@@ -1971,6 +1976,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 							deltaIndex: textDeltaIndex,
 							cumulativeLength: assistantResponse.length,
 							cumulativeHash: hashText(assistantResponse),
+							...notificationPayloadBase,
 						},
 					});
 					if (reportText && progress) {
@@ -2002,6 +2008,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 									toolCallId: existing.id || `call_${index}`,
 									toolName: existing.name || '',
 									toolIndex: index,
+									...notificationPayloadBase,
 								},
 							});
 						}
@@ -2019,6 +2026,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 									argumentsDelta: tc.function.arguments,
 									argumentsCumulativeLength: existing.arguments.length,
 									argumentsCumulativeHash: hashText(existing.arguments),
+									...notificationPayloadBase,
 								},
 							});
 						}
@@ -2121,6 +2129,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 								toolIndex: index,
 								argumentsText: argsStr,
 								argumentsHash: hashText(argsStr),
+								...notificationPayloadBase,
 							},
 						});
 						collectedToolCalls.push({
@@ -2226,6 +2235,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					hasError: false,
 					cancelled: false,
 					hasToolCalls: collectedToolCalls.length > 0,
+					...notificationPayloadBase,
 				},
 			});
 			return { text: assistantResponse, reasoningContent: assistantReasoningContent, toolCalls: collectedToolCalls, remoteRequestId, remoteMessageId, providerId, modelId };
@@ -2239,6 +2249,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					payload: {
 						messageId: remoteMessageId,
 						reason: '用户取消或请求中止',
+						...notificationPayloadBase,
 					},
 				});
 				return { text: assistantResponse, reasoningContent: assistantReasoningContent, toolCalls: collectedToolCalls, remoteRequestId, remoteMessageId, providerId, modelId };
@@ -2253,6 +2264,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 					errorMessage: error instanceof Error ? error.message : String(error),
 					retryable: false,
 					stage: 'request_model',
+					...notificationPayloadBase,
 				},
 			});
 			throw error;
@@ -2795,6 +2807,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				resultText: text,
 				truncated: false,
 				errorMessage: '',
+				isExpert: true,
 			},
 		});
 		this._appendExpertContextRecord(state, {

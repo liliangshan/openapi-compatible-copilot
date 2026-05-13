@@ -4,7 +4,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.7.1",
+	"version": "2.7.2",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -275,6 +275,12 @@
 					"type": "string",
 					"default": "",
 					"description": "Webhook URL used to receive final assistant messages without tool calls.",
+					"scope": "machine-overridable"
+				},
+				"openapicopilot.remoteNotification.webhookSecret": {
+					"type": "string",
+					"default": "",
+					"description": "Shared secret used to create HMAC SHA-256 webhook signatures. The signature header is formatted as t=<timestamp>,v1=<hex digest> over <timestamp>.<body>.",
 					"scope": "machine-overridable"
 				},
 				"openapicopilot.remoteNotification.inboundMaxTextLength": {

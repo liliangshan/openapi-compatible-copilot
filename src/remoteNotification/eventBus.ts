@@ -24,6 +24,8 @@ export class RemoteNotificationEventBus implements vscode.Disposable {
 			timestamp: new Date().toISOString(),
 			source: 'vscode-extension',
 			payload: event.payload,
+			workspaceFolders: [],
+			activeWorkspaceFolder: '',
 		};
 		this.emitter.fire(envelope);
 		return envelope;
@@ -43,6 +45,8 @@ export class RemoteNotificationEventBus implements vscode.Disposable {
 			timestamp: new Date().toISOString(),
 			source: 'vscode-extension',
 			payload,
+			workspaceFolders: [],
+			activeWorkspaceFolder: '',
 		};
 	}
 

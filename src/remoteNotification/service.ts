@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { RemoteNotificationCache } from './cache';
 import { getRemoteNotificationConfig, getTrimmedWorkspacePath, getWorkspaceId, maskRemoteUrl } from './config';
 import { RemoteNotificationEventBus } from './eventBus';
@@ -168,6 +169,10 @@ export class RemoteNotificationService implements vscode.Disposable {
 			return;
 		}
 		if (this.config.websocketEnabled && this.config.websocketUrl) {
+			// 过滤掉 apply_patch 工具的 tool_call_delta 事件，不通过 WebSocket 上报
+			if (event.type === 'model.tool_call_delta' && (event.payload as any)?.toolName === 'apply_patch') {
+				return;
+			}
 			this.websocketCache.enqueue(event);
 			this.stats.websocketQueued++;
 			this.output.appendLine(`[websocket-queued] type=${event.type} requestId=${event.requestId} queue=${this.websocketCache.length}`);
@@ -460,6 +465,8 @@ export class RemoteNotificationService implements vscode.Disposable {
 		if (!this.config.webhookUrl) {
 			return;
 		}
+		const timestamp = String(Math.floor(Date.now() / 1000));
+		const webhookId = event.eventId || event.messageId;
 		let attempt = 0;
 		const maxAttempts = this.config.webhookRetryCount + 1;
 		while (attempt < maxAttempts) {
@@ -471,17 +478,27 @@ export class RemoteNotificationService implements vscode.Disposable {
 				const controller = new AbortController();
 				const timer = setTimeout(() => controller.abort(), this.config.webhookTimeoutMs);
 				try {
+					const workspaceFolders = getWorkspaceFolders();
+					const activeWorkspaceFolder = workspaceFolders.find(f => f.isPrimary)?.path || '';
+					const body = JSON.stringify({
+						...event,
+						workspaceFolders,
+						activeWorkspaceFolder,
+						payload: {
+							...event.payload,
+							deliveryAttempt: attempt,
+						},
+					});
 					const response = await fetch(this.config.webhookUrl, {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json',
-							'X-LLSOAI-Protocol-Version': '1.0',
-							'X-LLSOAI-Event-Type': event.type,
-							'X-LLSOAI-Request-Id': event.requestId,
-							'X-LLSOAI-Session-Id': event.sessionId,
-							'X-LLSOAI-Dedupe-Key': String(event.payload?.dedupeKey || event.eventId),
+							'Webhook-Id': webhookId,
+							'Webhook-Event': event.type,
+							'Webhook-Timestamp': timestamp,
+							'Webhook-Signature': this.createWebhookSignature(timestamp, body),
 						},
-						body: JSON.stringify({ ...event, payload: { ...event.payload, deliveryAttempt: attempt } }),
+						body,
 						signal: controller.signal,
 					});
 					if (response.ok) {
@@ -499,6 +516,15 @@ export class RemoteNotificationService implements vscode.Disposable {
 			}
 		}
 		this.stats.webhookFailed++;
+	}
+
+	private createWebhookSignature(timestamp: string, body: string): string {
+		if (!this.config.webhookSecret) {
+			return `t=${timestamp},v1=`;
+		}
+		const signedPayload = `${timestamp}.${body}`;
+		const digest = crypto.createHmac('sha256', this.config.webhookSecret).update(signedPayload).digest('hex');
+		return `t=${timestamp},v1=${digest}`;
 	}
 
 	async openSettings(): Promise<void> {

@@ -18,6 +18,7 @@ export interface RemoteNotificationConfig {
 	websocketUrl: string;
 	webhookEnabled: boolean;
 	webhookUrl: string;
+	webhookSecret: string;
 	inboundMaxTextLength: number;
 	inboundDedupeWindowMs: number;
 	allowHistoryRequest: boolean;
@@ -52,6 +53,8 @@ export interface RemoteNotificationEnvelope<TPayload = any> {
 	timestamp: string;
 	source: 'vscode-extension';
 	payload: TPayload;
+	workspaceFolders: RemoteWorkspaceFolderInfo[];
+	activeWorkspaceFolder: string;
 }
 
 export interface RemoteNotificationModelEvent {
