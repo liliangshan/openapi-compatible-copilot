@@ -177,16 +177,18 @@ export class RemoteNotificationService implements vscode.Disposable {
 			this.stats.websocketQueued++;
 			this.output.appendLine(`[websocket-queued] type=${event.type} requestId=${event.requestId} queue=${this.websocketCache.length}`);
 		}
-		if (this.config.globalCacheEnabled && this.config.webhookEnabled && this.config.webhookUrl && isWebhookCandidate(event)) {
+		if (this.config.webhookEnabled && this.config.webhookUrl && isWebhookCandidate(event)) {
 			const webhookEnvelope = toWebhookEnvelope(event);
 			const dedupeKey = String(webhookEnvelope.payload?.dedupeKey || webhookEnvelope.eventId);
 			this.cleanupWebhookDedupe();
 			if (this.webhookDedupe.has(dedupeKey)) {
+				this.output.appendLine(`[webhook-skipped] duplicate dedupeKey=${dedupeKey} requestId=${event.requestId}`);
 				return;
 			}
 			this.webhookDedupe.set(dedupeKey, Date.now() + 3600000);
 			this.webhookCache.enqueue(webhookEnvelope);
 			this.stats.webhookQueued++;
+			this.output.appendLine(`[webhook-queued] type=${webhookEnvelope.type} requestId=${webhookEnvelope.requestId} queue=${this.webhookCache.length}`);
 		}
 	}
 
@@ -489,6 +491,7 @@ export class RemoteNotificationService implements vscode.Disposable {
 							deliveryAttempt: attempt,
 						},
 					});
+					this.output.appendLine(`[webhook-send] type=${event.type} requestId=${event.requestId} attempt=${attempt}/${maxAttempts} url=${maskRemoteUrl(this.config.webhookUrl)} bytes=${Buffer.byteLength(body, 'utf8')}`);
 					const response = await fetch(this.config.webhookUrl, {
 						method: 'POST',
 						headers: {
@@ -501,6 +504,8 @@ export class RemoteNotificationService implements vscode.Disposable {
 						body,
 						signal: controller.signal,
 					});
+					const responseText = await response.text().catch(() => '');
+					this.output.appendLine(`[webhook-response] type=${event.type} requestId=${event.requestId} attempt=${attempt}/${maxAttempts} status=${response.status} ok=${response.ok} body=${truncateLogText(responseText, 500)}`);
 					if (response.ok) {
 						this.stats.webhookSent++;
 						return;
@@ -791,6 +796,14 @@ function toWebhookEnvelope(event: RemoteNotificationEnvelope): RemoteNotificatio
 			workspaceFolders: getWorkspaceFolders(),
 		},
 	};
+}
+
+function truncateLogText(value: string, maxLength: number): string {
+	const normalized = value.replace(/[\r\n]+/g, ' ').trim();
+	if (normalized.length <= maxLength) {
+		return normalized;
+	}
+	return `${normalized.slice(0, maxLength)}...`;
 }
 
 function getWorkspaceFolders(): RemoteWorkspaceFolderInfo[] {

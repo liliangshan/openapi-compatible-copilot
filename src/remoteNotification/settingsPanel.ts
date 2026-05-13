@@ -81,6 +81,7 @@ function getHtml(text: Record<string, string>, config: ReturnType<typeof getRemo
 	const state = JSON.stringify(config).replace(/</g, '\\u003c');
 	const langParam = encodeURIComponent(SERVICE_URL_LANG[language] || 'en');
 	const selfHostedRepoUrl = 'https://github.com/liliangshan/llsoai-websocket';
+	const selfHostedWebhookRepoUrl = 'https://github.com/liliangshan/llsoai-webhook.git';
 	const hostedMainlandUrl = `https://oai.hlwidc.com/?lang=${langParam}`;
 	const hostedOverseasUrl = `https://oai.zhineng.dev/?lang=${langParam}`;
 	return `<!DOCTYPE html>
@@ -133,6 +134,10 @@ a:hover{text-decoration:underline}
 <div class="usage-link-row">
 <span class="usage-link-tag">GitHub</span>
 <a href="${escapeHtml(selfHostedRepoUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(selfHostedRepoUrl)}</a>
+</div>
+<div class="usage-link-row">
+<span class="usage-link-tag">webhook</span>
+<a href="${escapeHtml(selfHostedWebhookRepoUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(selfHostedWebhookRepoUrl)}</a>
 </div>
 </div>
 <div class="usage-card">
