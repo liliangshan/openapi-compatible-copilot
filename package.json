@@ -4,7 +4,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.7.3",
+	"version": "2.7.4",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -52,7 +52,7 @@
 			{
 				"command": "openapicopilot.remoteNotification.openSettings",
 				"category": "LLS OAI",
-				"title": "Open Remote Notification Settings"
+				"title": "Open Remote Work Settings"
 			}
 		],
 		"menus": {
@@ -251,13 +251,13 @@
 					"type": "boolean",
 					"default": false,
 					"description": "Enable remote notification forwarding.",
-					"scope": "application"
+					"scope": "machine-overridable"
 				},
 				"openapicopilot.remoteNotification.websocketEnabled": {
 					"type": "boolean",
 					"default": false,
 					"description": "Enable WebSocket remote notification channel.",
-					"scope": "application"
+					"scope": "machine-overridable"
 				},
 				"openapicopilot.remoteNotification.websocketUrl": {
 					"type": "string",
@@ -269,7 +269,7 @@
 					"type": "boolean",
 					"default": false,
 					"description": "Enable webhook remote notification channel.",
-					"scope": "application"
+					"scope": "machine-overridable"
 				},
 				"openapicopilot.remoteNotification.webhookUrl": {
 					"type": "string",
@@ -303,7 +303,7 @@
 					"type": "boolean",
 					"default": false,
 					"description": "Allow the remote WebSocket server to request project chat history from the current workspace .LLSOAI directory.",
-					"scope": "application"
+					"scope": "machine-overridable"
 				},
 				"openapicopilot.remoteNotification.historyRequestRateLimitPerMinute": {
 					"type": "integer",

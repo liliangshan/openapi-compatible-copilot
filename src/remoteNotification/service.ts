@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import WebSocket from 'ws';
-import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
