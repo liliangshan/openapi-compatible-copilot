@@ -22,10 +22,16 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 🖼️ **Vision/Multimodal Input Support** - Supports image input forwarding across OpenAI-compatible Chat Completions, Responses API, and Anthropic Messages API providers
 - 🛡️ **Hardened Multimodal Conversion** - Validates model vision capability, supported image MIME types, mixed text/image message merging, Anthropic tool results, Responses API image conversion, and safe placeholders for unsupported binary content
 - 🧠 **Strict Reasoning Compatibility** - Preserves and replays `reasoning_content` for tool-call turns, improving compatibility with DeepSeek Reasoner and other strict OpenAI-compatible providers
+- 📊 **Status Bar Context Compaction** - The token usage status bar tracks remaining context capacity and shows a localized “click to compact” action when the remaining budget is low. Click it to send `/compact` and compress the current Copilot Chat context
 - 🛠️ **VS Code Problems Diagnostics Fix** - The `get_errors` tool is handled locally so models can reliably receive VS Code Problems diagnostics, including warnings, with up to 10 sorted diagnostics returned per call
 - 📡 **Remote Work** - Connect the extension to a remote server via WebSocket and/or Webhook to receive `server.chat_message` events that are automatically injected into the active Chat Input and submitted, and to forward all `model.*` lifecycle events (request, deltas, tool results, completion, errors) back to the server with the original server-issued `requestId` preserved for request-response correlation. WebSocket and Webhook channels are fully decoupled and can be enabled independently. Includes a localized settings panel with a Usage section covering self-hosted deployment (<https://github.com/liliangshan/llsoai-websocket>) and our hosted services (Mainland China / Overseas), plus a clear privacy notice that we do not store or back up your data
 
 ## Latest Updates
+
+### 2.7.5
+
+- **Status bar context compaction** — The token usage status bar now detects when the remaining context budget is low and shows a localized “click to compact” action beside the percentage.
+- **One-click `/compact`** — Clicking the low-context status bar action sends `/compact` directly to Copilot Chat so you can compress the current conversation context before continuing.
 
 ### 2.7.0
 

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ConfigManager } from './configManager';
 import { OpenAPIChatModelProvider } from './provider';
 import { ConfigViewProvider, ConfigViewPanel } from './views/configView';
-import { initStatusBar } from './statusBar';
+import { initStatusBar, refreshContextStatusBarLanguage, sendCompactCommand } from './statusBar';
 import { initPromptEnhancementStatusBar } from './promptEnhancementStatusBar';
 import { TimelineService } from './timeline/service';
 import { RemoteNotificationEventBus } from './remoteNotification/eventBus';
@@ -57,6 +57,20 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('openapicopilot.openConfig', async () => {
 			// Focus the config view (same as manageProviders)
 			await vscode.commands.executeCommand(`${ConfigViewProvider.viewType}.focus`);
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('openapicopilot.compactContext', async () => {
+			await sendCompactCommand();
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('openapicopilot.language')) {
+				refreshContextStatusBarLanguage(statusBarItem, configManager.getResolvedLanguage());
+			}
 		})
 	);
 

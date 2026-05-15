@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.7.5
+
+### Added
+
+- **Status Bar Context Compaction** — The token usage status bar now monitors remaining context capacity and, when the remaining budget falls below the threshold, shows a localized “click to compact” action next to the usage percentage. Clicking the status bar sends `/compact` directly to Copilot Chat, making it easy to compress the current conversation context before it runs out of room.
+
 ## 2.7.1
 
 ### Fixed

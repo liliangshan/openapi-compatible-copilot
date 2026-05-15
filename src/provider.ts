@@ -902,7 +902,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			options.tools,
 			model,
 			this._statusBarItem,
-			async (text: string | vscode.LanguageModelChatRequestMessage) => this._estimateTokens(text)
+			async (text: string | vscode.LanguageModelChatRequestMessage) => this._estimateTokens(text),
+			this._configManager.getResolvedLanguage()
 		);
 
 		// Build request body
