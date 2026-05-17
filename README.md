@@ -24,9 +24,19 @@ A VS Code extension that integrates multiple OpenAI-compatible and Anthropic API
 - 🧠 **Strict Reasoning Compatibility** - Preserves and replays `reasoning_content` for tool-call turns, improving compatibility with DeepSeek Reasoner and other strict OpenAI-compatible providers
 - 📊 **Status Bar Context Compaction** - The token usage status bar tracks remaining context capacity and shows a localized “click to compact” action when the remaining budget is low. Click it to send `/compact` and compress the current Copilot Chat context
 - 🛠️ **VS Code Problems Diagnostics Fix** - The `get_errors` tool is handled locally so models can reliably receive VS Code Problems diagnostics, including warnings, with up to 10 sorted diagnostics returned per call
+- ✅ **LLS Task Workflow** - Use the built-in `@lls-task` chat participant to turn a dragged-in planning Markdown document into a workspace task workflow. The workflow is shown in the status bar, injected into main-model chats, and updated through a restricted `update_lls_task_workflow` tool that only changes task status. The extension can automatically continue unfinished workflows after the main model becomes idle
 - 📡 **Remote Work** - Connect the extension to a remote server via WebSocket and/or Webhook to receive `server.chat_message` events that are automatically injected into the active Chat Input and submitted, and to forward all `model.*` lifecycle events (request, deltas, tool results, completion, errors) back to the server with the original server-issued `requestId` preserved for request-response correlation. WebSocket and Webhook channels are fully decoupled and can be enabled independently. Includes a localized settings panel with a Usage section covering self-hosted deployment (<https://github.com/liliangshan/llsoai-websocket>) and our hosted services (Mainland China / Overseas), plus a clear privacy notice that we do not store or back up your data
 
 ## Latest Updates
+
+### 3.0.0
+
+- **LLS Task Workflow** — Added the `@lls-task` workflow assistant. Drag a solution planning Markdown document into the `@lls-task` chat participant and the configured task model will analyze it into a structured task workflow.
+- **Status bar workflow progress** — The LLS Task status bar shows localized workflow status, progress counts, hover task lists, setup guidance, and completed-workflow guidance for starting a new workflow.
+- **Main-model workflow context** — Active workflows are automatically injected into the main model context, including the generated task list and the original planning document path.
+- **Restricted workflow updates** — Added the local `update_lls_task_workflow` tool so the main model can update only task IDs and statuses (`pending`, `in_progress`, `completed`, `blocked`) without modifying task titles, descriptions, ordering, or summary.
+- **Automatic continuation** — After a main-model turn finishes, unfinished workflows are checked after 15 seconds. If the main model is idle and tasks remain incomplete, the extension auto-submits a localized continue prompt back into Chat.
+- **Localized workflow UX** — LLS Task settings, status bar text, hover messages, start prompts, error messages, and auto-continue prompts are localized across the supported UI languages.
 
 ### 2.7.5
 
@@ -96,6 +106,40 @@ The Usage section in the Remote Work settings panel offers two ways to get start
    - Overseas: <https://oai.zhineng.dev>
 
 > 🔒 **Privacy Notice** — When using our hosted service, we do not store or back up any of your data.
+
+## ✅ LLS Task Workflow
+
+LLS Task Workflow turns a planning document into an executable task flow for Copilot Chat. It is designed for longer implementation work where you want the model to follow a plan, expose progress in the status bar, and keep moving until the workflow is complete.
+
+### How It Works
+
+1. Configure the **LLS Task** provider and model in Global Settings.
+2. Click the LLS Task status bar item, or type `@lls-task` in Chat.
+3. Drag a solution planning Markdown document from Explorer into the `@lls-task` chat window.
+4. The task model analyzes the document and generates a structured workflow.
+5. The workflow appears in the status bar with progress counts and a hover task list.
+6. The extension sends a continue prompt to the main model. The current workflow and planning document path are automatically injected into the main-model context.
+7. As work progresses, the main model updates task status through the local `update_lls_task_workflow` tool.
+8. If the workflow is not complete after a main-model turn, the extension waits 15 seconds and auto-submits a localized continue prompt when the main model is idle.
+
+### Key Features
+
+- **Dedicated `@lls-task` participant** — Captures planning documents through VS Code Chat Participant integration.
+- **Planning-document analysis** — Supports Markdown and common text planning files, converting actionable content into workflow JSON internally.
+- **Status bar progress** — Displays completed/total task counts. Hovering shows the task list and statuses; completed workflows include guidance for starting a new workflow.
+- **Main-model context injection** — The active workflow and original planning document path are included automatically when the main model runs.
+- **Safe status-only updates** — The main model can only update task status via `update_lls_task_workflow`; task content, titles, order, and summary are protected.
+- **Automatic continuation** — Unfinished workflows are resumed automatically after the main model becomes idle, reducing manual “continue” prompts.
+- **Localized experience** — Setup hints, status bar labels, generated prompts, and workflow messages follow the configured UI language.
+
+### Configuration
+
+Open **Global Settings** and choose:
+
+- **LLS Task Provider** — The provider used to analyze planning documents.
+- **LLS Task Model** — The model used to generate the workflow.
+
+There is no separate enable switch: once a provider and model are selected, the `@lls-task` workflow is ready to use.
 
 ## ✨ Prompt Enhancement
 

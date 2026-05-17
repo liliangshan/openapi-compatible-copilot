@@ -29,6 +29,7 @@ import { isSupportedImageType, normalizeImageMediaType } from './utils/visionCon
 import { TimelineService, timelineErrorToJson } from './timeline/service';
 import { RemoteNotificationService } from './remoteNotification/service';
 import { hashText } from './remoteNotification/types';
+import { LlsTaskService, type LlsTaskWorkflowStatus, type LlsTaskWorkflowStatusUpdate } from './llsTask/service';
 
 const EXTENSION_LABEL = 'LLS OAI';
 const DEFAULT_CONTEXT_LENGTH = 128000;
@@ -42,6 +43,7 @@ const TIMELINE_LIST_TOOL_NAME = 'timeline_list_by_file';
 const TIMELINE_RESTORE_TOOL_NAME = 'timeline_restore_snapshot';
 const TIMELINE_READ_LINES_TOOL_NAME = 'timeline_read_snapshot_lines';
 const GET_ERRORS_TOOL_NAME = 'get_errors';
+const UPDATE_LLS_TASK_WORKFLOW_TOOL_NAME = 'update_lls_task_workflow';
 const MAX_AUTO_EXECUTED_TOOL_ROUNDS = 3;
 const MAX_GET_ERRORS_DIAGNOSTICS = 10;
 const MAX_SOLUTION_EXPERT_REVIEW_COUNT = 2;
@@ -579,6 +581,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	private _activeSolutionRunBySession: Map<string, string> = new Map();
 	private _promptEnhancementBypassHashes: Map<string, number> = new Map();
 	private _remoteInboundRequestIds: Map<string, { requestId: string; expiresAt: number }> = new Map();
+	private _activeMainRequestCount = 0;
 
 	/**
 	 * Event fired when the available set of language models changes.
@@ -590,7 +593,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		private readonly _configManager: ConfigManager,
 		statusBarItem: vscode.StatusBarItem,
 		private readonly _timelineService?: TimelineService,
-		private readonly _remoteNotificationService?: RemoteNotificationService
+		private readonly _remoteNotificationService?: RemoteNotificationService,
+		private readonly _llsTaskService?: LlsTaskService
 	) {
 		this._statusBarItem = statusBarItem;
 	}
@@ -765,6 +769,9 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		progress: vscode.Progress<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart | vscode.LanguageModelToolResultPart | vscode.LanguageModelDataPart>,
 		token: vscode.CancellationToken
 	): Promise<void> {
+		this._activeMainRequestCount++;
+		this._llsTaskService?.clearAutoContinueTimer();
+		try {
 		const metadata = model.__providerData;
 		if (!metadata) {
 			throw new Error('Model metadata not found');
@@ -953,6 +960,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const builtInTools = [
 			...(this._timelineService ? this._buildTimelineTools() : []),
 			this._buildGetErrorsTool(),
+			...(this._llsTaskService?.getSnapshot().workflow ? [this._buildUpdateLlsTaskWorkflowTool()] : []),
 			...(expertEnabled ? [this._buildAskLlsoaiTool()] : []),
 			...(solutionEnabled ? [this._buildAskSolutionProviderTool()] : []),
 		];
@@ -1076,6 +1084,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			const chatMessages = this._buildChatMessages(messages, result.text);
 			await this._configManager.saveChatHistory(chatMessages, modelId, options.tools ? [...options.tools] : undefined);
 			await this._savePromptContextCacheFromOpenAIMessages(currentSessionId, requestBody.messages, result.text);
+		}
+		} finally {
+			this._activeMainRequestCount = Math.max(0, this._activeMainRequestCount - 1);
+			this._llsTaskService?.scheduleAutoContinue({
+				isMainModelRunning: () => this._activeMainRequestCount > 0,
+			});
 		}
 	}
 
@@ -1371,6 +1385,33 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		};
 	}
 
+	private _buildUpdateLlsTaskWorkflowTool(): any {
+		return {
+			name: UPDATE_LLS_TASK_WORKFLOW_TOOL_NAME,
+			description: 'Update only the status of existing @lls-task workflow tasks when actual execution progress changes. You must provide existing task ids and one of: pending, in_progress, completed, blocked. This tool cannot update task title, description, summary, order, or create/delete tasks. Do not use it for planning changes. Call it in a separate tool-call round, not together with file editing, terminal, or other ordinary tools.',
+			inputSchema: {
+				type: 'object',
+				additionalProperties: false,
+				properties: {
+					updates: {
+						type: 'array',
+						description: 'Status updates for existing workflow tasks. Only taskId and status are allowed.',
+						items: {
+							type: 'object',
+							additionalProperties: false,
+							properties: {
+								taskId: { type: 'string', description: 'The existing task id from the current @lls-task workflow.' },
+								status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'blocked'], description: 'The new status for this existing task.' },
+							},
+							required: ['taskId', 'status'],
+						},
+					},
+				},
+				required: ['updates'],
+			},
+		};
+	}
+
 	private _mergeToolsWithBuiltIns(externalTools: readonly any[], builtIns: any[]): any[] {
 		if (builtIns.length === 0) {
 			return [...externalTools];
@@ -1390,8 +1431,12 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		return name === GET_ERRORS_TOOL_NAME;
 	}
 
+	private _isLlsTaskWorkflowTool(name: string): boolean {
+		return name === UPDATE_LLS_TASK_WORKFLOW_TOOL_NAME;
+	}
+
 	private _isAutoExecutedTool(name: string): boolean {
-		return this._isTimelineTool(name) || this._isGetErrorsTool(name);
+		return this._isTimelineTool(name) || this._isGetErrorsTool(name) || this._isLlsTaskWorkflowTool(name);
 	}
 
 	private _isInternalDelegationTool(name: string): boolean {
@@ -1399,7 +1444,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	}
 
 	private _isToolHiddenFromChildModel(name: string): boolean {
-		return name === TODO_TOOL_NAME || this._isInternalDelegationTool(name) || this._isTimelineTool(name) || this._isGetErrorsTool(name);
+		return name === TODO_TOOL_NAME || this._isInternalDelegationTool(name) || this._isTimelineTool(name) || this._isGetErrorsTool(name) || this._isLlsTaskWorkflowTool(name);
 	}
 
 	private _buildSolutionDraftFilePath(runId: string): string {
@@ -1528,6 +1573,31 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				truncated: false,
 			};
 			return JSON.stringify(result);
+		}
+	}
+
+	private _executeLlsTaskWorkflowToolAsJson(input: any): string {
+		try {
+			if (!this._llsTaskService) {
+				return JSON.stringify({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'LLS Task service is not available.', retryable: false } });
+			}
+			let candidate = input;
+			if (typeof candidate === 'string') {
+				try {
+					candidate = JSON.parse(candidate);
+				} catch {
+					candidate = {};
+				}
+			}
+			const updates: LlsTaskWorkflowStatusUpdate[] = Array.isArray(candidate?.updates)
+				? candidate.updates.map((item: any) => ({
+					taskId: String(item?.taskId ?? item?.id ?? '').trim(),
+					status: String(item?.status ?? '') as LlsTaskWorkflowStatus,
+				}))
+				: [];
+			return JSON.stringify(this._llsTaskService.updateTaskStatuses(updates));
+		} catch (error) {
+			return JSON.stringify({ ok: false, error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : String(error), retryable: false } });
 		}
 	}
 
@@ -1707,6 +1777,9 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		if (this._isGetErrorsTool(call.name)) {
 			return this._executeGetErrorsToolAsJson(call.input ?? call.arguments);
 		}
+		if (this._isLlsTaskWorkflowTool(call.name)) {
+			return this._executeLlsTaskWorkflowToolAsJson(call.input ?? call.arguments);
+		}
 		return JSON.stringify({ ok: false, error: { code: 'UNKNOWN_INTERNAL_TOOL', message: `Unknown auto executed tool: ${call.name}`, retryable: false } });
 	}
 
@@ -1717,8 +1790,9 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 				code: 'MIXED_AUTO_EXECUTED_AND_ORDINARY_TOOLS',
 				message: [
 					'This assistant message mixed extension-local auto-executed tools with ordinary external VS Code tools.',
-					'Ordinary external tools were not executed in this round to keep tool result pairing valid and to prevent get_errors from being forwarded externally.',
-					'Please retry by calling either only get_errors/timeline tools, or only ordinary external tools in the next assistant message.',
+					'Ordinary external tools were not executed in this round to keep tool result pairing valid and to prevent extension-local tools from being forwarded externally.',
+					'Extension-local auto-executed tools include get_errors, timeline tools, and update_lls_task_workflow.',
+					'Please retry by calling either only extension-local auto-executed tools, or only ordinary external tools in the next assistant message.',
 				].join(' '),
 				retryable: true,
 			},
@@ -3898,6 +3972,10 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		// 2.1 Force TODO prompt switch: check global first, then workspace/project
 		const forceTodoEnabled = this._configManager.getGlobalForceTodoEnabled() || this._configManager.getWorkspaceForceTodoEnabled();
 		const hasCurrentTodoTask = getCurrentTodoTaskContent(sessionId) !== null;
+		const llsTaskPrompt = this._llsTaskService?.buildMainModelPrompt(this._configManager.getResolvedLanguage());
+		if (llsTaskPrompt) {
+			systemParts.push(llsTaskPrompt);
+		}
 
 		// 3. VS Code system messages (filtered)
 		for (const message of messages) {

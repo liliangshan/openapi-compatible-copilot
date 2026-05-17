@@ -2,8 +2,9 @@ import * as vscode from 'vscode';
 import { ConfigManager } from './configManager';
 import { OpenAPIChatModelProvider } from './provider';
 import { ConfigViewProvider, ConfigViewPanel } from './views/configView';
-import { initStatusBar, refreshContextStatusBarLanguage, sendCompactCommand } from './statusBar';
+import { initLlsTaskStatusBar, initStatusBar, refreshContextStatusBarLanguage, sendCompactCommand } from './statusBar';
 import { initPromptEnhancementStatusBar } from './promptEnhancementStatusBar';
+import { LlsTaskService } from './llsTask/service';
 import { TimelineService } from './timeline/service';
 import { RemoteNotificationEventBus } from './remoteNotification/eventBus';
 import { RemoteNotificationService } from './remoteNotification/service';
@@ -16,7 +17,16 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Initialize config manager
 	const configManager = new ConfigManager(context, context.secrets);
+	const llsTaskService = new LlsTaskService(configManager);
+	const llsTaskParticipant = vscode.chat.createChatParticipant(
+		'lls.task',
+		async (request, _context, stream) => {
+			await llsTaskService.handleChatRequest(request, stream);
+		}
+	);
+	context.subscriptions.push(llsTaskParticipant);
 	initPromptEnhancementStatusBar(context, configManager);
+	initLlsTaskStatusBar(context, configManager, llsTaskService);
 
 	// Initialize local timeline service for AI agent recovery support
 	const timelineOutput = vscode.window.createOutputChannel('OpenAPI Copilot Timeline');
@@ -30,7 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(remoteNotificationEventBus, remoteNotificationService);
 
 	// Register the chat provider
-	const chatProvider = new OpenAPIChatModelProvider(configManager, statusBarItem, timelineService, remoteNotificationService);
+	const chatProvider = new OpenAPIChatModelProvider(configManager, statusBarItem, timelineService, remoteNotificationService, llsTaskService);
 	remoteNotificationService.setPromptBypassMarker((prompt: string, requestId?: string) => chatProvider.markRemoteInboundPromptBypass(prompt, requestId));
 	remoteNotificationService.start();
 	const providerRegistration = vscode.lm.registerLanguageModelChatProvider('openapicopilot', chatProvider);

@@ -4,7 +4,7 @@
 	"displayName": "LLS OAI",
 	"description": "OpenAI-compatible OR Anthropic for Copilot Chat",
 	"icon": "assets/logo.png",
-	"version": "2.7.5",
+	"version": "3.0.0",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -22,6 +22,13 @@
 		"chatProvider"
 	],
 	"contributes": {
+		"chatParticipants": [
+			{
+				"id": "lls.task",
+				"name": "lls-task",
+				"description": "LLS Task workflow chat participant"
+			}
+		],
 		"languageModelChatProviders": [
 			{
 				"vendor": "openapicopilot",
@@ -50,6 +57,11 @@
 				"title": "Open Project Settings"
 			},
 			{
+				"command": "openapicopilot.llsTask.openMenu",
+				"category": "LLS OAI",
+				"title": "Open LLS Task Workflow Menu"
+			},
+			{
 				"command": "openapicopilot.remoteNotification.openSettings",
 				"category": "LLS OAI",
 				"title": "Open Remote Work Settings"
@@ -68,6 +80,9 @@
 				},
 				{
 					"command": "openapicopilot.openProjectSettingsTab"
+				},
+				{
+					"command": "openapicopilot.llsTask.openMenu"
 				},
 				{
 					"command": "openapicopilot.remoteNotification.openSettings"
@@ -192,6 +207,18 @@
 					"default": "global",
 					"description": "Workspace solution provider expert review state. Use global, force enabled, or force disabled for this workspace.",
 					"scope": "resource"
+				},
+				"openapicopilot.llsTask.providerId": {
+					"type": "string",
+					"default": "",
+					"description": "Provider ID used by @lls-task workflow model.",
+					"scope": "machine-overridable"
+				},
+				"openapicopilot.llsTask.modelId": {
+					"type": "string",
+					"default": "",
+					"description": "Model ID used by @lls-task workflow model.",
+					"scope": "machine-overridable"
 				},
 				"openapicopilot.promptEnhancement.enabled": {
 					"type": "boolean",
@@ -388,6 +415,7 @@
 	},
 	"main": "./out/extension.js",
 	"activationEvents": [
+		"onChatParticipant:lls.task",
 		"onStartupFinished"
 	],
 	"scripts": {

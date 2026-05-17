@@ -46,6 +46,7 @@ type ConfigViewMessageKey =
 	| 'configImported' 
 	| 'expertModeSettingsUpdated' 
 	| 'solutionProviderSettingsUpdated' 
+	| 'llsTaskSettingsUpdated' 
 	| 'chatHistorySettingsUpdated' 
 	| 'projectChatHistorySettingsUpdated' 
 	| 'systemPromptUpdated';
@@ -57,7 +58,11 @@ type ConfigViewInitialTextKey =
 	| 'promptEnhancementHelp'
 	| 'promptEnhancementAutoSendHelp'
 	| 'promptEnhancementProvider'
-	| 'promptEnhancementModel';
+	| 'promptEnhancementModel'
+	| 'llsTask'
+	| 'llsTaskHelp'
+	| 'llsTaskProvider'
+	| 'llsTaskModel';
 
 const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>> = {
 	en: {
@@ -68,6 +73,7 @@ const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>>
 		configImported: 'Configuration imported successfully.',
 		expertModeSettingsUpdated: 'Expert mode settings updated.',
 		solutionProviderSettingsUpdated: 'Solution provider settings updated.',
+		llsTaskSettingsUpdated: 'LLS Task settings updated.',
 		chatHistorySettingsUpdated: 'Chat history settings updated.',
 		projectChatHistorySettingsUpdated: 'Project chat history settings updated.',
 		systemPromptUpdated: 'System prompt updated.',
@@ -80,6 +86,7 @@ const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>>
 		configImported: '配置导入成功。',
 		expertModeSettingsUpdated: '专家模式设置已更新。',
 		solutionProviderSettingsUpdated: '方案提供商设置已更新。',
+		llsTaskSettingsUpdated: '任务流设置已更新。',
 		chatHistorySettingsUpdated: '聊天历史设置已更新。',
 		projectChatHistorySettingsUpdated: '项目聊天历史设置已更新。',
 		systemPromptUpdated: '系统提示词已更新。',
@@ -92,6 +99,7 @@ const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>>
 		configImported: '組態匯入成功。',
 		expertModeSettingsUpdated: '專家模式設定已更新。',
 		solutionProviderSettingsUpdated: '方案供應商設定已更新。',
+		llsTaskSettingsUpdated: '任務流程設定已更新。',
 		chatHistorySettingsUpdated: '聊天紀錄設定已更新。',
 		projectChatHistorySettingsUpdated: '專案聊天紀錄設定已更新。',
 		systemPromptUpdated: '系統提示詞已更新。',
@@ -104,6 +112,7 @@ const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>>
 		configImported: '구성이 성공적으로 가져오기되었습니다.',
 		expertModeSettingsUpdated: '전문가 모드 설정이 업데이트되었습니다.',
 		solutionProviderSettingsUpdated: '솔루션 공급자 설정이 업데이트되었습니다.',
+		llsTaskSettingsUpdated: 'LLS Task 설정이 업데이트되었습니다.',
 		chatHistorySettingsUpdated: '채팅 기록 설정이 업데이트되었습니다.',
 		projectChatHistorySettingsUpdated: '프로젝트 채팅 기록 설정이 업데이트되었습니다.',
 		systemPromptUpdated: '시스템 프롬프트가 업데이트되었습니다.',
@@ -116,6 +125,7 @@ const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>>
 		configImported: '構成が正常にインポートされました。',
 		expertModeSettingsUpdated: 'エキスパートモード設定が更新されました。',
 		solutionProviderSettingsUpdated: 'ソリューションプロバイダー設定が更新されました。',
+		llsTaskSettingsUpdated: 'LLS Task 設定が更新されました。',
 		chatHistorySettingsUpdated: 'チャット履歴設定が更新されました。',
 		projectChatHistorySettingsUpdated: 'プロジェクトチャット履歴設定が更新されました。',
 		systemPromptUpdated: 'システムプロンプトが更新されました。',
@@ -128,6 +138,7 @@ const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>>
 		configImported: 'Configuration importée avec succès.',
 		expertModeSettingsUpdated: 'Paramètres du mode expert mis à jour.',
 		solutionProviderSettingsUpdated: 'Paramètres du fournisseur de solutions mis à jour.',
+		llsTaskSettingsUpdated: 'Paramètres LLS Task mis à jour.',
 		chatHistorySettingsUpdated: 'Paramètres de l\'historique de chat mis à jour.',
 		projectChatHistorySettingsUpdated: 'Paramètres de l\'historique de chat du projet mis à jour.',
 		systemPromptUpdated: 'Prompt système mis à jour.',
@@ -140,6 +151,7 @@ const CONFIG_VIEW_MESSAGES: Record<string, Record<ConfigViewMessageKey, string>>
 		configImported: 'Konfiguration erfolgreich importiert.',
 		expertModeSettingsUpdated: 'Expertenmodus-Einstellungen aktualisiert.',
 		solutionProviderSettingsUpdated: 'Lösungsanbieter-Einstellungen aktualisiert.',
+		llsTaskSettingsUpdated: 'LLS Task-Einstellungen aktualisiert.',
 		chatHistorySettingsUpdated: 'Chatverlaufseinstellungen aktualisiert.',
 		projectChatHistorySettingsUpdated: 'Projekt-Chatverlaufseinstellungen aktualisiert.',
 		systemPromptUpdated: 'Systemprompt aktualisiert.',
@@ -159,6 +171,10 @@ const CONFIG_VIEW_INITIAL_TEXTS: Record<string, Record<ConfigViewInitialTextKey,
 		promptEnhancementAutoSendHelp: 'When enabled, the optimized prompt will be inserted and submitted automatically.',
 		promptEnhancementProvider: 'Prompt Enhancement Provider',
 		promptEnhancementModel: 'Prompt Enhancement Model',
+		llsTask: 'LLS Task Workflow',
+		llsTaskHelp: 'Use the selected model to analyze @lls-task requests and plan task flows.',
+		llsTaskProvider: 'Task Flow Provider',
+		llsTaskModel: 'Task Flow Model',
 	},
 	'zh-cn': {
 		promptEnhancement: '提示词优化',
@@ -168,6 +184,10 @@ const CONFIG_VIEW_INITIAL_TEXTS: Record<string, Record<ConfigViewInitialTextKey,
 		promptEnhancementAutoSendHelp: '开启后，优化后的提示词会自动插入并提交。',
 		promptEnhancementProvider: '提示词优化提供商',
 		promptEnhancementModel: '提示词优化模型',
+		llsTask: 'LLS Task 任务流',
+		llsTaskHelp: '使用选定模型分析 @lls-task 请求并规划任务流。',
+		llsTaskProvider: '任务流提供商',
+		llsTaskModel: '任务流模型',
 	},
 	'zh-tw': {
 		promptEnhancement: '提示詞最佳化',
@@ -177,6 +197,10 @@ const CONFIG_VIEW_INITIAL_TEXTS: Record<string, Record<ConfigViewInitialTextKey,
 		promptEnhancementAutoSendHelp: '開啟後，最佳化後的提示詞會自動插入並提交。',
 		promptEnhancementProvider: '提示詞最佳化供應商',
 		promptEnhancementModel: '提示詞最佳化模型',
+		llsTask: 'LLS Task 任務流程',
+		llsTaskHelp: '使用選定模型分析 @lls-task 請求並規劃任務流程。',
+		llsTaskProvider: '任務流程供應商',
+		llsTaskModel: '任務流程模型',
 	},
 	ko: {
 		promptEnhancement: '프롬프트 향상',
@@ -186,6 +210,10 @@ const CONFIG_VIEW_INITIAL_TEXTS: Record<string, Record<ConfigViewInitialTextKey,
 		promptEnhancementAutoSendHelp: '사용하면 최적화된 프롬프트가 자동으로 삽입되고 제출됩니다.',
 		promptEnhancementProvider: '프롬프트 향상 공급자',
 		promptEnhancementModel: '프롬프트 향상 모델',
+		llsTask: 'LLS Task 워크플로',
+		llsTaskHelp: '선택한 모델로 @lls-task 요청을 분석하고 작업 흐름을 계획합니다.',
+		llsTaskProvider: '작업 흐름 공급자',
+		llsTaskModel: '작업 흐름 모델',
 	},
 	ja: {
 		promptEnhancement: 'プロンプト強化',
@@ -195,6 +223,10 @@ const CONFIG_VIEW_INITIAL_TEXTS: Record<string, Record<ConfigViewInitialTextKey,
 		promptEnhancementAutoSendHelp: '有効にすると、最適化されたプロンプトが自動で挿入され送信されます。',
 		promptEnhancementProvider: 'プロンプト強化プロバイダー',
 		promptEnhancementModel: 'プロンプト強化モデル',
+		llsTask: 'LLS Task ワークフロー',
+		llsTaskHelp: '選択したモデルで @lls-task リクエストを分析し、タスクフローを計画します。',
+		llsTaskProvider: 'タスクフロープロバイダー',
+		llsTaskModel: 'タスクフローモデル',
 	},
 	fr: {
 		promptEnhancement: 'Amélioration du prompt',
@@ -204,6 +236,10 @@ const CONFIG_VIEW_INITIAL_TEXTS: Record<string, Record<ConfigViewInitialTextKey,
 		promptEnhancementAutoSendHelp: 'Lorsque cette option est activée, le prompt optimisé sera inséré et soumis automatiquement.',
 		promptEnhancementProvider: 'Fournisseur d’amélioration du prompt',
 		promptEnhancementModel: 'Modèle d’amélioration du prompt',
+		llsTask: 'Workflow LLS Task',
+		llsTaskHelp: 'Utilise le modèle sélectionné pour analyser les requêtes @lls-task et planifier les flux de tâches.',
+		llsTaskProvider: 'Fournisseur de flux de tâches',
+		llsTaskModel: 'Modèle de flux de tâches',
 	},
 	de: {
 		promptEnhancement: 'Prompt-Optimierung',
@@ -213,6 +249,10 @@ const CONFIG_VIEW_INITIAL_TEXTS: Record<string, Record<ConfigViewInitialTextKey,
 		promptEnhancementAutoSendHelp: 'Wenn aktiviert, wird der optimierte Prompt automatisch eingefügt und gesendet.',
 		promptEnhancementProvider: 'Prompt-Optimierungsanbieter',
 		promptEnhancementModel: 'Prompt-Optimierungsmodell',
+		llsTask: 'LLS Task-Workflow',
+		llsTaskHelp: 'Verwendet das ausgewählte Modell, um @lls-task-Anfragen zu analysieren und Aufgabenabläufe zu planen.',
+		llsTaskProvider: 'Aufgabenablauf-Anbieter',
+		llsTaskModel: 'Aufgabenablauf-Modell',
 	},
 };
 
@@ -682,6 +722,23 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				}
 				break;
 
+			case 'getLlsTaskSettings':
+				try {
+					const llsTaskSettings = this._configManager.getLlsTaskConfig();
+					const llsTaskProviders = getExpertSelectableProviders(await this._configManager.getProviders());
+					this._getWebview()?.postMessage({
+						command: 'llsTaskSettingsLoaded',
+						data: {
+							settings: llsTaskSettings,
+							providers: llsTaskProviders,
+						}
+					});
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to load LLS Task settings: ${errorMessage}`);
+				}
+				break;
+
 			case 'updateExpertModeSettings':
 				try {
 					if ((message as any).panelMode) {
@@ -725,6 +782,29 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				} catch (error: unknown) {
 					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 					vscode.window.showErrorMessage(`Failed to update solution provider settings: ${errorMessage}`);
+				}
+				break;
+
+			case 'updateLlsTaskSettings':
+				try {
+					if ((message as any).panelMode) {
+						return;
+					}
+					const { providerId, modelId } = message.data as { providerId: string; modelId: string };
+					const updatedLlsTaskSettings = await this._configManager.updateLlsTaskConfig({ providerId, modelId });
+					const llsTaskProviders = getExpertSelectableProviders(await this._configManager.getProviders());
+					this._getWebview()?.postMessage({
+						command: 'llsTaskSettingsLoaded',
+						data: {
+							settings: updatedLlsTaskSettings,
+							providers: llsTaskProviders,
+						},
+						success: true
+					});
+					vscode.window.showInformationMessage(getConfigViewMessage(this._configManager.getResolvedLanguage(), 'llsTaskSettingsUpdated'));
+				} catch (error: unknown) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					vscode.window.showErrorMessage(`Failed to update LLS Task settings: ${errorMessage}`);
 				}
 				break;
 
@@ -1496,6 +1576,22 @@ After completing the operations, please reply with the following message in both
 							</div>
 						</div>
 
+						<!-- LLS Task Section -->
+						<div class="modal-section">
+							<h3 data-i18n="llsTask">LLS Task Workflow</h3>
+							<div class="help-text" data-i18n="llsTaskHelp">Use the selected model to analyze @lls-task requests and plan task flows.</div>
+							<div class="form-row">
+								<div class="form-group">
+									<label for="modalLlsTaskProvider" data-i18n="llsTaskProvider">Task Flow Provider</label>
+									<select id="modalLlsTaskProvider"></select>
+								</div>
+								<div class="form-group">
+									<label for="modalLlsTaskModel" data-i18n="llsTaskModel">Task Flow Model</label>
+									<select id="modalLlsTaskModel"></select>
+								</div>
+							</div>
+						</div>
+
 						<!-- Enhanced TODO Section -->
 						<div class="modal-section">
 							<h3 data-i18n="enhancedTodo">Enhanced TODO</h3>
@@ -1704,6 +1800,7 @@ export class ConfigViewPanel {
 		const solutionProviderSettings = this._configManager.getSolutionProviderConfig();
 		const projectSolutionProviderSettings = this._configManager.getWorkspaceSolutionProviderConfig();
 		const effectiveSolutionProviderSettings = this._configManager.getEffectiveSolutionProviderConfig();
+		const llsTaskSettings = this._configManager.getLlsTaskConfig();
 		const promptEnhancementSettings = this._configManager.getPromptEnhancementConfig();
 		const projectPromptEnhancementSettings = this._configManager.getWorkspacePromptEnhancementConfig();
 		const effectivePromptEnhancementSettings = this._configManager.getEffectivePromptEnhancementConfig();
@@ -1728,6 +1825,7 @@ export class ConfigViewPanel {
 			solutionProviderSettings,
 			projectSolutionProviderSettings,
 			effectiveSolutionProviderSettings,
+			llsTaskSettings,
 			promptEnhancementSettings,
 			projectPromptEnhancementSettings,
 			effectivePromptEnhancementSettings,
@@ -1770,9 +1868,23 @@ export class ConfigViewPanel {
 			`<option value="" data-i18n="solutionSelectModel">Select model</option>`,
 			...((selectedSolutionProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedSolutionModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
 		].join('');
+		const selectedLlsTaskProviderId = settings.llsTaskSettings?.providerId || '';
+		const selectedLlsTaskProvider = selectedLlsTaskProviderId
+			? expertProviders.find((provider: any) => provider.id === selectedLlsTaskProviderId)
+			: undefined;
+		const selectedLlsTaskModelId = settings.llsTaskSettings?.modelId || '';
+		const llsTaskProviderOptions = [
+			`<option value="" data-i18n="llsTaskSelectProvider">Select provider</option>`,
+			...expertProviders.map((provider: any) => `<option value="${this._escapeHtml(provider.id)}" ${provider.id === selectedLlsTaskProviderId ? 'selected' : ''}>${this._escapeHtml(provider.name)}</option>`)
+		].join('');
+		const llsTaskModelOptions = [
+			`<option value="" data-i18n="llsTaskSelectModel">Select model</option>`,
+			...((selectedLlsTaskProvider?.models || []) as any[]).map((model: any) => `<option value="${this._escapeHtml(model.modelId)}" ${model.modelId === selectedLlsTaskModelId ? 'selected' : ''}>${this._escapeHtml(model.displayName || model.modelId)}</option>`)
+		].join('');
 		const panelProvidersJson = JSON.stringify(expertProviders).replace(/</g, '\\u003c');
 		const panelExpertModeSettingsJson = JSON.stringify(settings.expertModeSettings || { enabled: false, providerId: '', modelId: '' }).replace(/</g, '\\u003c');
 		const panelSolutionProviderSettingsJson = JSON.stringify(settings.solutionProviderSettings || { enabled: false, providerId: '', modelId: '', reviewWithExpert: false }).replace(/</g, '\\u003c');
+		const panelLlsTaskSettingsJson = JSON.stringify(settings.llsTaskSettings || { providerId: '', modelId: '' }).replace(/</g, '\\u003c');
 		const promptEnhancementSettings = settings.promptEnhancementSettings || { enabled: false, autoSend: false, providerId: '', modelId: '' };
 		const promptEnhancementContextCacheSettings = settings.promptEnhancementContextCacheSettings || { contextMessageLimit: 20 };
 		const resolvedLanguage = this._configManager?.getResolvedLanguage() || 'en';
@@ -1783,6 +1895,10 @@ export class ConfigViewPanel {
 		const promptEnhancementAutoSendHelpText = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'promptEnhancementAutoSendHelp'));
 		const promptEnhancementProviderLabel = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'promptEnhancementProvider'));
 		const promptEnhancementModelLabel = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'promptEnhancementModel'));
+		const llsTaskLabel = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'llsTask'));
+		const llsTaskHelpText = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'llsTaskHelp'));
+		const llsTaskProviderLabel = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'llsTaskProvider'));
+		const llsTaskModelLabel = this._escapeHtml(getConfigViewInitialText(resolvedLanguage, 'llsTaskModel'));
 		const panelPromptEnhancementSettingsJson = JSON.stringify(promptEnhancementSettings).replace(/</g, '\\u003c');
 		const selectedPromptEnhancementProviderId = promptEnhancementSettings.providerId || '';
 		const selectedPromptEnhancementProvider = selectedPromptEnhancementProviderId
@@ -1921,6 +2037,22 @@ export class ConfigViewPanel {
 					</div>
 				</section>
 
+				<!-- LLS Task Section -->
+				<section class="config-section">
+					<h2 data-i18n="llsTask">${llsTaskLabel}</h2>
+					<div class="help-text" data-i18n="llsTaskHelp">${llsTaskHelpText}</div>
+					<div class="form-row">
+						<div class="form-group">
+							<label for="panelLlsTaskProvider" data-i18n="llsTaskProvider">${llsTaskProviderLabel}</label>
+							<select id="panelLlsTaskProvider">${llsTaskProviderOptions}</select>
+						</div>
+						<div class="form-group">
+							<label for="panelLlsTaskModel" data-i18n="llsTaskModel">${llsTaskModelLabel}</label>
+							<select id="panelLlsTaskModel">${llsTaskModelOptions}</select>
+						</div>
+					</div>
+				</section>
+
 				<!-- Enhanced TODO Section -->
 				<section class="config-section">
 					<h2 data-i18n="enhancedTodo">Enhanced TODO</h2>
@@ -1956,6 +2088,7 @@ export class ConfigViewPanel {
 				window.panelProviders = ${panelProvidersJson};
 				window.panelExpertModeSettings = ${panelExpertModeSettingsJson};
 				window.panelSolutionProviderSettings = ${panelSolutionProviderSettingsJson};
+				window.panelLlsTaskSettings = ${panelLlsTaskSettingsJson};
 				window.panelPromptEnhancementSettings = ${panelPromptEnhancementSettingsJson};
 			</script>
 		`;
@@ -2356,6 +2489,20 @@ export class ConfigViewPanel {
 				});
 				break;
 
+			case 'getLlsTaskSettings':
+				if (!isPanelModeMessage) {
+					return;
+				}
+				const llsTaskProviders = getExpertSelectableProviders(await this._configManager.getProviders());
+				this._currentPanel?.webview.postMessage({
+					command: 'llsTaskSettingsLoaded',
+					data: {
+						settings: this._configManager.getLlsTaskConfig(),
+						providers: llsTaskProviders,
+					}
+				});
+				break;
+
 			case 'optimizeSystemPrompt': {
 				const { target, prompt, providerId, modelId } = data as { target: string; prompt: string; providerId?: string; modelId?: string };
 				try {
@@ -2395,6 +2542,10 @@ export class ConfigViewPanel {
 					providerId: data.solutionProviderProviderId || '',
 					modelId: data.solutionProviderModelId || '',
 					reviewWithExpert: !!data.solutionProviderReviewWithExpert,
+				});
+				await this._configManager.updateLlsTaskConfig({
+					providerId: data.llsTaskProviderId || '',
+					modelId: data.llsTaskModelId || '',
 				});
 				await this._configManager.updatePromptEnhancementConfig({
 					enabled: !!data.promptEnhancementEnabled,

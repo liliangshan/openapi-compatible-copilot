@@ -16,6 +16,8 @@
 	let expertSelectableProviders = [];
 	let solutionProviderSettings = { enabled: false, providerId: '', modelId: '', reviewWithExpert: false };
 	let solutionSelectableProviders = [];
+	let llsTaskSettings = { providerId: '', modelId: '' };
+	let llsTaskSelectableProviders = [];
 	let promptEnhancementSettings = { enabled: false, autoSend: false, providerId: '', modelId: '' };
 	let promptEnhancementSelectableProviders = [];
 	let configuredLanguage = 'auto';
@@ -173,6 +175,10 @@
 			solutionUseGlobalProvider: 'Use global solution provider ({value})',
 			solutionUseGlobalModel: 'Use global solution model ({value})',
 			solutionModelOverrideHelp: 'Select both provider and model to override the global solution model. Leave either empty to keep using the global solution model.',
+			llsTask: 'LLS Task Workflow',
+			llsTaskHelp: 'Use the selected model to analyze @lls-task requests and plan task flows.',
+			llsTaskProvider: 'Task Flow Provider',
+			llsTaskModel: 'Task Flow Model',
 			promptEnhancement: 'Prompt Enhancement',
 			enablePromptEnhancement: 'Enable Prompt Enhancement',
 			promptEnhancementAutoSend: 'Automatically submit optimized prompt',
@@ -346,6 +352,10 @@
 			solutionUseGlobalProvider: '使用全局方案提供商（{value}）',
 			solutionUseGlobalModel: '使用全局方案模型（{value}）',
 			solutionModelOverrideHelp: '同时选择提供商和模型即可覆盖全局方案模型；任意一项留空则继续使用全局方案模型。',
+			llsTask: 'LLS Task 任务流',
+			llsTaskHelp: '使用选定模型分析 @lls-task 请求并规划任务流。',
+			llsTaskProvider: '任务流提供商',
+			llsTaskModel: '任务流模型',
 			promptEnhancement: '提示词优化',
 			enablePromptEnhancement: '启用提示词优化',
 			promptEnhancementAutoSend: '自动提交优化后的提示词',
@@ -393,6 +403,10 @@
 
 	translations['zh-tw'] = {
 		...translations['zh-cn'],
+		llsTask: 'LLS Task 任務流程',
+		llsTaskHelp: '使用選定模型分析 @lls-task 請求並規劃任務流程。',
+		llsTaskProvider: '任務流程提供商',
+		llsTaskModel: '任務流程模型',
 		promptEnhancement: '提示詞最佳化',
 		enablePromptEnhancement: '啟用提示詞最佳化',
 		promptEnhancementHelp: '在請求之前使用模型對提示詞進行自動最佳化。',
@@ -421,18 +435,34 @@
 	};
 
 	Object.assign(translations.ko, {
+		llsTask: 'LLS Task 워크플로',
+		llsTaskHelp: '선택한 모델로 @lls-task 요청을 분석하고 작업 흐름을 계획합니다.',
+		llsTaskProvider: '작업 흐름 공급자',
+		llsTaskModel: '작업 흐름 모델',
 		preserveReasoningContent: 'reasoning_content 보존',
 		preserveReasoningContentHelp: 'DeepSeek 사고 모드용입니다. reasoning_content를 캐시하고 이후 요청에 다시 전달합니다.',
 	});
 	Object.assign(translations.ja, {
+		llsTask: 'LLS Task ワークフロー',
+		llsTaskHelp: '選択したモデルで @lls-task リクエストを分析し、タスクフローを計画します。',
+		llsTaskProvider: 'タスクフロープロバイダー',
+		llsTaskModel: 'タスクフローモデル',
 		preserveReasoningContent: 'reasoning_content を保持',
 		preserveReasoningContentHelp: 'DeepSeek 思考モード用です。reasoning_content をキャッシュし、後続リクエストで再送します。',
 	});
 	Object.assign(translations.fr, {
+		llsTask: 'Workflow LLS Task',
+		llsTaskHelp: 'Utilise le modèle sélectionné pour analyser les requêtes @lls-task et planifier les flux de tâches.',
+		llsTaskProvider: 'Fournisseur de flux de tâches',
+		llsTaskModel: 'Modèle de flux de tâches',
 		preserveReasoningContent: 'Conserver reasoning_content',
 		preserveReasoningContentHelp: 'Pour le mode de réflexion DeepSeek. Met en cache reasoning_content et le renvoie dans les requêtes suivantes.',
 	});
 	Object.assign(translations.de, {
+		llsTask: 'LLS Task-Workflow',
+		llsTaskHelp: 'Verwendet das ausgewählte Modell, um @lls-task-Anfragen zu analysieren und Aufgabenabläufe zu planen.',
+		llsTaskProvider: 'Aufgabenablauf-Anbieter',
+		llsTaskModel: 'Aufgabenablauf-Modell',
 		preserveReasoningContent: 'reasoning_content beibehalten',
 		preserveReasoningContentHelp: 'Für den DeepSeek-Denkmodus. Speichert reasoning_content zwischen und sendet es in späteren Anfragen erneut.',
 	});
@@ -822,6 +852,8 @@
 	const modalSolutionProviderProvider = document.getElementById('modalSolutionProviderProvider');
 	const modalSolutionProviderModel = document.getElementById('modalSolutionProviderModel');
 	const modalSolutionProviderReviewWithExpert = document.getElementById('modalSolutionProviderReviewWithExpert');
+	const modalLlsTaskProvider = document.getElementById('modalLlsTaskProvider');
+	const modalLlsTaskModel = document.getElementById('modalLlsTaskModel');
 	const modalImportRecordsBtn = document.getElementById('modalImportRecordsBtn');
 	const modalExportRecordsBtn = document.getElementById('modalExportRecordsBtn');
 	
@@ -891,6 +923,7 @@
 			vscode.postMessage({ command: 'getChatHistorySettings', panelMode: true });
 			vscode.postMessage({ command: 'getExpertModeSettings', panelMode: true });
 			vscode.postMessage({ command: 'getSolutionProviderSettings', panelMode: true });
+			vscode.postMessage({ command: 'getLlsTaskSettings', panelMode: true });
 			vscode.postMessage({ command: 'getSystemPrompt', panelMode: true });
 		} else if (window.settingsMode === 'project') {
 			vscode.postMessage({ command: 'getProjectChatHistorySettings', panelMode: true });
@@ -903,6 +936,7 @@
 		vscode.postMessage({ command: 'getChatHistorySettings' });
 		vscode.postMessage({ command: 'getExpertModeSettings' });
 		vscode.postMessage({ command: 'getSolutionProviderSettings' });
+		vscode.postMessage({ command: 'getLlsTaskSettings' });
 		vscode.postMessage({ command: 'getSystemPrompt' });
 	}
 	setupEventListeners();
@@ -977,6 +1011,11 @@
 			solutionProviderSettings.providerId = modalSolutionProviderProvider.value || '';
 			solutionProviderSettings.modelId = '';
 			populateSolutionProviderModels(modalSolutionProviderProvider, modalSolutionProviderModel, solutionProviderSettings.modelId);
+		});
+		modalLlsTaskProvider?.addEventListener('change', () => {
+			llsTaskSettings.providerId = modalLlsTaskProvider.value || '';
+			llsTaskSettings.modelId = '';
+			populateLlsTaskModels(modalLlsTaskProvider, modalLlsTaskModel, llsTaskSettings.modelId);
 		});
 		
 		// Settings buttons - Project Settings (open in editor tab)
@@ -1129,6 +1168,8 @@
 		const panelExpertModeModel = document.getElementById('panelExpertModeModel');
 		const panelSolutionProviderProvider = document.getElementById('panelSolutionProviderProvider');
 		const panelSolutionProviderModel = document.getElementById('panelSolutionProviderModel');
+		const panelLlsTaskProvider = document.getElementById('panelLlsTaskProvider');
+		const panelLlsTaskModel = document.getElementById('panelLlsTaskModel');
 		const panelPromptEnhancementProvider = document.getElementById('panelPromptEnhancementProvider');
 		const panelPromptEnhancementModel = document.getElementById('panelPromptEnhancementModel');
 		bindSystemPromptOptimizeButton('panelOptimizeGlobalSystemPromptBtn', 'panelGlobalSystemPrompt', 'panelGlobalSystemPrompt');
@@ -1142,6 +1183,9 @@
 			if (window.panelSolutionProviderSettings) {
 				solutionProviderSettings = window.panelSolutionProviderSettings;
 			}
+			if (window.panelLlsTaskSettings) {
+				llsTaskSettings = window.panelLlsTaskSettings;
+			}
 			if (window.panelPromptEnhancementSettings) {
 				promptEnhancementSettings = window.panelPromptEnhancementSettings;
 			}
@@ -1149,6 +1193,8 @@
 			populateExpertModeModels(panelExpertModeProvider, panelExpertModeModel, expertModeSettings.modelId || '');
 			populateSolutionProviderProviders(panelSolutionProviderProvider, solutionProviderSettings.providerId || '');
 			populateSolutionProviderModels(panelSolutionProviderProvider, panelSolutionProviderModel, solutionProviderSettings.modelId || '');
+			populateLlsTaskProviders(panelLlsTaskProvider, llsTaskSettings.providerId || '');
+			populateLlsTaskModels(panelLlsTaskProvider, panelLlsTaskModel, llsTaskSettings.modelId || '');
 			populatePromptEnhancementProviders(panelPromptEnhancementProvider, promptEnhancementSettings.providerId || '');
 			populatePromptEnhancementModels(panelPromptEnhancementProvider, panelPromptEnhancementModel, promptEnhancementSettings.modelId || '');
 		}
@@ -1171,6 +1217,8 @@
 				const solutionProviderProviderId = document.getElementById('panelSolutionProviderProvider')?.value || '';
 				const solutionProviderModelId = document.getElementById('panelSolutionProviderModel')?.value || '';
 				const solutionProviderReviewWithExpert = document.getElementById('panelSolutionProviderReviewWithExpert')?.checked || false;
+				const llsTaskProviderId = document.getElementById('panelLlsTaskProvider')?.value || '';
+				const llsTaskModelId = document.getElementById('panelLlsTaskModel')?.value || '';
 				const promptEnhancementEnabled = document.getElementById('panelPromptEnhancementEnabled')?.checked || false;
 				const promptEnhancementAutoSend = document.getElementById('panelPromptEnhancementAutoSend')?.checked || false;
 				const promptEnhancementProviderId = document.getElementById('panelPromptEnhancementProvider')?.value || '';
@@ -1190,6 +1238,8 @@
 						solutionProviderProviderId,
 						solutionProviderModelId,
 						solutionProviderReviewWithExpert,
+						llsTaskProviderId,
+						llsTaskModelId,
 						promptEnhancementEnabled,
 						promptEnhancementAutoSend,
 						promptEnhancementProviderId,
@@ -1237,6 +1287,9 @@
 		panelSolutionProviderProvider?.addEventListener('change', () => {
 			populateSolutionProviderModels(panelSolutionProviderProvider, panelSolutionProviderModel, '');
 		});
+		panelLlsTaskProvider?.addEventListener('change', () => {
+			populateLlsTaskModels(panelLlsTaskProvider, panelLlsTaskModel, '');
+		});
 		panelPromptEnhancementProvider?.addEventListener('change', () => {
 			populatePromptEnhancementModels(panelPromptEnhancementProvider, panelPromptEnhancementModel, '');
 		});
@@ -1279,6 +1332,16 @@
 						solutionSelectableProviders = message.data.providers;
 					}
 					updateSolutionProviderControls();
+				}
+				break;
+
+			case 'llsTaskSettingsLoaded':
+				if (message.data) {
+					llsTaskSettings = message.data.settings || { providerId: '', modelId: '' };
+					if (message.data.providers) {
+						llsTaskSelectableProviders = message.data.providers;
+					}
+					updateLlsTaskControls();
 				}
 				break;
 
@@ -1919,6 +1982,43 @@
 		applyI18n();
 	}
 
+	function populateLlsTaskProviders(providerSelect, selectedProviderId) {
+		if (!providerSelect) return;
+		const placeholder = providerSelect.dataset.placeholderKey
+			? formatTranslation(t(providerSelect.dataset.placeholderKey), { value: providerSelect.dataset.placeholderValue || '' })
+			: (providerSelect.dataset.placeholder || t('llsTaskProvider'));
+		const selectableProviders = providers.length > 0
+			? getExpertSelectableProviders()
+			: (llsTaskSelectableProviders.length > 0 ? llsTaskSelectableProviders : expertSelectableProviders);
+		providerSelect.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` + selectableProviders.map(provider => `
+			<option value="${escapeHtml(provider.id)}" ${provider.id === selectedProviderId ? 'selected' : ''}>${escapeHtml(provider.name)}</option>
+		`).join('');
+		const placeholderOption = providerSelect.querySelector('option[value=""]');
+		if (placeholderOption && providerSelect.dataset.placeholderKey) {
+			placeholderOption.setAttribute('data-i18n-template', providerSelect.dataset.placeholderKey);
+			placeholderOption.setAttribute('data-i18n-value-value', providerSelect.dataset.placeholderValue || '');
+		}
+		applyI18n();
+	}
+
+	function populateLlsTaskModels(providerSelect, modelSelect, selectedModelId) {
+		if (!modelSelect) return;
+		const providerId = providerSelect?.value || '';
+		const models = getProviderModels(providerId);
+		const placeholder = modelSelect.dataset.placeholderKey
+			? formatTranslation(t(modelSelect.dataset.placeholderKey), { value: modelSelect.dataset.placeholderValue || '' })
+			: (modelSelect.dataset.placeholder || t('llsTaskModel'));
+		modelSelect.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` + models.map(model => `
+			<option value="${escapeHtml(model.modelId)}" ${model.modelId === selectedModelId ? 'selected' : ''}>${escapeHtml(model.displayName || model.modelId)}</option>
+		`).join('');
+		const placeholderOption = modelSelect.querySelector('option[value=""]');
+		if (placeholderOption && modelSelect.dataset.placeholderKey) {
+			placeholderOption.setAttribute('data-i18n-template', modelSelect.dataset.placeholderKey);
+			placeholderOption.setAttribute('data-i18n-value-value', modelSelect.dataset.placeholderValue || '');
+		}
+		applyI18n();
+	}
+
 	function populatePromptEnhancementProviders(providerSelect, selectedProviderId) {
 		if (!providerSelect) return;
 		const placeholder = providerSelect.dataset.placeholderKey
@@ -1992,6 +2092,21 @@
 			const selectedModelId = window.panelSolutionProviderSettings?.modelId || solutionProviderSettings.modelId;
 			populateSolutionProviderProviders(panelProvider, selectedProviderId);
 			populateSolutionProviderModels(panelProvider, panelModel, selectedModelId);
+		}
+	}
+
+	function updateLlsTaskControls() {
+		populateLlsTaskProviders(modalLlsTaskProvider, llsTaskSettings.providerId);
+		populateLlsTaskModels(modalLlsTaskProvider, modalLlsTaskModel, llsTaskSettings.modelId);
+
+		const panelProvider = document.getElementById('panelLlsTaskProvider');
+		const panelModel = document.getElementById('panelLlsTaskModel');
+		if (panelProvider && window.panelProviders) {
+			providers = window.panelProviders;
+			const selectedProviderId = window.panelLlsTaskSettings?.providerId || llsTaskSettings.providerId;
+			const selectedModelId = window.panelLlsTaskSettings?.modelId || llsTaskSettings.modelId;
+			populateLlsTaskProviders(panelProvider, selectedProviderId);
+			populateLlsTaskModels(panelProvider, panelModel, selectedModelId);
 		}
 	}
 
@@ -2102,6 +2217,13 @@
 				providerId: modalSolutionProviderProvider?.value || '',
 				modelId: modalSolutionProviderModel?.value || '',
 				reviewWithExpert: modalSolutionProviderReviewWithExpert?.checked || false
+			}
+		});
+		vscode.postMessage({
+			command: 'updateLlsTaskSettings',
+			data: {
+				providerId: modalLlsTaskProvider?.value || '',
+				modelId: modalLlsTaskModel?.value || ''
 			}
 		});
 		closeGlobalSettingsModalFn();

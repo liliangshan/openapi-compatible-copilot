@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { ExpertModeConfig, PromptEnhancementConfig, PromptEnhancementContextCacheConfig, ProviderConfig, ProviderConfigWithoutSecrets, SolutionProviderConfig, WorkspaceExpertModeConfig, WorkspaceExpertModeEnabledState, WorkspacePromptEnhancementAutoSendState, WorkspacePromptEnhancementConfig, WorkspacePromptEnhancementContextCacheConfig, WorkspacePromptEnhancementEnabledState, WorkspaceSolutionProviderConfig, WorkspaceSolutionProviderEnabledState, WorkspaceSolutionProviderReviewWithExpertState } from './types';
+import { ExpertModeConfig, LlsTaskConfig, PromptEnhancementConfig, PromptEnhancementContextCacheConfig, ProviderConfig, ProviderConfigWithoutSecrets, SolutionProviderConfig, WorkspaceExpertModeConfig, WorkspaceExpertModeEnabledState, WorkspacePromptEnhancementAutoSendState, WorkspacePromptEnhancementConfig, WorkspacePromptEnhancementContextCacheConfig, WorkspacePromptEnhancementEnabledState, WorkspaceSolutionProviderConfig, WorkspaceSolutionProviderEnabledState, WorkspaceSolutionProviderReviewWithExpertState } from './types';
 
 /**
  * Generate a unique ID
@@ -96,6 +96,9 @@ export class ConfigManager {
 	private static readonly SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_CONFIG_KEY = 'solutionProvider.reviewWithExpert';
 	private static readonly WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY = 'solutionProvider.reviewWithExpertState';
 	private static readonly WORKSPACE_SOLUTION_PROVIDER_ENABLED_STATE_CONFIG_KEY = 'solutionProvider.enabledState';
+	private static readonly LLS_TASK_CONFIG_KEY = 'openapicopilot.llsTaskConfig';
+	private static readonly LLS_TASK_PROVIDER_CONFIG_KEY = 'llsTask.providerId';
+	private static readonly LLS_TASK_MODEL_CONFIG_KEY = 'llsTask.modelId';
 	private static readonly PROMPT_ENHANCEMENT_CONFIG_KEY = 'openapicopilot.promptEnhancementConfig';
 	private static readonly PROMPT_ENHANCEMENT_ENABLED_CONFIG_KEY = 'promptEnhancement.enabled';
 	private static readonly PROMPT_ENHANCEMENT_AUTO_SEND_CONFIG_KEY = 'promptEnhancement.autoSend';
@@ -483,6 +486,33 @@ export class ConfigManager {
 		await config.update(ConfigManager.SOLUTION_PROVIDER_MODEL_CONFIG_KEY, updated.modelId, vscode.ConfigurationTarget.Workspace);
 		await config.update(ConfigManager.WORKSPACE_SOLUTION_PROVIDER_REVIEW_WITH_EXPERT_STATE_CONFIG_KEY, reviewWithExpertState, vscode.ConfigurationTarget.Workspace);
 		return { ...updated, enabled: enabledState === 'enabled', reviewWithExpert: reviewWithExpertState === 'enabled', enabledState, reviewWithExpertState };
+	}
+
+	/**
+	 * Get @lls-task global settings
+	 */
+	getLlsTaskConfig(): LlsTaskConfig {
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		const stored = this.context.globalState.get<LlsTaskConfig>(ConfigManager.LLS_TASK_CONFIG_KEY);
+		const providerInspect = config.inspect<string>(ConfigManager.LLS_TASK_PROVIDER_CONFIG_KEY);
+		const modelInspect = config.inspect<string>(ConfigManager.LLS_TASK_MODEL_CONFIG_KEY);
+		return {
+			providerId: providerInspect?.globalValue ?? stored?.providerId ?? '',
+			modelId: modelInspect?.globalValue ?? stored?.modelId ?? '',
+		};
+	}
+
+	/**
+	 * Update @lls-task global settings
+	 */
+	async updateLlsTaskConfig(settings: Partial<LlsTaskConfig>): Promise<LlsTaskConfig> {
+		const current = this.getLlsTaskConfig();
+		const updated = { ...current, ...settings };
+		const config = vscode.workspace.getConfiguration('openapicopilot');
+		await config.update(ConfigManager.LLS_TASK_PROVIDER_CONFIG_KEY, updated.providerId, vscode.ConfigurationTarget.Global);
+		await config.update(ConfigManager.LLS_TASK_MODEL_CONFIG_KEY, updated.modelId, vscode.ConfigurationTarget.Global);
+		await this.context.globalState.update(ConfigManager.LLS_TASK_CONFIG_KEY, updated);
+		return updated;
 	}
 
 	/**

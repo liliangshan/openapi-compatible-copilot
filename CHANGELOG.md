@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.0.0
+
+### Added
+
+- **LLS Task Workflow** — Added the `@lls-task` chat participant for turning dragged-in solution planning Markdown/text documents into structured task workflows.
+- **Task workflow model settings** — Added Global Settings selectors for the dedicated LLS Task provider and model. The workflow feature is available by default once both values are configured.
+- **Workflow status bar** — Added a localized LLS Task status bar entry that shows workflow progress, hover task lists, setup guidance, missing-workflow guidance, and completed-workflow guidance for starting a new workflow.
+- **Main-model workflow injection** — Active workflows are automatically injected into main-model requests, together with the original planning document path, so the main model can continue from the current task state without manually reading another tool.
+- **Restricted status update tool** — Added the local `update_lls_task_workflow` tool. The main model may update only task IDs and statuses (`pending`, `in_progress`, `completed`, `blocked`); task titles, descriptions, order, summary, and content are protected.
+- **Automatic workflow continuation** — After a main-model response finishes, unfinished workflows are checked after 15 seconds. If the main model is idle and tasks remain incomplete, the extension automatically writes and submits a localized continue prompt to Chat.
+- **Localized LLS Task UX** — Added multilingual messages for setup prompts, missing-document/model errors, status bar hints, workflow completion guidance, and auto-continue prompts.
+
+### Changed
+
+- **Task generation chat output** — `@lls-task` no longer prints the generated workflow JSON into Chat after analysis. The workflow is stored internally and surfaced through the status bar and main-model context instead.
+
 ## 2.7.5
 
 ### Added

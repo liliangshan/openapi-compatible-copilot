@@ -99,6 +99,16 @@ export interface SolutionProviderConfig {
 	reviewWithExpert: boolean;
 }
 
+/**
+ * LLS Task global settings
+ */
+export interface LlsTaskConfig {
+	/** Provider used by @lls-task workflow model */
+	providerId: string;
+	/** Model used by @lls-task workflow model */
+	modelId: string;
+}
+
 export type WorkspaceSolutionProviderEnabledState = 'global' | 'enabled' | 'disabled';
 
 export type WorkspaceSolutionProviderReviewWithExpertState = 'global' | 'enabled' | 'disabled';
