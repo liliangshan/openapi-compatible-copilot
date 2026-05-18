@@ -771,6 +771,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 	): Promise<void> {
 		this._activeMainRequestCount++;
 		this._llsTaskService?.clearAutoContinueTimer();
+		let shouldScheduleLlsTaskAutoContinue = true;
 		try {
 		const metadata = model.__providerData;
 		if (!metadata) {
@@ -991,6 +992,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		});
 
 		if (result.toolCalls.length > 0) {
+			shouldScheduleLlsTaskAutoContinue = false;
 			const internalToolCalls = result.toolCalls.filter(toolCall => toolCall.name === ASK_LLSOAI_TOOL_NAME || toolCall.name === ASK_SOLUTION_PROVIDER_TOOL_NAME);
 			const ordinaryToolCalls = result.toolCalls.filter(toolCall => toolCall.name !== ASK_LLSOAI_TOOL_NAME && toolCall.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME);
 			if (internalToolCalls.length > 1 || (internalToolCalls.length > 0 && ordinaryToolCalls.length > 0)) {
@@ -1087,9 +1089,11 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 		} finally {
 			this._activeMainRequestCount = Math.max(0, this._activeMainRequestCount - 1);
-			this._llsTaskService?.scheduleAutoContinue({
-				isMainModelRunning: () => this._activeMainRequestCount > 0,
-			});
+			if (shouldScheduleLlsTaskAutoContinue) {
+				this._llsTaskService?.scheduleAutoContinue({
+					isMainModelRunning: () => this._activeMainRequestCount > 0,
+				});
+			}
 		}
 	}
 
