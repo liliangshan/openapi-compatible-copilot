@@ -3,6 +3,7 @@ import { ConfigManager, ResolvedAppLanguage } from '../configManager';
 import { insertIntoChatInput } from '../promptEnhancementStatusBar';
 import { convertOpenAIRequestToAnthropic } from '../utils/anthropicConverter';
 import { convertChatCompletionsToResponsesAPI } from '../utils/v1ResponseConverter';
+import { LLS_TASK_START_PLACEHOLDER_TEXT } from './messages';
 
 export interface LlsTaskWorkflowItem {
 	id: string;
@@ -58,7 +59,7 @@ const MESSAGES: Record<ResolvedAppLanguage, {
 	completed: string;
 }> = {
 	'en': {
-		missingDocument: 'Error: No planning document was provided. Please drag the solution planning document from Explorer into this @lls-task window.',
+		missingDocument: 'Error: No planning document or custom prompt was provided. Please drag the solution planning document from Explorer into this @lls-task window, or enter your own task workflow prompt.',
 		missingModel: 'Error: @lls-task workflow model is not configured. Please select a task workflow provider and model in Global Settings.',
 		providerNotFound: 'Error: @lls-task provider or model was not found. Please check Global Settings.',
 		analyzing: 'Analyzing the planning document and generating task workflow JSON...',
@@ -66,7 +67,7 @@ const MESSAGES: Record<ResolvedAppLanguage, {
 		completed: 'Task workflow generated and updated to the status bar.',
 	},
 	'zh-cn': {
-		missingDocument: '错误：没有提供方案规划文档。请把资源管理器中的方案规划文档拖到这个 @lls-task 窗口中。',
+		missingDocument: '错误：没有提供方案规划文档或自定义提示词。请把资源管理器中的方案规划文档拖到这个 @lls-task 窗口中，或者输入自己的任务流提示词。',
 		missingModel: '错误：尚未配置 @lls-task 任务流模型。请先在全局设置中选择任务流提供商和模型。',
 		providerNotFound: '错误：未找到 @lls-task 提供商或模型，请检查全局设置。',
 		analyzing: '正在分析方案规划文档并生成任务流 JSON...',
@@ -74,7 +75,7 @@ const MESSAGES: Record<ResolvedAppLanguage, {
 		completed: '任务流已生成，并已更新到状态栏。',
 	},
 	'zh-tw': {
-		missingDocument: '錯誤：沒有提供方案規劃文件。請把資源管理器中的方案規劃文件拖到這個 @lls-task 視窗中。',
+		missingDocument: '錯誤：沒有提供方案規劃文件或自訂提示詞。請把資源管理器中的方案規劃文件拖到這個 @lls-task 視窗中，或者輸入自己的任務流程提示詞。',
 		missingModel: '錯誤：尚未設定 @lls-task 任務流程模型。請先在全域設定中選擇任務流程提供商和模型。',
 		providerNotFound: '錯誤：找不到 @lls-task 提供商或模型，請檢查全域設定。',
 		analyzing: '正在分析方案規劃文件並生成任務流程 JSON...',
@@ -82,7 +83,7 @@ const MESSAGES: Record<ResolvedAppLanguage, {
 		completed: '任務流程已生成，並已更新到狀態列。',
 	},
 	ko: {
-		missingDocument: '오류: 계획 문서가 제공되지 않았습니다. 탐색기의 솔루션 계획 문서를 이 @lls-task 창으로 끌어다 놓으세요.',
+		missingDocument: '오류: 계획 문서나 사용자 지정 프롬프트가 제공되지 않았습니다. 탐색기의 솔루션 계획 문서를 이 @lls-task 창으로 끌어다 놓거나, 자신의 작업 흐름 프롬프트를 입력하세요.',
 		missingModel: '오류: @lls-task 작업 흐름 모델이 설정되지 않았습니다. 전역 설정에서 공급자와 모델을 선택하세요.',
 		providerNotFound: '오류: @lls-task 공급자 또는 모델을 찾을 수 없습니다. 전역 설정을 확인하세요.',
 		analyzing: '계획 문서를 분석하고 작업 흐름 JSON을 생성하는 중...',
@@ -90,7 +91,7 @@ const MESSAGES: Record<ResolvedAppLanguage, {
 		completed: '작업 흐름이 생성되어 상태 표시줄에 업데이트되었습니다.',
 	},
 	ja: {
-		missingDocument: 'エラー: 計画ドキュメントが提供されていません。エクスプローラー内のソリューション計画ドキュメントをこの @lls-task ウィンドウにドラッグしてください。',
+		missingDocument: 'エラー: 計画ドキュメントまたは独自のプロンプトが提供されていません。エクスプローラー内のソリューション計画ドキュメントをこの @lls-task ウィンドウにドラッグするか、独自のタスクフロープロンプトを入力してください。',
 		missingModel: 'エラー: @lls-task タスクフローモデルが設定されていません。グローバル設定でプロバイダーとモデルを選択してください。',
 		providerNotFound: 'エラー: @lls-task プロバイダーまたはモデルが見つかりません。グローバル設定を確認してください。',
 		analyzing: '計画ドキュメントを分析し、タスクフロー JSON を生成しています...',
@@ -98,7 +99,7 @@ const MESSAGES: Record<ResolvedAppLanguage, {
 		completed: 'タスクフローを生成し、ステータスバーに更新しました。',
 	},
 	fr: {
-		missingDocument: 'Erreur : aucun document de planification fourni. Faites glisser le document de planification de solution depuis l’explorateur dans cette fenêtre @lls-task.',
+		missingDocument: 'Erreur : aucun document de planification ni prompt personnalisé fourni. Faites glisser le document de planification de solution depuis l’explorateur dans cette fenêtre @lls-task, ou saisissez votre propre prompt de flux de tâches.',
 		missingModel: 'Erreur : le modèle de flux de tâches @lls-task n’est pas configuré. Sélectionnez un fournisseur et un modèle dans les paramètres globaux.',
 		providerNotFound: 'Erreur : fournisseur ou modèle @lls-task introuvable. Vérifiez les paramètres globaux.',
 		analyzing: 'Analyse du document de planification et génération du JSON de flux de tâches...',
@@ -106,7 +107,7 @@ const MESSAGES: Record<ResolvedAppLanguage, {
 		completed: 'Flux de tâches généré et mis à jour dans la barre d’état.',
 	},
 	de: {
-		missingDocument: 'Fehler: Es wurde kein Planungsdokument bereitgestellt. Ziehen Sie das Lösungsplanungsdokument aus dem Explorer in dieses @lls-task-Fenster.',
+		missingDocument: 'Fehler: Es wurde kein Planungsdokument und kein eigener Prompt bereitgestellt. Ziehen Sie das Lösungsplanungsdokument aus dem Explorer in dieses @lls-task-Fenster, oder geben Sie Ihren eigenen Aufgabenfluss-Prompt ein.',
 		missingModel: 'Fehler: Das @lls-task-Aufgabenflussmodell ist nicht konfiguriert. Wählen Sie Anbieter und Modell in den globalen Einstellungen aus.',
 		providerNotFound: 'Fehler: @lls-task-Anbieter oder Modell wurde nicht gefunden. Bitte prüfen Sie die globalen Einstellungen.',
 		analyzing: 'Planungsdokument wird analysiert und Aufgabenfluss-JSON generiert...',
@@ -246,7 +247,7 @@ export class LlsTaskService {
 	async handleChatRequest(request: vscode.ChatRequest, stream: vscode.ChatResponseStream): Promise<void> {
 		const language = this.configManager.getResolvedLanguage();
 		const text = MESSAGES[language] || MESSAGES.en;
-		const document = await this.extractPlanningDocument(request);
+		const document = await this.extractPlanningDocument(request) || this.extractCustomPromptDocument(request, language);
 		if (!document) {
 			stream.markdown(text.missingDocument);
 			return;
@@ -314,6 +315,31 @@ export class LlsTaskService {
 			};
 		}
 		return undefined;
+	}
+
+	private extractCustomPromptDocument(request: vscode.ChatRequest, language: ResolvedAppLanguage): { fileName: string; content: string } | undefined {
+		const prompt = this.extractCustomPromptText(request.prompt || '', language);
+		if (!prompt) {
+			return undefined;
+		}
+		return {
+			fileName: 'custom @lls-task prompt',
+			content: prompt,
+		};
+	}
+
+	private extractCustomPromptText(prompt: string, language: ResolvedAppLanguage): string | undefined {
+		const normalizedPrompt = String(prompt || '').trim();
+		if (!normalizedPrompt) {
+			return undefined;
+		}
+
+		const placeholder = LLS_TASK_START_PLACEHOLDER_TEXT[language] || LLS_TASK_START_PLACEHOLDER_TEXT.en;
+		if (normalizedPrompt === placeholder) {
+			return undefined;
+		}
+
+		return normalizedPrompt;
 	}
 
 	private tryGetUri(value: unknown): vscode.Uri | undefined {

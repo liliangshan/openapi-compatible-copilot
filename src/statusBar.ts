@@ -1,21 +1,12 @@
 import * as vscode from 'vscode';
 import { ConfigManager, ResolvedAppLanguage } from './configManager';
+import { LLS_TASK_START_PROMPT } from './llsTask/messages';
 import { LlsTaskService } from './llsTask/service';
 import { insertIntoChatInput } from './promptEnhancementStatusBar';
 
 const DEFAULT_TOTAL_CONTEXT_TOKENS = 156_000;
 const COMPACT_REMAINING_THRESHOLD_TOKENS = 50_000;
 const COMPACT_PROMPT = '/compact';
-const LLS_TASK_START_PROMPT: Record<ResolvedAppLanguage, string> = {
-	'en': '@lls-task Please drag the solution planning document from Explorer into this window.',
-	'zh-cn': '@lls-task 请把资源管理器中的方案规划文档拖到这个窗口中',
-	'zh-tw': '@lls-task 請把資源管理器中的方案規劃文件拖到這個視窗中',
-	ko: '@lls-task 탐색기의 솔루션 계획 문서를 이 창으로 끌어다 놓으세요.',
-	ja: '@lls-task エクスプローラー内のソリューション計画ドキュメントをこのウィンドウにドラッグしてください。',
-	fr: '@lls-task Veuillez faire glisser le document de planification de solution depuis l’explorateur dans cette fenêtre.',
-	de: '@lls-task Bitte ziehen Sie das Lösungsplanungsdokument aus dem Explorer in dieses Fenster.',
-};
-
 const COMPACT_ACTION_TEXT: Record<ResolvedAppLanguage, string> = {
 	'en': 'click to compact',
 	'zh-cn': '点此压缩',
@@ -57,23 +48,23 @@ const LLS_TASK_MISSING_MODEL_TOOLTIP: Record<ResolvedAppLanguage, string> = {
 };
 
 const LLS_TASK_NO_WORKFLOW_TOOLTIP: Record<ResolvedAppLanguage, string> = {
-	'en': 'Click here, then drag the solution planning Markdown document into the chat window to execute the task workflow.',
-	'zh-cn': '请点击这，然后拖入方案规划 md 文档执行任务流。',
-	'zh-tw': '請點擊這裡，然後拖入方案規劃 md 文件以執行任務流程。',
-	ko: '여기를 클릭한 다음, 솔루션 계획 Markdown 문서를 채팅 창으로 끌어다 놓아 작업 흐름을 실행하세요.',
-	ja: 'ここをクリックしてから、ソリューション計画 Markdown ドキュメントをチャットウィンドウにドラッグしてタスクフローを実行してください。',
-	fr: 'Cliquez ici, puis faites glisser le document Markdown de planification de solution dans la fenêtre de chat pour exécuter le flux de tâches.',
-	de: 'Klicken Sie hier und ziehen Sie dann das Markdown-Planungsdokument in das Chatfenster, um den Aufgabenfluss auszuführen.',
+	'en': 'Click here, then drag the solution planning Markdown document into the chat window, or delete the inserted hint and use your own prompt.',
+	'zh-cn': '请点击这，然后拖入方案规划 md 文档，或者删除自动插入的提示并使用自己的提示词。',
+	'zh-tw': '請點擊這裡，然後拖入方案規劃 md 文件，或者刪除自動插入的提示並使用自己的提示詞。',
+	ko: '여기를 클릭한 다음 솔루션 계획 Markdown 문서를 채팅 창으로 끌어다 놓거나, 삽입된 안내 문구를 삭제하고 자신의 프롬프트를 사용하세요.',
+	ja: 'ここをクリックしてからソリューション計画 Markdown ドキュメントをチャットウィンドウにドラッグするか、挿入されたヒントを削除して独自のプロンプトを使用してください。',
+	fr: 'Cliquez ici, puis faites glisser le document Markdown de planification de solution dans la fenêtre de chat, ou supprimez l’indication insérée et utilisez votre propre prompt.',
+	de: 'Klicken Sie hier und ziehen Sie dann das Markdown-Planungsdokument in das Chatfenster, oder löschen Sie den eingefügten Hinweis und verwenden Sie Ihren eigenen Prompt.',
 };
 
 const LLS_TASK_NEW_WORKFLOW_TOOLTIP: Record<ResolvedAppLanguage, string> = {
-	'en': 'Click here, then drag the solution planning Markdown document into the chat window to execute a new task workflow.',
-	'zh-cn': '点击这，然后拖入方案规划 md 文档执行新的任务流。',
-	'zh-tw': '點擊這裡，然後拖入方案規劃 md 文件以執行新的任務流程。',
-	ko: '여기를 클릭한 다음, 솔루션 계획 Markdown 문서를 채팅 창으로 끌어다 놓아 새 작업 흐름을 실행하세요.',
-	ja: 'ここをクリックしてから、ソリューション計画 Markdown ドキュメントをチャットウィンドウにドラッグして新しいタスクフローを実行してください。',
-	fr: 'Cliquez ici, puis faites glisser le document Markdown de planification de solution dans la fenêtre de chat pour exécuter un nouveau flux de tâches.',
-	de: 'Klicken Sie hier und ziehen Sie dann das Markdown-Planungsdokument in das Chatfenster, um einen neuen Aufgabenfluss auszuführen.',
+	'en': 'Click here, then drag the solution planning Markdown document into the chat window to execute a new workflow, or delete the inserted hint and use your own prompt.',
+	'zh-cn': '点击这，然后拖入方案规划 md 文档执行新的任务流，或者删除自动插入的提示并使用自己的提示词。',
+	'zh-tw': '點擊這裡，然後拖入方案規劃 md 文件以執行新的任務流程，或者刪除自動插入的提示並使用自己的提示詞。',
+	ko: '여기를 클릭한 다음 솔루션 계획 Markdown 문서를 채팅 창으로 끌어다 놓아 새 작업 흐름을 실행하거나, 삽입된 안내 문구를 삭제하고 자신의 프롬프트를 사용하세요.',
+	ja: 'ここをクリックしてからソリューション計画 Markdown ドキュメントをチャットウィンドウにドラッグして新しいタスクフローを実行するか、挿入されたヒントを削除して独自のプロンプトを使用してください。',
+	fr: 'Cliquez ici, puis faites glisser le document Markdown de planification de solution dans la fenêtre de chat pour exécuter un nouveau flux, ou supprimez l’indication insérée et utilisez votre propre prompt.',
+	de: 'Klicken Sie hier und ziehen Sie dann das Markdown-Planungsdokument in das Chatfenster, um einen neuen Aufgabenfluss auszuführen, oder löschen Sie den eingefügten Hinweis und verwenden Sie Ihren eigenen Prompt.',
 };
 
 const LLS_TASK_PROGRESS_TEXT: Record<ResolvedAppLanguage, string> = {

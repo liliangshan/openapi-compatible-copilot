@@ -105,7 +105,7 @@
 			displayName: 'Display Name',
 			displayNamePlaceholder: 'e.g., GPT-4o',
 			contextLength: 'Context Length',
-			maxTokens: 'Max Tokens',
+			maxTokens: 'Max Output Tokens',
 			visionSupport: 'Vision Support',
 			toolCalling: 'Tool Calling',
 			transformThinkTags: 'Transform Think Tags (<|im_start|>/♩)',
@@ -280,7 +280,7 @@
 			displayName: '显示名称',
 			displayNamePlaceholder: '例如：GPT-4o',
 			contextLength: '上下文长度',
-			maxTokens: '最大 Token 数',
+			maxTokens: '最大输出 Token 数',
 			visionSupport: '视觉支持',
 			toolCalling: '工具调用',
 			transformThinkTags: '转换 Think 标签（<|im_start|>/♩）',
@@ -404,6 +404,7 @@
 	translations['zh-tw'] = {
 		...translations['zh-cn'],
 		llsTask: 'LLS Task 任務流程',
+		maxTokens: '最大輸出 Token 數',
 		llsTaskHelp: '使用選定模型分析 @lls-task 請求並規劃任務流程。',
 		llsTaskProvider: '任務流程提供商',
 		llsTaskModel: '任務流程模型',
@@ -439,6 +440,7 @@
 		llsTaskHelp: '선택한 모델로 @lls-task 요청을 분석하고 작업 흐름을 계획합니다.',
 		llsTaskProvider: '작업 흐름 공급자',
 		llsTaskModel: '작업 흐름 모델',
+		maxTokens: '최대 출력 토큰 수',
 		preserveReasoningContent: 'reasoning_content 보존',
 		preserveReasoningContentHelp: 'DeepSeek 사고 모드용입니다. reasoning_content를 캐시하고 이후 요청에 다시 전달합니다.',
 	});
@@ -447,11 +449,13 @@
 		llsTaskHelp: '選択したモデルで @lls-task リクエストを分析し、タスクフローを計画します。',
 		llsTaskProvider: 'タスクフロープロバイダー',
 		llsTaskModel: 'タスクフローモデル',
+		maxTokens: '最大出力トークン数',
 		preserveReasoningContent: 'reasoning_content を保持',
 		preserveReasoningContentHelp: 'DeepSeek 思考モード用です。reasoning_content をキャッシュし、後続リクエストで再送します。',
 	});
 	Object.assign(translations.fr, {
 		llsTask: 'Workflow LLS Task',
+		maxTokens: 'Tokens de sortie max.',
 		llsTaskHelp: 'Utilise le modèle sélectionné pour analyser les requêtes @lls-task et planifier les flux de tâches.',
 		llsTaskProvider: 'Fournisseur de flux de tâches',
 		llsTaskModel: 'Modèle de flux de tâches',
@@ -460,6 +464,7 @@
 	});
 	Object.assign(translations.de, {
 		llsTask: 'LLS Task-Workflow',
+		maxTokens: 'Max. Ausgabe-Tokens',
 		llsTaskHelp: 'Verwendet das ausgewählte Modell, um @lls-task-Anfragen zu analysieren und Aufgabenabläufe zu planen.',
 		llsTaskProvider: 'Aufgabenablauf-Anbieter',
 		llsTaskModel: 'Aufgabenablauf-Modell',

@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.0.2
+
+### Added
+
+- **LLS Task custom prompts** — `@lls-task` can now generate a workflow from custom prompt text when no planning document is dragged into Chat. Dragged documents still take priority, while unchanged localized start-placeholder text is treated as guidance rather than workflow content.
+
+### Changed
+
+- **Clearer LLS Task start prompt** — The status bar insertion prompt now tells users to drag a planning document or delete the inserted hint and use their own prompt, with localized messages across supported UI languages.
+- **Max output token wording and request behavior** — Model configuration now labels the former max token field as max output tokens, and the configured output limit is passed to OpenAI-compatible, Responses API, and Anthropic model requests.
+
 ## 3.0.0
 
 ### Added

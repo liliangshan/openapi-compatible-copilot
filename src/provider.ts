@@ -191,6 +191,7 @@ interface MainRequestContext {
 	topP: number;
 	samplingMode: string;
 	transformThink: boolean;
+	maxOutputTokens: number;
 }
 
 const FORCE_TODO_PROMPT = 'If there is no todo list, create one before making changes. If a todo list already exists, continue using the existing todo list, execute todo items in order, and update the todo status after completing each item.';
@@ -718,6 +719,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 						topP: model.topP ?? 1.0,
 						samplingMode: model.samplingMode ?? 'both',
 						transformThink: model.transformThink ?? false,
+						maxOutputTokens: maxOutput,
 					}
 				} as vscode.LanguageModelChatInformation & { __providerData: any });
 			}
@@ -880,6 +882,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		const topP = metadata.topP as number ?? 1.0;
 		const samplingMode = (metadata.samplingMode as string) ?? 'both';
 		const transformThink = (metadata.transformThink as boolean) ?? false;
+		const maxOutputTokens = Number(metadata.maxOutputTokens) || DEFAULT_MAX_TOKENS;
 		const forceTodoEnabled = this._configManager.getGlobalForceTodoEnabled() || this._configManager.getWorkspaceForceTodoEnabled();
 
 		// Get API key from secrets
@@ -898,6 +901,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			topP,
 			samplingMode,
 			transformThink,
+			maxOutputTokens,
 		};
 		const expertModel = await this._getConfiguredExpertModel();
 		const expertEnabled = !!expertModel;
@@ -942,20 +946,8 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			stream: true,
 		};
 
-		
-
-		// Only pass temperature/top_p based on samplingMode
-		// Some models (e.g. Claude) don't support both simultaneously
-		if (samplingMode === 'temperature') {
-			requestBody.temperature = temperature;
-		} else if (samplingMode === 'top_p') {
-			requestBody.top_p = topP;
-		} else if (samplingMode === 'none') {
-			// Do not pass temperature or top_p
-		} else {
-			requestBody.temperature = temperature;
-			requestBody.top_p = topP;
-		}
+		this._applySamplingOptions(requestBody, mainContext);
+		this._applyMaxOutputTokens(requestBody, mainContext);
 
 		// Handle tool calling if present
 		const builtInTools = [
@@ -1164,6 +1156,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			stream: true,
 		};
 		this._applySamplingOptions(requestBody, mainContext);
+		this._applyMaxOutputTokens(requestBody, mainContext);
 		if (mainTools.length > 0) {
 			requestBody.tools = mainTools
 				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME && tool?.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME)
@@ -2370,6 +2363,15 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		}
 	}
 
+	/**
+	 * Apply the configured maximum output token limit to a model request body.
+	 */
+	private _applyMaxOutputTokens(requestBody: any, context: MainRequestContext): void {
+		if (Number.isFinite(context.maxOutputTokens) && context.maxOutputTokens > 0) {
+			requestBody.max_tokens = Math.floor(context.maxOutputTokens);
+		}
+	}
+
 	private async _getConfiguredExpertModel(): Promise<(MainRequestContext & { providerName: string; modelName: string; toolCalling: boolean }) | null> {
 		const config = this._configManager.getEffectiveExpertModeConfig();
 		if (!config.enabled || !config.providerId || !config.modelId) {
@@ -2394,6 +2396,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			topP: expertModel.topP ?? 1.0,
 			samplingMode: expertModel.samplingMode ?? 'both',
 			transformThink: expertModel.transformThink ?? false,
+			maxOutputTokens: expertModel.maxTokens || DEFAULT_MAX_TOKENS,
 			toolCalling: expertModel.toolCalling ?? true,
 		};
 	}
@@ -2422,6 +2425,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			topP: solutionModel.topP ?? 1.0,
 			samplingMode: solutionModel.samplingMode ?? 'both',
 			transformThink: solutionModel.transformThink ?? false,
+			maxOutputTokens: solutionModel.maxTokens || DEFAULT_MAX_TOKENS,
 			reviewWithExpert: config.reviewWithExpert ?? false,
 			toolCalling: solutionModel.toolCalling ?? true,
 		};
@@ -2576,6 +2580,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			stream: true,
 		};
 		this._applySamplingOptions(requestBody, mainContext);
+		this._applyMaxOutputTokens(requestBody, mainContext);
 		if (mainTools.length > 0) {
 			requestBody.tools = mainTools
 				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME && tool?.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME)
@@ -2780,6 +2785,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			stream: true,
 		};
 		this._applySamplingOptions(requestBody, expertContext);
+		this._applyMaxOutputTokens(requestBody, expertContext);
 		const expertTools = state.expertToolCalling ? this._filterExpertTools(state.mainTools) : [];
 		if (expertTools.length > 0) {
 			requestBody.tools = expertTools.map((tool: any) => ({
@@ -3068,6 +3074,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			stream: true,
 		};
 		this._applySamplingOptions(requestBody, state.mainRequestContext);
+		this._applyMaxOutputTokens(requestBody, state.mainRequestContext);
 		if (state.mainTools.length > 0) {
 			requestBody.tools = state.mainTools
 				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME && tool?.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME)
@@ -3317,6 +3324,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			stream: true,
 		};
 		this._applySamplingOptions(requestBody, state.solutionRequestContext);
+		this._applyMaxOutputTokens(requestBody, state.solutionRequestContext);
 		const solutionTools = this._filterSolutionTools(state, state.mainTools);
 		if (solutionTools.length > 0) {
 			requestBody.tools = solutionTools.map((tool: any) => ({
@@ -3647,6 +3655,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 			stream: true,
 		};
 		this._applySamplingOptions(requestBody, mainContext);
+		this._applyMaxOutputTokens(requestBody, mainContext);
 		if (mainTools.length > 0) {
 			requestBody.tools = mainTools
 				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME && tool?.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME)
@@ -3703,6 +3712,7 @@ export class OpenAPIChatModelProvider implements vscode.LanguageModelChatProvide
 		];
 		const requestBody: any = { model: state.mainRequestContext.modelId, messages: mainMessages, stream: true };
 		this._applySamplingOptions(requestBody, state.mainRequestContext);
+		this._applyMaxOutputTokens(requestBody, state.mainRequestContext);
 		if (state.mainTools.length > 0) {
 			requestBody.tools = state.mainTools
 				.filter((tool: any) => tool?.name !== ASK_LLSOAI_TOOL_NAME && tool?.name !== ASK_SOLUTION_PROVIDER_TOOL_NAME)
